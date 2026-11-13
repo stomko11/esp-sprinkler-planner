@@ -14,7 +14,7 @@ from homeassistant.helpers import selector
 
 from .const import (CONF_CONTROLLER, CONF_DEVICE, CONF_VALVE_OVERLAP, CONF_VALVES, CONTROLLER_KEYS, DEFAULT_WATCHDOG,
                     DOMAIN, OPT_RESTORE, OPT_WATCHDOG)
-from .discovery import Entity, propose
+from .discovery import Entity, ValveProposal, propose
 
 
 def _device_entities(hass, device_id: str) -> List[Entity]:
@@ -48,6 +48,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._idx = 0
         self._extra = False
         self._valves: List[Dict[str, Any]] = []
+        self._reconf = None          # config entry being reconfigured
 
     @staticmethod
     @callback
@@ -77,6 +78,26 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         })
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
 
+    async def async_step_reconfigure(self, user_input=None):
+        """Change the mapping of an existing planner: same steps, pre-filled with the current values.
+        Zone ids stay the same, so slots, settings and history are kept."""
+        entry = self._get_reconfigure_entry()
+        self._reconf = entry
+        device_id = entry.data[CONF_DEVICE]
+        ents = _device_entities(self.hass, device_id)
+        self._switches = [e.entity_id for e in ents if e.domain == "switch"]
+        self._numbers = [e.entity_id for e in ents if e.domain == "number"]
+        dev = dr.async_get(self.hass).async_get(device_id)
+        self._proposal = propose(ents, (dev.name_by_user or dev.name) if dev else "")
+        self._proposal.controller = dict(entry.data.get(CONF_CONTROLLER) or {})
+        self._proposal.valves = [ValveProposal(v.get("name") or v["id"], v.get("valve_switch"), v.get("enable_switch"),
+                                               v.get("duration"), v.get("max_minutes"), int(v.get("order", i)))
+                                 for i, v in enumerate(entry.data.get(CONF_VALVES) or [])]
+        self._ids = [v["id"] for v in entry.data.get(CONF_VALVES) or []]
+        self._enabled = [v.get("enabled", True) for v in entry.data.get(CONF_VALVES) or []]
+        self._data = {k: entry.data[k] for k in entry.data}
+        return await self.async_step_controller()
+
     async def async_step_controller(self, user_input=None):
         if user_input is not None:
             self._data[CONF_CONTROLLER] = {k: user_input.get(k) for k in CONTROLLER_KEYS}
@@ -91,7 +112,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 fields[vol.Required(key, description=_suggested(proposed))] = sel
             else:
                 fields[vol.Optional(key, description=_suggested(proposed))] = sel
-        fields[vol.Optional(CONF_VALVE_OVERLAP, default=0)] = selector.NumberSelector(
+        overlap = int((self._reconf.options.get(CONF_VALVE_OVERLAP, self._reconf.data.get(CONF_VALVE_OVERLAP, 0))
+                       if self._reconf else 0) or 0)
+        fields[vol.Optional(CONF_VALVE_OVERLAP, default=overlap)] = selector.NumberSelector(
             {"min": 0, "max": 600, "step": 1, "unit_of_measurement": "s", "mode": "box"})
         return self.async_show_form(step_id="controller", data_schema=vol.Schema(fields))
 
@@ -112,7 +135,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         st = self.hass.states.get(user_input["duration"])
                         max_m = st.attributes.get("max") if st else None
                     self._valves.append({
-                        "id": f"zone_{len(self._valves) + 1}",
+                        "id": self._zone_id(),
                         "name": user_input.get("name") or (cur.name if cur else f"Zone {len(self._valves) + 1}"),
                         "order": int(user_input.get("order", len(self._valves))),
                         "enabled": bool(user_input.get("enabled", True)),
@@ -137,17 +160,31 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _entity_selector("switch", self._switches),
             vol.Required("order", default=cur.order if cur else self._idx): selector.NumberSelector(
                 {"min": 0, "max": 63, "step": 1, "mode": "box"}),
-            vol.Required("enabled", default=True): bool,
+            vol.Required("enabled", default=self._enabled[self._idx] if self._reconf and self._idx < len(self._enabled) else True): bool,
             vol.Required("skip", default=False): bool,
             vol.Required("add_another", default=False): bool,
         })
         return self.async_show_form(step_id="valve", data_schema=schema, errors=errors, description_placeholders={
             "index": str(n), "total": str(max(len(props), n)), "detected": cur.name if cur else "-"})
 
+    def _zone_id(self) -> str:
+        """Reconfigure: the valve keeps its zone id; a new valve gets the next free one."""
+        if self._reconf and self._idx < len(getattr(self, "_ids", [])):
+            return self._ids[self._idx]
+        taken = {v["id"] for v in self._valves} | set(getattr(self, "_ids", []))
+        n = 1
+        while f"zone_{n}" in taken:
+            n += 1
+        return f"zone_{n}"
+
     def _finish(self):
         if not self._valves:
             return self.async_abort(reason="no_valves")
         self._data[CONF_VALVES] = sorted(self._valves, key=lambda v: (v["order"], v["id"]))
+        if self._reconf:
+            opts = {**self._reconf.options, CONF_VALVE_OVERLAP: self._data.get(CONF_VALVE_OVERLAP, 0)}
+            self.hass.config_entries.async_update_entry(self._reconf, options=opts)
+            return self.async_update_reload_and_abort(self._reconf, data=self._data, reason="reconfigured")
         return self.async_create_entry(title=self._data[CONF_NAME], data=self._data,
                                        options={OPT_RESTORE: True, OPT_WATCHDOG: DEFAULT_WATCHDOG})
 

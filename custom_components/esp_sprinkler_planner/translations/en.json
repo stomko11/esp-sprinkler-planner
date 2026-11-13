@@ -42,7 +42,8 @@
     },
     "abort": {
       "already_configured": "This device already has a planner.",
-      "no_valves": "No valve was mapped."
+      "no_valves": "No valve was mapped.",
+      "reconfigured": "Mapping updated. Slots, settings and history were kept."
     }
   },
   "options": {

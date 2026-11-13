@@ -251,19 +251,47 @@ class EspSprinklerPlannerCard extends HTMLElement {
       </div>
       <div class="lbl">Today</div>
       ${this._timeline(today, plan, false)}
-      <div class="lbl">Zones</div>
-      <div class="zl">${zones.map((z) => {
-        const nx = (plan.runs || []).find((r) => r.start > d.now && r.zones.some((x) => x.zone === z.id));
+      <div class="lbl">Zones today</div>
+      <div class="tiles">${zones.map((z) => {
+        const sk = new Set(plan.skipped || []);
+        const nx = (plan.runs || []).find((r) => r.start > d.now && !sk.has(runKey(r)) && r.zones.some((x) => x.zone === z.id));
         const zm = nx && nx.zones.find((x) => x.zone === z.id);
-        const lr = last[z.id];
+        const done = todayHist[z.id] || 0;
+        const left = (plan.runs || []).filter((r) => r.day === today && r.start > d.now && !sk.has(runKey(r))).reduce((a, r) => a + ((r.zones.find((x) => x.zone === z.id) || {}).minutes || 0), 0);
+        const tot = Math.max(done + left, 1);
         const on = az && az.zone === z.id;
-        return `<div class="zrow ${z.enabled ? "" : "dis"} ${on ? "on" : ""}">
-          <span class="dot" style="background:${z.color}"></span><b>${esc(z.name)}</b>
-          <span class="muted">${z.enabled ? "" : "disabled \u00b7 "}today ${Math.round(todayHist[z.id] || 0)}\u2032 \u00b7 last ${lr ? `${fmtDay(dayOf(lr.end))} ${lr.minutes}\u2032` : "\u2013"} \u00b7 next ${nx ? `${fmtDay(nx.day)} ${hm(nx.start)} (${zm.minutes}\u2032)` : "\u2013"}</span></div>`;
+        return `<div class="tile ${z.enabled ? "" : "dis"} ${on ? "on" : ""}" title="${esc(z.name)}: ${Math.round(done)} min watered today, ${Math.round(left)} min still planned today">
+          <div class="tn"><span class="dot" style="background:${z.color}"></span>${esc(z.name)}${on ? ` <span class="chip small run-on">ON</span>` : ""}</div>
+          <div class="pbar"><i style="width:${(done / tot * 100).toFixed(1)}%;background:${z.color}"></i><i class="plan" style="width:${(left / tot * 100).toFixed(1)}%;--c:${z.color}"></i></div>
+          <div class="tm"><b>${Math.round(done)}</b>${left ? `<span class="muted"> +${Math.round(left)}</span>` : ""} min<span class="grow"></span>${nx ? `<span class="muted" title="next run">\u23f5 ${nx.day === today ? "" : fmtDay(nx.day) + " "}${hm(nx.start)} \u00b7 ${zm.minutes}\u2032</span>` : ""}</div>
+        </div>`;
       }).join("")}</div>`;
   }
 
-  _tab_week() { return `<div data-preview="week"></div><div class="lbl">Runs</div><div data-preview="runs"></div>`; }
+  _tab_week() {
+    return `<div class="lbl">Minutes per day <span class="muted">(watered / planned)</span></div>${this._chart()}
+      <div class="lbl">Next 7 days</div><div data-preview="week"></div>
+      <details class="runs"><summary>Run details</summary><div data-preview="runs"></div></details>`;
+  }
+
+  _chart() {
+    const d = this.data; const today = dayOf(d.now); const plan = this._plan(); const zones = this._zones();
+    const hist = d.history || {}; const days = [];
+    for (let i = -6; i <= 7; i++) days.push(addDays(today, i));
+    const col = days.map((day) => {
+      const per = {};
+      if (day <= today) Object.entries(hist[day] || {}).forEach(([z, m]) => { per[z] = { done: m, plan: 0 }; });
+      if (day >= today) (plan.runs || []).filter((r) => r.day === day && (day > today || r.start > d.now) && !(plan.skipped || []).includes(runKey(r))).forEach((r) => r.zones.forEach((x) => {
+        per[x.zone] = per[x.zone] || { done: 0, plan: 0 }; per[x.zone].plan += x.minutes; }));
+      const total = Object.values(per).reduce((a, v) => a + v.done + v.plan, 0);
+      return { day, per, total };
+    });
+    const max = Math.max(30, ...col.map((c) => c.total));
+    return `<div class="chart">${col.map((c) => `<div class="cc ${c.day === today ? "today" : ""}" title="${fmtDay(c.day)}: ${Math.round(c.total)} min\n${zones.filter((z) => c.per[z.id]).map((z) => `${z.name}: ${Math.round(c.per[z.id].done)}${c.per[z.id].plan ? ` + ${Math.round(c.per[z.id].plan)} planned` : ""}`).join("\n")}">
+        <div class="stack">${zones.filter((z) => c.per[z.id]).map((z) => `${c.per[z.id].done ? `<i style="height:${(c.per[z.id].done / max * 100).toFixed(1)}%;background:${z.color}"></i>` : ""}${c.per[z.id].plan ? `<i class="plan" style="height:${(c.per[z.id].plan / max * 100).toFixed(1)}%;--c:${z.color}"></i>` : ""}`).join("")}</div>
+        <em>${c.total ? Math.round(c.total) : ""}</em><span>${DAYS[(new Date(c.day + "T12:00:00").getDay() + 6) % 7].slice(0, 2)}</span></div>`).join("")}</div>
+      <div class="legend">${zones.map((z) => `<span><i style="background:${z.color}"></i>${esc(z.name)}</span>`).join("")}<span><i class="plan" style="--c:#888"></i>planned</span></div>`;
+  }
 
   _tab_slots() {
     const zones = this._zones();
@@ -313,7 +341,8 @@ class EspSprinklerPlannerCard extends HTMLElement {
     return `${out || `<div class="muted pad">No slots yet.</div>`}
       <div class="row"><button data-act="addslot">+ Add slot</button></div>
       <div class="lbl">Preview \u2013 next 7 days ${this.dirty ? "(unsaved)" : ""}</div>
-      <div data-preview="week"></div><div data-preview="runs"></div>`;
+      <div data-preview="week"></div>
+      <details class="runs" open><summary>Runs and conflicts</summary><div data-preview="runs"></div></details>`;
   }
 
   _tab_zones() {
@@ -343,16 +372,19 @@ class EspSprinklerPlannerCard extends HTMLElement {
     const d = this.data; const st = this.draft.settings || {}; const p = this.draft.pump || {};
     const flags = d.flags || {};
     const pumpCands = Object.keys(this._hass.states).filter((e) => /^(switch|input_boolean|light|fan)\./.test(e)).sort();
+    const fname = (e) => ((this._hass.states[e] || {}).attributes || {}).friendly_name || e;
+    const services = (d.notify_services || []).filter((x) => x !== "notify.notify" && x !== "notify.send_message");
     const n = this.draft.notifications || {}; const full = d.notifications_full || { events: {} };
     const meta = d.notify_meta || { events: [], actions: {}, variables: {}, defaults: {} };
     const targets = new Set(n.targets || []);
     const evRows = meta.events.map((ev) => {
       const e = { ...(meta.defaults[ev] || {}), ...((full.events || {})[ev] || {}), ...(((n.events || {})[ev]) || {}) };
       return `<details class="ev"><summary><label><input type="checkbox" data-ne="${ev}|enabled" ${e.enabled ? "checked" : ""}> ${esc(ev.replace("_", " "))}</label>
-          <span class="muted">${esc((e.targets && e.targets.length ? e.targets.join(", ") : "default targets"))}</span></summary>
+          <span class="muted">${esc(e.targets ? (e.targets.length ? e.targets.map((x) => x.slice(7)).join(", ") : "nobody") : "default recipients")}</span></summary>
         <div class="row"><label class="wide">Title <input data-ne="${ev}|title" value="${esc(e.title || "")}"></label></div>
         <div class="row"><label class="wide">Message <input data-ne="${ev}|message" value="${esc(e.message || "")}"></label></div>
-        <div class="row"><label class="wide">Targets (comma separated, empty = default) <input data-ne="${ev}|targets" value="${esc((e.targets || []).join(", "))}"></label></div>
+        <div class="row"><label><input type="checkbox" data-nown="${ev}" ${e.targets ? "checked" : ""}> own recipients for this event</label></div>
+        ${e.targets ? `<div class="svcs">${services.map((x) => `<label class="svc ${e.targets.includes(x) ? "on" : ""}"><input type="checkbox" data-nev="${ev}|${esc(x)}" ${e.targets.includes(x) ? "checked" : ""}>${esc(x.slice(7))}</label>`).join("")}</div>` : ""}
         ${ev === "planned" ? `<div class="row"><label>minutes before <input type="number" class="n" data-ne="planned|lead" value="${esc(e.lead ?? 30)}"></label></div>` : ""}
         <div class="row">Buttons: ${Object.entries(meta.actions).map(([a, l]) => `<label><input type="checkbox" data-na="${ev}|${a}" ${(e.actions || []).includes(a) ? "checked" : ""}> ${esc(l)}</label>`).join("")}
           <span class="grow"></span><button data-act="testnotif" data-ev="${ev}">Send test</button></div>
@@ -371,13 +403,17 @@ class EspSprinklerPlannerCard extends HTMLElement {
       </div>
       <div class="muted small">Timing uses valve overlap ${d.timing.valve_overlap} s (integration options) and pump delay ${d.timing.pump_delay} s.</div>
       <div class="lbl">Pump</div>
-      <div class="row"><select data-k="pump.entity" data-r="1"><option value="">(no pump)</option>${pumpCands.map((e) => `<option value="${esc(e)}" ${p.entity === e ? "selected" : ""}>${esc(e)}</option>`).join("")}</select>
+      <div class="row"><input class="picker" list="pumplist" data-pick="pump.entity" value="${esc(p.entity || "")}" placeholder="type to search: pump, well, shelly\u2026">
+        <datalist id="pumplist">${pumpCands.map((e) => `<option value="${esc(e)}">${esc(fname(e))}</option>`).join("")}</datalist>
+        ${p.entity ? `<span class="muted">${esc(fname(p.entity))}</span><button data-act="nopump">\u2715</button>` : ""}</div>
+      <div class="row">
         ${p.entity ? `<label><input type="checkbox" data-k="pump.auto_on" data-t="bool" ${p.auto_on !== false ? "checked" : ""}> on before a run</label>
           <label>then wait <input type="number" class="n" min="0" max="600" data-k="pump.delay" data-t="int" value="${esc(p.delay || 0)}"> s</label>
           <label><input type="checkbox" data-k="pump.auto_off" data-t="bool" ${p.auto_off !== false ? "checked" : ""}> off after</label>
           <label><input type="checkbox" data-k="pump.warn_if_off" data-t="bool" ${p.warn_if_off !== false ? "checked" : ""}> warn if off</label>` : ""}</div>
       <div class="lbl">Notifications</div>
-      <div class="row">Send to: ${(d.notify_services || []).filter((s) => s !== "notify.notify" && s !== "notify.send_message").map((s) => `<label><input type="checkbox" data-nt="${esc(s)}" ${targets.has(s) ? "checked" : ""}> ${esc(s.slice(7))}</label>`).join("") || `<span class="muted">no notify services</span>`}</div>
+      <div class="row"><b>Send to</b> <span class="muted">(default for every event, pick any number)</span></div>
+      <div class="svcs">${services.map((x) => `<label class="svc ${targets.has(x) ? "on" : ""}"><input type="checkbox" data-nt="${esc(x)}" ${targets.has(x) ? "checked" : ""}>${esc(x.slice(7))}</label>`).join("") || `<span class="muted">no notify services</span>`}</div>
       ${evRows}`;
   }
 
@@ -405,9 +441,28 @@ class EspSprinklerPlannerCard extends HTMLElement {
       this._markDirty(isChange && t.dataset.r === "1");
       return;
     }
+    if (t.dataset.pick !== undefined) {
+      if (!isChange) return;
+      const v = t.value.trim();
+      const ok = !v || this._hass.states[v];
+      t.classList.toggle("bad", !ok);
+      if (ok) { this._setPath(t.dataset.pick, v || null); this._markDirty(true); }
+      return;
+    }
     if (!isChange) {
       if (t.dataset.ne && t.type !== "checkbox") this._setEvent(t.dataset.ne, t.value, false);
       return;
+    }
+    if (t.dataset.nown) {
+      const ev = t.dataset.nown; const n = this.draft.notifications; n.events = n.events || {}; n.events[ev] = n.events[ev] || {};
+      if (t.checked) n.events[ev].targets = (n.targets || []).slice(); else delete n.events[ev].targets;
+      this._markDirty(true); return;
+    }
+    if (t.dataset.nev) {
+      const [ev, svc] = t.dataset.nev.split("|"); const n = this.draft.notifications; n.events = n.events || {}; n.events[ev] = n.events[ev] || {};
+      const cur = n.events[ev].targets || [];
+      n.events[ev].targets = t.checked ? [...new Set([...cur, svc])] : cur.filter((x) => x !== svc);
+      this._markDirty(true); return;
     }
     if (t.dataset.day) {
       const [i, di] = t.dataset.day.split("|").map(Number); const s = this.draft.slots[i];
@@ -428,7 +483,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
     } else if (t.dataset.nt) {
       const n = this.draft.notifications; n.targets = n.targets || [];
       n.targets = t.checked ? [...new Set([...n.targets, t.dataset.nt])] : n.targets.filter((x) => x !== t.dataset.nt);
-      this._markDirty(false);
+      this._markDirty(true);
     } else if (t.dataset.ne) {
       this._setEvent(t.dataset.ne, t.type === "checkbox" ? t.checked : t.value, true);
     } else if (t.dataset.na) {
@@ -475,6 +530,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
       } else if (act === "delslot") {
         const i = +t.dataset.i; if (!confirm(`Delete slot "${this.draft.slots[i].name || this.draft.slots[i].id}"?`)) return;
         this.draft.slots.splice(i, 1); this._open.clear(); this._markDirty(true);
+      } else if (act === "nopump") { this.draft.pump = {}; this._markDirty(true);
       } else if (act === "revert") { this.dirty = false; this.draft = this._makeDraft(this.data); this.preview = null; this._render(); }
       else if (act === "save") {
         try {
@@ -566,6 +622,25 @@ label.day { display:inline-flex; align-items:center; gap:2px; font-size:12px; }
 .sb { width:70%; border-radius:3px 3px 0 0; min-height:1px; } .sc span { margin-top:2px; } .sc em { position:absolute; top:0; font-style:normal; }
 details.ev { border:1px solid var(--divider-color,#ddd); border-radius:8px; padding:4px 8px; margin:4px 0; } details.ev summary { cursor:pointer; display:flex; gap:10px; align-items:center; }
 code { font-size:11px; background:var(--secondary-background-color,#f2f2f2); padding:0 3px; border-radius:3px; }
+.tiles { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:8px; }
+.tile { background:var(--secondary-background-color,#f4f4f4); border-radius:10px; padding:8px 10px; }
+.tile.on { box-shadow:0 0 0 2px #2fbf71; } .tn { font-weight:600; display:flex; align-items:center; gap:2px; margin-bottom:6px; }
+.chip.run-on { background:#2fbf71; color:#fff; }
+.pbar { display:flex; height:8px; border-radius:4px; overflow:hidden; background:var(--divider-color,#ddd); }
+.pbar i { display:block; }
+i.plan { background:repeating-linear-gradient(135deg, var(--c) 0 3px, transparent 3px 6px); opacity:.75; }
+.tm { display:flex; align-items:baseline; gap:2px; font-size:12px; margin-top:4px; } .tm b { font-size:15px; }
+.chart { display:flex; gap:3px; height:130px; align-items:stretch; margin:6px 0 2px; }
+.cc { flex:1; display:flex; flex-direction:column; align-items:center; font-size:10px; color:var(--secondary-text-color,#888); position:relative; }
+.cc.today span { color:var(--primary-color,#03a9f4); font-weight:700; }
+.stack { flex:1; width:72%; display:flex; flex-direction:column-reverse; border-bottom:1px solid var(--divider-color,#ccc); }
+.stack i { display:block; width:100%; }
+.cc em { font-style:normal; height:13px; } .cc span { margin-top:2px; }
+details.runs { margin-top:8px; } details.runs summary { cursor:pointer; color:var(--secondary-text-color,#777); font-size:12px; font-weight:600; }
+.svcs { display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 8px; }
+.svc { border:1px solid var(--divider-color,#ccc); border-radius:14px; padding:2px 10px 2px 4px; display:inline-flex; align-items:center; gap:4px; cursor:pointer; font-size:12px; }
+.svc.on { border-color:var(--primary-color,#03a9f4); background:color-mix(in srgb, var(--primary-color,#03a9f4) 12%, transparent); }
+input.picker { width:320px; } input.bad { border-color:#e5484d; }
 .bar { position:sticky; bottom:0; display:none; gap:8px; align-items:center; padding:8px 14px; margin:0 -14px; background:var(--card-background-color,#fff); border-top:1px solid var(--divider-color,#ddd); }
 .bar.show { display:flex; }
 @media (max-width:520px) { .grid2 { grid-template-columns:1fr; } }

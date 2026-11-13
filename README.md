@@ -163,6 +163,12 @@ the ESP. Turn `switch.<name>_planner_dry_run` off only when you want it to reall
 Event `esp_sprinkler_planner_event` with `type`: `started`, `finished`, `stopped`, `skipped`
 (with `reason`), `dry_run` (with the calls it would make), `error`, `skip_set`.
 
+### Changing the valve mapping
+
+Settings → Devices & services → ESP Sprinkler Planner → ⋮ → **Reconfigure**. Same steps as setup,
+pre-filled. Zones keep their ids, so slots, settings and history stay. A removed valve is
+dropped from the slots.
+
 ### Card
 
 The integration serves its own card - no resource to add. On any dashboard add a manual card:

@@ -253,6 +253,20 @@ class Runtime:
         self.active = data.get("active")
         self.history = data.get("history") or {}
         self.last_run = data.get("last_run") or {}
+        # a zone removed by Reconfigure: drop it from the slots instead of failing the whole plan
+        known = {v["id"] for v in self.valves}
+        dropped = []
+        for sl in self.config.get("slots") or []:
+            before = len(sl.get("zones") or [])
+            sl["zones"] = [z for z in sl.get("zones") or [] if z.get("zone") in known]
+            if len(sl["zones"]) != before:
+                dropped.append(sl.get("id"))
+        for zid in list((self.config.get("zones") or {})):
+            if zid not in known:
+                del self.config["zones"][zid]
+        if dropped:
+            _LOGGER.warning("%s: removed zones dropped from slot(s) %s", self.entry.title, ", ".join(dropped))
+            await self._save()
         self._valve_of = {v["valve_switch"]: v["id"] for v in self.valves if v.get("valve_switch")}
         if self._valve_of:
             self._unsubs.append(async_track_state_change_event(self.hass, list(self._valve_of), self._on_valve))
