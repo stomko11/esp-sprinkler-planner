@@ -242,6 +242,10 @@
         "accept": {
           "name": "Accept",
           "description": "Accept (on) or dismiss (off)."
+        },
+        "reset": {
+          "name": "Take back",
+          "description": "Forget the answer; the run is undecided again."
         }
       }
     },

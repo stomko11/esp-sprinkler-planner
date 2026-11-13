@@ -472,9 +472,12 @@ class Runtime:
                               self.wx.get("current")).as_dict()
             if cfg["mode"] == "suggest":
                 sug = self.suggestions.get(key)
+                if sug and sug.get("status") in ("accepted", "dismissed") and cfg["answers"] == "follow" \
+                        and d["action"] != sug.get("asked", sug["action"]):
+                    sug = None                  # the forecast now says something else: ask again
                 d["status"] = sug["status"] if sug else ("pending" if d["action"] != "run" else "none")
-                if sug and sug["status"] == "accepted":
-                    d.update({k: sug[k] for k in ("action", "factor", "reasons")})
+                if sug and sug["status"] == "accepted" and cfg["answers"] == "keep":
+                    d.update({k: sug[k] for k in ("action", "factor", "reasons")})   # frozen at accept time
                 applied = d["status"] == "accepted"
             else:
                 sug = self.suggestions.get(key)
@@ -506,7 +509,7 @@ class Runtime:
                 if sug and sug["status"] == "pending":
                     del self.suggestions[key]
                 continue
-            if sug is None:
+            if sug is None or (sug.get("status") != "pending" and d["status"] == "pending"):
                 self.suggestions[key] = {"status": "pending", "action": d["action"], "factor": d["factor"],
                                          "reasons": d["reasons"], "created": now.isoformat()}
                 new = True
@@ -523,7 +526,17 @@ class Runtime:
                "adjust": "upravi\u0165" if sk else "adjust", "run": "spusti\u0165" if sk else "run"}[d["action"]]
         return {"action": act, "factor": f"{round(d['factor'] * 100)} %", "reason": ", ".join(d["reasons"])}
 
-    async def answer_suggestion(self, key: str, accept: bool) -> None:
+    async def answer_suggestion(self, key: str, accept: Optional[bool]) -> None:
+        """accept True / False answers the suggestion; None takes the answer back (undecided again)."""
+        if accept is None:
+            if self.suggestions.pop(key, None) is None:
+                raise model.ConfigError(f"run {key} has no answered suggestion")
+            await self._save()
+            await self.async_replan()
+            return
+        await self._answer(key, accept)
+
+    async def _answer(self, key: str, accept: bool) -> None:
         sug = self.suggestions.get(key)
         if sug is None:
             # runs beyond the suggestion horizon show the weather decision too: answering creates it
@@ -532,6 +545,10 @@ class Runtime:
                 raise model.ConfigError(f"no weather suggestion for {key}")
             sug = self.suggestions[key] = {"action": d["action"], "factor": d["factor"], "reasons": d["reasons"],
                                            "created": dt_util.utcnow().isoformat()}
+        live = self.decisions.get(key) or {}
+        if live.get("action") and live["action"] != "run":
+            sug.update({"action": live["action"], "factor": live["factor"], "reasons": live["reasons"]})
+        sug["asked"] = sug["action"]
         sug["status"] = "accepted" if accept else "dismissed"
         await self._save()
         await self.async_replan()

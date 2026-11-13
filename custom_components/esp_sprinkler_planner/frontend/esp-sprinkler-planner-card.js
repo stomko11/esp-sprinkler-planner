@@ -27,7 +27,11 @@ const SK = {
   "Raining now (binary or mm/h)": "Pr\u00e1ve pr\u0161\u00ed (bin\u00e1rny alebo mm/h)", "skip at gusts \u2265": "presko\u010di\u0165 pri n\u00e1razoch \u2265",
   "Live sensors": "Aktu\u00e1lne senzory", "Prices": "Ceny", "water per m\u00b3": "voda za m\u00b3", "energy per kWh": "energia za kWh",
   "Cost": "N\u00e1klady", "Last 12 months": "Posledn\u00fdch 12 mesiacov", "less": "menej", "more": "viac",
-  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Click to accept": "Kliknut\u00edm prijme\u0161", "Close": "Zavrie\u0165", "No runs on this day.": "V tento de\u0148 ni\u010d nebe\u017e\u00ed.",
+  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Click to accept": "Kliknut\u00edm prijme\u0161", "Accepted. Click to take back.": "Prijat\u00e9. Kliknut\u00edm vr\u00e1ti\u0161.",
+  "Dismissed: runs as planned. Click to take back.": "Zamietnut\u00e9: be\u017e\u00ed pod\u013ea pl\u00e1nu. Kliknut\u00edm vr\u00e1ti\u0161.",
+  "Take back accept": "Zru\u0161i\u0165 prijatie", "Take back dismiss": "Zru\u0161i\u0165 zamietnutie",
+  "When the forecast changes after I answered": "Ke\u010f sa predpove\u010f po odpovedi zmen\u00ed",
+  "keep my answer as it was": "necha\u0165 moju odpove\u010f, ako bola", "follow the new forecast, ask again if it changes": "riadi\u0165 sa novou predpove\u010fou, pri zmene sa op\u00fdta\u0165 znova", "Close": "Zavrie\u0165", "No runs on this day.": "V tento de\u0148 ni\u010d nebe\u017e\u00ed.",
   "Click a day for its runs.": "Klikni na de\u0148 pre jeho behy.", "adjust by weather": "upravi\u0165 pod\u013ea po\u010dasia", "Planner off": "Pl\u00e1nova\u010d vypnut\u00fd", "missing": "ch\u00fdba", "Remove": "Odstr\u00e1ni\u0165",
   "Suggestion (not applied): {0}": "N\u00e1vrh (nepou\u017eit\u00fd): {0}", "Time": "\u010cas", "Energy": "Energia", "average / usual": "priemer / be\u017en\u00fd",
   "+ add notify service": "+ prida\u0165 notify slu\u017ebu", "Send test to {0}": "Posla\u0165 test na {0}", "Sent to {0}": "Odoslan\u00e9: {0}",
@@ -381,7 +385,9 @@ class EspSprinklerPlannerCard extends HTMLElement {
     if ((plan.skipped || []).includes(k)) return `<span class="rm user" title="${esc(t("skipped by you"))}">\u2715</span>`;
     const dec = this._decision(r, plan);
     const tip = `${hm(r.start)} ${r.slots.map((x) => this._slotName(x)).join(" + ")}${dec && dec.reasons.length ? ": " + dec.reasons.join(", ") : ""}`;
-    if (!dec || dec.status === "dismissed" || dec.status === "none" || dec.action === "run") {
+    if (dec && dec.status === "dismissed")
+      return `<span class="rm ok ans" data-act="sugreset" data-key="${esc(k)}" title="${esc(t("Dismissed: runs as planned. Click to take back."))}\n${esc(tip)}">\u2713</span>`;
+    if (!dec || dec.status === "none" || dec.action === "run") {
       const wxOn = ((this.data.weather_full || {}).mode || "off") !== "off";
       return `<span class="rm ok" title="${esc(tip)}">${wxOn && !dec ? "\u00b7" : "\u2713"}</span>`;
     }
@@ -389,6 +395,8 @@ class EspSprinklerPlannerCard extends HTMLElement {
     const what = dec.action === "skip" ? "\u2715" : `${pct > 0 ? "+" : "\u2212"}${Math.abs(pct)}%`;
     if (dec.status === "pending")      // only a suggestion: nothing changes until you accept it
       return `<span class="rm sug ${dec.action}" data-act="sugyes" data-key="${esc(k)}" title="${esc(t("Suggestion (not applied): {0}", tip))}\n${esc(t("Click to accept"))}"><ha-icon icon="mdi:lightbulb-on-outline"></ha-icon>${what}</span>`;
+    if (dec.status === "accepted")
+      return `<span class="rm ${dec.action === "skip" ? "skip" : "adj"} ans" data-act="sugreset" data-key="${esc(k)}" title="${esc(t("Accepted. Click to take back."))}\n${esc(tip)}">${what}</span>`;
     return `<span class="rm ${dec.action === "skip" ? "skip" : "adj"}" title="${esc(tip)}">${what}</span>`;
   }
 
@@ -448,7 +456,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
           ${act ? `<div class="big">${az ? `${this._mark(this._zone(az.zone), true)}${esc(az.name)}` : act.dry_run ? t("Dry run") : t("Starting\u2026")}</div>
                    <div class="muted">${az && az.until ? `${t("until {0}", hm(az.until))} \u00b7 ` : ""}${t("run ends {0}", hm(act.run.end))}</div>
                    ${this._progress(act)}
-                   <button class="ab danger stopnow" data-act="stop"><ha-icon icon="mdi:stop-circle"></ha-icon>${t("Stop")}</button>`
+                   <button class="ab danger stopnow" data-act="stop" title="${esc(t("Stop"))}"><ha-icon icon="mdi:stop-circle"></ha-icon>${t("Stop")}</button>`
                 : `<div class="big muted">${t("Nothing running")}</div>`}
         </div>
         <div class="box ${(d.flags || {}).enabled ? "" : "boxoff"}">
@@ -600,7 +608,9 @@ class EspSprinklerPlannerCard extends HTMLElement {
     const now = this.data.now;
     const rows = runs.map((r) => {
       const k = runKey(r); const dec = this._decision(r, plan); const past = r.end < now;
-      const btns = past ? "" : sug[k] ? `<button class="ab" data-act="sugno" data-key="${esc(k)}">${t("Dismiss")}</button><button class="ab primary" data-act="sugyes" data-key="${esc(k)}">${t("Accept")}</button>`
+      const answered = dec && (dec.status === "accepted" || dec.status === "dismissed");
+      const btns = past ? "" : answered ? `<button class="ab" data-act="sugreset" data-key="${esc(k)}"><ha-icon icon="mdi:undo"></ha-icon>${t(dec.status === "accepted" ? "Take back accept" : "Take back dismiss")}</button>`
+        : sug[k] ? `<button class="ab" data-act="sugno" data-key="${esc(k)}">${t("Dismiss")}</button><button class="ab primary" data-act="sugyes" data-key="${esc(k)}">${t("Accept")}</button>`
         : user.has(k) ? `<button class="ab" data-act="unskip" data-key="${esc(k)}"><ha-icon icon="mdi:undo"></ha-icon>${t("Undo")}</button>`
         : wx.has(k) ? `<button class="ab" data-act="unskip" data-key="${esc(k)}"><ha-icon icon="mdi:play"></ha-icon>${t("Run anyway")}</button>`
         : `<button class="ab" data-act="skiprun" data-key="${esc(k)}"><ha-icon icon="mdi:skip-next-circle-outline"></ha-icon>${t("Skip")}</button>`;
@@ -871,7 +881,8 @@ class EspSprinklerPlannerCard extends HTMLElement {
           <span class="fl">${t("change per degree")}</span>${sl("per_degree", 4, 0, 10, 0.5, " %")}
           <span class="fl">${t("at least")}</span>${sl("min_factor", 50, 0, 100, 5, " %")}
           <span class="fl">${t("at most")}</span>${sl("max_factor", 160, 100, 250, 5, " %")}
-          ${mode === "suggest" ? `<span class="fl">${t("suggest for runs within")}</span>${sl("horizon", 24, 1, 72, 1, " h")}` : ""}
+          ${mode === "suggest" ? `<span class="fl">${t("suggest for runs within")}</span>${sl("horizon", 24, 1, 72, 1, " h")}
+          <span class="fl">${t("When the forecast changes after I answered")}</span><select data-k="${wk("answers")}" data-r="1">${[["keep", t("keep my answer as it was")], ["follow", t("follow the new forecast, ask again if it changes")]].map(([v, l]) => `<option value="${v}" ${(w.answers || "keep") === v ? "selected" : ""}>${l}</option>`).join("")}</select>` : ""}
         </div>
         <div class="row"><label><input type="checkbox" class="tog" data-k="${wk("scale_rain")}" data-t="bool" ${w.scale_rain !== false ? "checked" : ""}> ${t("less rain reduces the minutes")}</label></div>
         <div class="muted small">${t("Zones with follow weather off are never changed.")}</div>` : ""}`, false)}
@@ -1042,6 +1053,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
       } else if (act === "stop") { await svc("stop", {}); setTimeout(() => this._load(), 1500); }
       else if (act === "skip") { await svc("skip_next", {}); setTimeout(() => this._load(), 800); }
       else if (act === "unskip") { await svc("unskip", { run: tg.dataset.key }); setTimeout(() => this._load(), 800); }
+      else if (act === "sugreset") { await svc("answer_suggestion", { run: tg.dataset.key, reset: true }); setTimeout(() => this._load(), 800); }
       else if (act === "sugyes" || act === "sugno") { await svc("answer_suggestion", { run: tg.dataset.key, accept: act === "sugyes" }); setTimeout(() => this._load(), 800); }
       else if (act === "wxrefresh") { await svc("refresh_weather", {}); setTimeout(() => this._load(), 1500); }
       else if (act === "qr") { this._qr = this._qr ? null : { sel: {}, min: {}, reverse: false }; this._render(); }
@@ -1197,7 +1209,8 @@ ha-icon.zi { --mdc-icon-size:16px; margin-right:4px; flex:none; } ha-icon.zi.big
 label.day { display:inline-grid; place-items:center; min-width:34px; height:26px; padding:0 4px; border-radius:13px; border:1px solid var(--divider-color,#ccc); font-size:12px; cursor:pointer; user-select:none; }
 label.day input { display:none; } label.day.on { background:var(--primary-color,#03a9f4); border-color:transparent; color:#fff; font-weight:600; }
 .help { font-size:12px; color:var(--secondary-text-color,#888); margin:-2px 0 8px; line-height:1.4; }
-.stopnow { margin-top:8px; }
+.box { position:relative; } .stopnow { position:absolute; top:8px; right:8px; padding:4px 10px; }
+.rm.ans { cursor:pointer; } .rm.ans:hover { outline:2px solid var(--primary-text-color,#fff); outline-offset:-1px; }
 .fcd { cursor:pointer; transition:box-shadow .1s; } .fcd:hover { box-shadow:0 0 0 1px var(--divider-color,#bbb); } .fcd.sel { box-shadow:0 0 0 2px var(--primary-color,#03a9f4); }
 .dpanel { box-shadow:inset 3px 0 0 var(--primary-color,#03a9f4); }
 .dprow { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; padding:6px 0; border-top:1px solid var(--divider-color,#eee); } .dprow.past { opacity:.5; }

@@ -135,7 +135,9 @@ answer_suggestion:
       selector:
         text:
     accept:
-      required: true
+      selector:
+        boolean:
+    reset:
       selector:
         boolean:
 refresh_weather:

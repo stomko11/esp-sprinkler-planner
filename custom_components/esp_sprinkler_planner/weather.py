@@ -39,7 +39,9 @@ DEFAULTS: Dict[str, Any] = {
     "skip_rain": 4.0, "scale_rain": True, "window": 12, "min_probability": 50,
     "skip_wind": 40.0, "skip_cold": 4.0, "base_temp": 22.0, "per_degree": 4.0,
     "min_factor": 50.0, "max_factor": 160.0, "horizon": 24,
+    "answers": "keep",   # keep: an accepted / dismissed suggestion is final; follow: it follows forecast changes
 }
+ANSWERS = ("keep", "follow")
 NUMBERS = {"skip_gust": (0, 250), "skip_rain": (0, 200), "window": (0, 72), "min_probability": (0, 100), "skip_wind": (0, 200),
            "skip_cold": (-30, 30), "base_temp": (-10, 45), "per_degree": (0, 25), "min_factor": (0, 100),
            "max_factor": (100, 300), "horizon": (1, 168)}
@@ -61,6 +63,8 @@ def merged(cfg: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     out = {**DEFAULTS, **{k: v for k, v in cfg.items() if v is not None and v != ""}}
     if out["mode"] not in MODES:
         raise WeatherConfigError(f"weather.mode: one of {', '.join(MODES)}")
+    if out["answers"] not in ANSWERS:
+        raise WeatherConfigError(f"weather.answers: one of {', '.join(ANSWERS)}")
     for k in SENSORS:
         v = out[k]
         if v is not None and (not isinstance(v, str) or "." not in v):

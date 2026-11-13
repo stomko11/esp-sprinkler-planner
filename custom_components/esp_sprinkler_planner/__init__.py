@@ -38,7 +38,7 @@ SCHEMAS = {
     "unskip": vol.Schema({ENTRY: cv.string, vol.Optional("run"): cv.string}),
     "skip_run": vol.Schema({ENTRY: cv.string, vol.Required("run"): cv.string}),
     "answer_suggestion": vol.Schema({ENTRY: cv.string, vol.Required("run"): cv.string,
-                                     vol.Required("accept"): cv.boolean}),
+                                     vol.Optional("accept"): cv.boolean, vol.Optional("reset", default=False): cv.boolean}),
     "refresh_weather": vol.Schema({ENTRY: cv.string}),
     "get_stats": vol.Schema({ENTRY: cv.string, vol.Optional("period", default="week"): vol.In(["day", "week", "month", "year"]),
                              vol.Optional("count", default=12): vol.All(int, vol.Range(1, 400))}),
@@ -102,7 +102,9 @@ async def async_setup(hass: HomeAssistant, config) -> bool:
             elif call.service == "unskip":
                 return {"unskipped": await rt.unskip(d.get("run"))}
             elif call.service == "answer_suggestion":
-                await rt.answer_suggestion(d["run"], d["accept"])
+                if not d["reset"] and "accept" not in d:
+                    raise ConfigError("pass accept (true / false) or reset: true")
+                await rt.answer_suggestion(d["run"], None if d["reset"] else d["accept"])
             elif call.service == "refresh_weather":
                 await rt.refresh_weather()
                 await rt.async_replan()

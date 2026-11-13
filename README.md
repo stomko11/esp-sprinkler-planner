@@ -232,6 +232,11 @@ X % raises the `flow_warning` notification (leak or blocked valve). Service `get
 - Click a forecast day on Overview to see its runs with Skip / Undo / Run anyway, or Accept /
   Dismiss for a suggestion (service `skip_run` skips one run by key). Clicking a dashed
   suggestion mark in Week / preview accepts it.
+- Clicking an answered mark (filled = accepted, ✓ = dismissed) takes the answer back; the
+  run is undecided again (service `answer_suggestion` with `reset: true`).
+- Weather → "When the forecast changes after I answered": **keep** (default, the answer and
+  its minutes stay as they were) or **follow** (an accepted run follows the new forecast; if the
+  suggested action changes, e.g. -50 % becomes skip, you are asked again).
 - Slot editor explains start / finish, offset (minutes before / after the time, sunrise or
   sunset) and "adjust by weather" (off = always the exact minutes).
 - The master switch stops the schedule; manual and quick runs still work. When off, the next
