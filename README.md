@@ -46,8 +46,9 @@ Status: **design** (nothing implemented yet). This file is the spec we agree on 
 The controller runs one valve at a time, so slots that would overlap or sit close together
 become one **run**. Configurable:
 
-- **Merge window**: runs starting within N minutes (e.g. 60) of each other, or overlapping,
-  are merged.
+- **Merge window**: two runs are merged when the gap between the first one's end and the
+  next one's start is N minutes (e.g. 60) or less, or when they overlap. The check is repeated
+  on the merged result, so a chain of slots merges only as long as each next gap still fits.
 - **Placement**: the run with fewer zones joins the bigger one on the side where it was
   planned - earlier → added at the start, later → added at the end. Equal size: earlier
   slot's order first.
@@ -155,6 +156,14 @@ timing rules can be tested on their own.
 4. Card: zones, slot editor, timeline
 5. Weather rules + suggestions
 6. Graphs, polish, HACS release
+
+## Development
+
+```
+python3 -m unittest discover -s tests -v
+```
+
+The tests use only the standard library (pytest runs them too).
 
 Reference material for the first user (current automations, scripts, ESPHome config,
 dashboard) stays outside this repo.
