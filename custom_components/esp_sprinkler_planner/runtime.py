@@ -418,10 +418,14 @@ class Runtime:
         except wx_mod.WeatherConfigError:
             cfg = wx_mod.merged({})
         decisions: Dict[str, Dict[str, Any]] = {}
-        factors: Dict[Any, float] = {}
+        factors: Dict[Any, float] = {}     # (day, slot id) -> factor; 0 = drop the zones that follow the weather
         skips: List[str] = []
         if cfg["mode"] == "off":
             return decisions, factors, skips
+        try:
+            fixed = {z.id for z in model.zones_from(self.valves, cfg_all.get("zones") or {}) if not z.weather}
+        except model.ConfigError:
+            fixed = set()
         now = dt_util.utcnow()
         have = bool(self.wx.get("hourly") or self.wx.get("daily") or self.wx.get("fallen") is not None
                     or self.wx.get("temp") is not None)
@@ -447,10 +451,11 @@ class Runtime:
             decisions[key] = d
             if not applied:
                 continue
-            if d["action"] == "skip":
-                skips.append(key)
-            elif r.day not in factors:
-                factors[r.day] = d["factor"]
+            if d["action"] == "skip" and not (fixed & set(r.zone_ids())):
+                skips.append(key)           # the whole run follows the weather: keep it in the plan, dimmed
+            else:
+                for sid in r.slot_ids:      # skip: drop only the weather zones; adjust: scale them
+                    factors[(r.day, sid)] = 0.0 if d["action"] == "skip" else d["factor"]
         return decisions, factors, skips
 
     def _update_suggestions(self, horizon_h: float) -> bool:
@@ -550,6 +555,11 @@ class Runtime:
         self._valve_of = {v["valve_switch"]: v["id"] for v in self.valves if v.get("valve_switch")}
         if self._valve_of:
             self._unsubs.append(async_track_state_change_event(self.hass, list(self._valve_of), self._on_valve))
+            for eid, zid in self._valve_of.items():   # open during a restart: count it from when it opened
+                st = self.hass.states.get(eid)
+                if st and st.state == "on":
+                    self._zone_on[zid] = st.last_changed
+                    self._meter_start(zid, st.last_changed)
         for ev in ("mobile_app_notification_action", "ios.notification_action_fired"):
             self._unsubs.append(self.hass.bus.async_listen(ev, self._on_action))
         main = self.controller.get("main_switch")
@@ -594,7 +604,7 @@ class Runtime:
         if not factors:
             return base, decisions, skips
         final = planner.plan(zones, slots, settings, dt_util.now().date(), days, tz, self._sun,
-                             lambda day: factors.get(day, 1.0))
+                             lambda day, sid: factors.get((day, sid), 1.0))
         return final, decisions, skips
 
     async def async_replan(self) -> None:
@@ -877,7 +887,10 @@ class Runtime:
             lang = ui.get("language") or "auto"
             if lang not in ("auto",) + notify_logic.LANGUAGES:
                 raise model.ConfigError(f"ui.language: auto, {', '.join(notify_logic.LANGUAGES)}")
-            new["ui"] = {"language": lang}
+            title = str(ui.get("title") or "").strip()
+            if len(title) > 60:
+                raise model.ConfigError("ui.title: at most 60 characters")
+            new["ui"] = {"language": lang, **({"title": title} if title else {})}
         if notifications is not None:
             try:
                 notify_logic.merged(notifications)

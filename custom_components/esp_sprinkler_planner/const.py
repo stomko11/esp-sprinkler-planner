@@ -14,4 +14,4 @@ OPT_RESTORE = "restore"
 OPT_WATCHDOG = "watchdog_margin"
 
 DEFAULT_WATCHDOG = 10  # minutes past the planned end before the run is stopped
-PLAN_DAYS = 2          # days planned ahead for scheduling (today + tomorrow)
+PLAN_DAYS = 8          # days planned ahead for scheduling (the next run can be days away when runs are skipped)

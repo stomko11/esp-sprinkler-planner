@@ -198,7 +198,17 @@ X % raises the `flow_warning` notification (leak or blocked valve). Service `get
 
 ### Zones, language, notifications
 
-- Zone colour plus an optional **icon** (`mdi:*`), shown in the colour of the zone.
+- Zones are configured in Settings → Zones: name, colour, optional **icon** (`mdi:*`, shown in
+  the zone colour), use, **follow weather** (off for a greenhouse or indoor zone: never
+  shortened, lengthened or skipped; in a weather-skipped run only these zones still run),
+  max per run / day.
+- Card header: integration icon, editable name (Settings → Planner), and the master switch
+  that turns the planner on / off.
+- Week and slot preview show per run: ✓ as planned, ✕ skipped, ±50 % adjusted; a `?` means
+  a suggestion waiting for Accept / Dismiss.
+- Statistics count every opening of a mapped valve switch, also ones started outside the
+  planner (ESP button, other automations). A valve already open at an HA restart is counted
+  from when it opened.
 - **Language** auto / English / Slovensky: card, default notification texts and buttons,
   weather reasons. Changed notification texts stay as you wrote them.
 - Every notification event has editable title and message (templates), own recipients

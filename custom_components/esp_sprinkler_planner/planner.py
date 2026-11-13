@@ -41,6 +41,7 @@ class Zone:
     max_per_run: Optional[float] = None
     max_per_day: Optional[float] = None
     hard_max: Optional[float] = None   # the ESP run_duration number max_value
+    weather: bool = True               # False: the weather never changes or skips this zone (greenhouse, indoor)
 
 
 @dataclass(frozen=True)
@@ -145,7 +146,7 @@ class Plan:
 
 
 SunTimes = Callable[[date], Optional[Tuple[datetime, datetime]]]
-Multiplier = Union[float, Callable[[date], float]]
+Multiplier = Union[float, Callable[..., float]]   # value, f(day) or f(day, slot_id); 0 drops the weather zones
 
 # ---------------------------------------------------------------- helpers
 
@@ -215,8 +216,14 @@ def _initial_runs(zones, slots, settings, first_day, days, tz, sun, multiplier, 
     runs: List[Run] = []
     for i in range(days):
         day = first_day + timedelta(days=i)
-        mult = multiplier(day) if callable(multiplier) else multiplier
         for slot in slots:
+            if callable(multiplier):
+                try:
+                    mult = multiplier(day, slot.id)
+                except TypeError:
+                    mult = multiplier(day)
+            else:
+                mult = multiplier
             if not slot_active_on(slot, day):
                 continue
             entries = []
@@ -239,8 +246,15 @@ def _initial_runs(zones, slots, settings, first_day, days, tz, sun, multiplier, 
                                           f"{slot.name or slot.id}: no sunrise/sunset data for {day}"))
                 continue
             steps, notes = [], []
+            dropped = [e for e in entries if mult <= 0 and slot.use_multiplier and zones[e.zone_id].weather]
+            if dropped:
+                entries = [e for e in entries if e not in dropped]
+                notes.append("weather: " + ", ".join(zones[e.zone_id].name or e.zone_id for e in dropped) + " skipped")
+                if not entries:
+                    continue
             for e in _ordered(zones, entries, slot.reverse):
-                minutes = e.minutes * (mult if slot.use_multiplier else 1.0)
+                zone = zones[e.zone_id]
+                minutes = e.minutes * (mult if slot.use_multiplier and zone.weather else 1.0)
                 minutes, note = _cap_run(zones[e.zone_id], minutes)
                 if note:
                     notes.append(note)

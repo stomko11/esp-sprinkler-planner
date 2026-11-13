@@ -123,6 +123,18 @@ class MultiplierAndLimits(unittest.TestCase):
         self.assertEqual([r.steps[0].minutes for r in p.runs], [15, 10])
         self.assertEqual(p.runs[0].steps[0].base_minutes, 10)
 
+    def test_weather_opt_out_and_drop(self):
+        zones = [P.Zone("z1", "Lawn", 0), P.Zone("z2", "Greenhouse", 1, weather=False)]
+        p = one_day([slot("m", time(5, 0), [("z1", 10), ("z2", 10)])], zones=zones,
+                    multiplier=lambda d, sid: 1.5)
+        self.assertEqual([s.minutes for s in p.runs[0].steps], [15, 10])
+        p = one_day([slot("m", time(5, 0), [("z1", 10), ("z2", 10)])], zones=zones,
+                    multiplier=lambda d, sid: 0.0)
+        self.assertEqual([s.zone_id for s in p.runs[0].steps], ["z2"])
+        self.assertIn("weather: Lawn skipped", p.runs[0].notes)
+        p = one_day([slot("m", time(5, 0), [("z1", 10)])], zones=zones, multiplier=lambda d, sid: 0.0)
+        self.assertEqual(p.runs, [])
+
     def test_multiplier_per_day(self):
         p = P.plan(ZONES, [slot("m", time(5, 0), [("z1", 10)])], PLAIN, MON, 2, TZ,
                    multiplier=lambda d: 2.0 if d.weekday() == 0 else 1.0)

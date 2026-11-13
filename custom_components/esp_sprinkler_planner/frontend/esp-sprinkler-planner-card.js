@@ -69,7 +69,7 @@ const SK = {
   "warn when a zone's flow differs by": "upozorni\u0165, ak sa prietok z\u00f3ny l\u00ed\u0161i o", "% from usual": "% od be\u017en\u00e9ho",
   "Totals are preferred; without them the rate is integrated while a zone is open.": "Prednos\u0165 maj\u00fa celkov\u00e9 hodnoty; bez nich sa integruje okam\u017eit\u00e1 hodnota po\u010das otvorenej z\u00f3ny.",
   "This week": "Tento t\u00fd\u017ede\u0148", "This month": "Tento mesiac", "This year": "Tento rok", "All time": "Celkovo",
-  "runs": "behov", "valve openings": "otvorení", "skips": "presko\u010den\u00ed", "day": "de\u0148", "week": "t\u00fd\u017ede\u0148", "month": "mesiac", "year": "rok",
+  "runs": "behov", "valve openings": "otvoren\u00ed", "skips": "presko\u010den\u00ed", "day": "de\u0148", "week": "t\u00fd\u017ede\u0148", "month": "mesiac", "year": "rok",
   "Watering time": "\u010cas polievania", "Water": "Voda", "Pump energy": "Energia \u010derpadla", "Per zone": "Pod\u013ea z\u00f3n",
   "avg flow": "priem. prietok", "usual": "be\u017en\u00fd", "avg power": "priem. pr\u00edkon", "saved by skips": "u\u0161etren\u00e9 presko\u010den\u00edm",
   "No statistics yet - they start with the first real run.": "Zatia\u013e \u017eiadne \u0161tatistiky - za\u010dn\u00fa prv\u00fdm skuto\u010dn\u00fdm behom.",
@@ -79,7 +79,10 @@ const SK = {
   "skipped_ev": "presko\u010den\u00e9", "stopped_ev": "zastaven\u00e9", "error_ev": "chyba", "pump_off_ev": "\u010derpadlo vypnut\u00e9", "dry_run_ev": "sk\u00fa\u0161ka",
   "suggestion_ev": "n\u00e1vrh po\u010dasia", "weather_ev": "zmena kv\u00f4li po\u010dasiu", "flow_warning_ev": "neobvykl\u00fd prietok",
   "Stop_a": "Zastavi\u0165", "Skip_a": "Presko\u010di\u0165", "Turn pump ON_a": "Zapn\u00fa\u0165 \u010derpadlo", "Accept_a": "Prija\u0165", "Dismiss_a": "Zamietnu\u0165",
-  "no forecast in range": "mimo predpovede",
+  "no forecast in range": "mimo predpovede", "follow weather": "riadi\u0165 sa po\u010das\u00edm", "ignores weather": "ignoruje po\u010dasie",
+  "Off for a greenhouse or indoor zone: the weather never shortens, lengthens or skips it.": "Vypni pre sklen\u00edk alebo vn\u00fatorn\u00fa z\u00f3nu: po\u010dasie ju nikdy neskr\u00e1ti, nepred\u013a\u017ei ani nepresko\u010d\u00ed.",
+  "Skip when rain reaches": "Presko\u010di\u0165, ke\u010f zr\u00e1\u017eky dosiahnu", "change per degree": "zmena na stupe\u0148", "at least": "najmenej",
+  "at most": "najviac", "Zones with follow weather off are never changed.": "Z\u00f3ny s vypnut\u00fdm riaden\u00edm po\u010das\u00edm sa nemenia.",
 };
 const DAYS_EN = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DAYS_SK = ["Po", "Ut", "St", "\u0160t", "Pi", "So", "Ne"];
@@ -115,6 +118,8 @@ class EspSprinklerPlannerCard extends HTMLElement {
     this._open = new Set();
     this._qr = null;            // quick run dialog state
     this._sp = { period: "week", count: 12, metric: "min" };
+    this._dets = {};            // open state of <details data-d=...>, kept across renders
+    if (this._tab === "zones") this._tab = "settings";
   }
 
   static getStubConfig() { return {}; }
@@ -134,6 +139,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
     this.shadowRoot.addEventListener("click", (e) => this._onClick(e));
     this.shadowRoot.addEventListener("input", (e) => this._onInput(e, false));
     this.shadowRoot.addEventListener("change", (e) => this._onInput(e, true));
+    this.shadowRoot.addEventListener("toggle", (e) => { const k = e.target.dataset && e.target.dataset.d; if (k) this._dets[k] = e.target.open; }, true);
     this._load();
     this._timer = setInterval(() => this._load(), 60000);
     this._tick = setInterval(() => this._moveNow(), 30000);
@@ -248,6 +254,15 @@ class EspSprinklerPlannerCard extends HTMLElement {
   }
   _unitOf(e) { return (((this._hass.states[e] || {}).attributes || {}).unit_of_measurement || ""); }
   _decision(r, plan) { return ((plan.weather || {})[runKey(r)]) || null; }
+  _open_(key, dflt) { return (this._dets[key] ?? dflt) ? "open" : ""; }
+  _det(key, dflt, summary, body, cls) {
+    return `<details class="${cls || "sec"}" data-d="${key}" ${this._open_(key, dflt)}><summary>${summary}</summary><div class="secb">${body}</div></details>`;
+  }
+  _slider(path, value, min, max, step, unit) {
+    const v = value ?? min;
+    return `<span class="sl"><input type="range" data-k="${path}" data-t="num" data-u="${esc(unit || "")}" min="${min}" max="${max}" step="${step}" value="${esc(v)}"><output>${esc(v)}${esc(unit || "")}</output></span>`;
+  }
+  _title() { return this._cfg.title || ((this.draft && this.draft.ui) || {}).title || this.data.title; }
 
   // ------------------------------------------------------------------ rendering
   _render() {
@@ -258,13 +273,14 @@ class EspSprinklerPlannerCard extends HTMLElement {
     const d = this.data;
     const flags = d.flags || {};
     const STATUS = { idle: "Idle", scheduled: "Scheduled", running: "Running", dry_run: "Dry run", disabled: "Disabled", error: "Error" };
-    const tabs = [["today", "Today"], ["week", "Week"], ["stats", "Stats"], ["slots", "Slots"], ["zones", "Zones"], ["settings", "Settings"]];
+    const tabs = [["today", "Today"], ["week", "Week"], ["stats", "Stats"], ["slots", "Slots"], ["settings", "Settings"]];
     root.innerHTML = `
       <div class="head">
-        <div class="title">${esc(this._cfg.title || d.title)}</div>
+        <ha-icon class="hicon ${flags.enabled ? "" : "off"}" icon="mdi:sprinkler-variant"></ha-icon>
+        <div class="title">${esc(this._title())}</div>
         <span class="chip st-${esc(d.status)}">${esc(t(STATUS[d.status] || d.status))}</span>
         ${flags.dry_run ? `<span class="chip warn" title="${esc(t("Nothing is sent to the ESP"))}">${t("DRY RUN")}</span>` : ""}
-        ${flags.enabled ? "" : `<span class="chip off">${t("planner off")}</span>`}
+        <label class="master" title="${esc(t("Planner enabled"))}"><input type="checkbox" class="tog" data-flag="enabled" ${flags.enabled ? "checked" : ""}></label>
       </div>
       ${d.error ? `<div class="banner err">${esc(d.error)}</div>` : ""}
       ${this._loadErr ? `<div class="banner err">${esc(this._loadErr)}</div>` : ""}
@@ -321,13 +337,28 @@ class EspSprinklerPlannerCard extends HTMLElement {
   }
 
   _wxDay(day) { return ((this.data.weather_now || {}).days || []).find((x) => x.day === day); }
+  _runMark(r, plan) {
+    const k = runKey(r);
+    if ((plan.skipped || []).includes(k)) return `<span class="rm user" title="${esc(t("skipped by you"))}">\u2715</span>`;
+    const dec = this._decision(r, plan);
+    const tip = `${hm(r.start)} ${r.slots.map((x) => this._slotName(x)).join(" + ")}${dec && dec.reasons.length ? ": " + dec.reasons.join(", ") : ""}`;
+    if (!dec || dec.status === "dismissed" || dec.status === "none" || dec.action === "run") {
+      const wxOn = ((this.data.weather_full || {}).mode || "off") !== "off";
+      return `<span class="rm ok" title="${esc(tip)}">${wxOn && !dec ? "\u00b7" : "\u2713"}</span>`;
+    }
+    const pend = dec.status === "pending" ? "?" : "";
+    if (dec.action === "skip") return `<span class="rm skip ${pend ? "pend" : ""}" title="${esc(tip)}">\u2715${pend}</span>`;
+    const pct = Math.round((dec.factor - 1) * 100);
+    return `<span class="rm adj ${pend ? "pend" : ""}" title="${esc(tip)}">${pct > 0 ? "+" : "\u2212"}${Math.abs(pct)}%${pend}</span>`;
+  }
+
   _wxBadge(day, plan) {
     const w = this._wxDay(day);
-    const decs = (plan.runs || []).filter((r) => r.day === day).map((r) => this._decision(r, plan)).filter(Boolean);
-    const f = decs.find((x) => x.action === "adjust" && (x.status === "auto" || x.status === "accepted"));
-    const sk = decs.find((x) => x.action === "skip" && (x.status === "auto" || x.status === "accepted"));
-    if (!w && !f && !sk) return "";
-    return `<span class="wx">${w && w.cond ? `<ha-icon icon="mdi:weather-${WX_ICON[w.cond] || "cloudy"}"></ha-icon>` : ""}${w && w.tmax !== null && w.tmax !== undefined ? `${Math.round(w.tmax)}\u00b0` : ""}${w && w.rain ? ` <span class="rain">${r1(w.rain)} mm</span>` : ""}${f ? ` <b>${Math.round(f.factor * 100)} %</b>` : ""}${sk ? ` <b class="err">\u2715</b>` : ""}</span>`;
+    const runs = (plan.runs || []).filter((r) => r.day === day);
+    return `<span class="wxi">${w && w.cond ? `<ha-icon icon="mdi:weather-${WX_ICON[w.cond] || "cloudy"}"></ha-icon>` : ""}</span>
+      <span class="wxt">${w && w.tmax !== null && w.tmax !== undefined ? `${Math.round(w.tmax)}\u00b0` : ""}</span>
+      <span class="wxr rain">${w && w.rain ? `${r1(w.rain)} mm` : ""}</span>
+      <span class="wxm">${runs.map((r) => this._runMark(r, plan)).join("")}</span>`;
   }
 
   _weekRows(plan, small) {
@@ -444,12 +475,12 @@ class EspSprinklerPlannerCard extends HTMLElement {
     const user = new Set(plan.skipped || []); const wx = new Set(plan.weather_skipped || []);
     const runs = (plan.runs || []).filter((r) => r.start > now && (user.has(runKey(r)) || wx.has(runKey(r)))).slice(0, 6);
     if (!runs.length) return "";
-    return `<div class="box"><div class="lbl">${t("Skipped")}</div>${runs.map((r) => {
+    return `<details class="box skp" data-d="skipped" ${this._open_("skipped", false)}><summary class="lbl">${t("Skipped")} <span class="muted">${runs.map((r) => `${DAYS()[wd(r.day)]} ${hm(r.start)}`).join(", ")}</span></summary>${runs.map((r) => {
       const k = runKey(r); const isWx = wx.has(k) && !user.has(k); const dec = this._decision(r, plan);
       return `<div class="row"><b>${fmtDay(r.day)} ${hm(r.start)}</b> ${r.slots.map((x) => esc(this._slotName(x))).join(" + ")}
         <span class="muted">${isWx ? `${t("weather skip")}${dec ? ": " + esc(dec.reasons.join(", ")) : ""}` : t("skipped by you")}</span><span class="grow"></span>
         <button data-act="unskip" data-key="${esc(k)}">${isWx ? t("Run anyway") : t("Undo")}</button></div>`;
-    }).join("")}</div>`;
+    }).join("")}</details>`;
   }
 
   _forecastStrip(plan) {
@@ -473,7 +504,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
   _tab_week() {
     return `<div class="lbl">${t("Minutes per day")} <span class="muted">${t("(watered / planned)")}</span></div>${this._chart()}
       <div class="lbl">${t("Next 7 days")}</div><div data-preview="week"></div>
-      <details class="runs"><summary>${t("Run details")}</summary><div data-preview="runs"></div></details>`;
+      <details class="runs" data-d="runs_week" ${this._open_("runs_week", false)}><summary>${t("Run details")}</summary><div data-preview="runs"></div></details>`;
   }
 
   _chart() {
@@ -562,11 +593,10 @@ class EspSprinklerPlannerCard extends HTMLElement {
       const k = (f) => `slots.${i}.${f}`;
       return `<div class="slot ${s.enabled === false ? "dis" : ""}">
         <div class="shead" data-act="toggle" data-i="${i}">
-          <span class="caret">${open ? "\u25be" : "\u25b8"}</span><b>${esc(s.name || s.id)}</b>
-          <span class="muted">${esc(when)} \u00b7 ${esc(days)} \u00b7 ${t("{0} zones", (s.zones || []).length)}${s.reverse ? " \u00b7 " + t("reverse") : ""}</span>
-          <span class="zicons">${(s.zones || []).map((z) => this._mark(this._zone(z.zone))).join("")}</span>
-          <span class="grow"></span>
-          <label class="sw" title="${t("enabled")}"><input type="checkbox" data-k="${k("enabled")}" data-t="bool" ${s.enabled !== false ? "checked" : ""}></label>
+          <label class="sw" title="${t("enabled")}"><input type="checkbox" class="tog" data-k="${k("enabled")}" data-t="bool" ${s.enabled !== false ? "checked" : ""}></label>
+          <span class="caret">${open ? "\u25be" : "\u25b8"}</span><b class="sn">${esc(s.name || s.id)}</b>
+          <span class="muted ssum">${esc(when)} \u00b7 ${esc(days)}${s.reverse ? " \u00b7 " + t("reverse") : ""}</span>
+          <span class="zicons">${(s.zones || []).map((z) => this._mark(this._zone(z.zone))).join("")}<em>${(s.zones || []).length}</em></span>
         </div>
         ${open ? `<div class="sbody">
           <div class="row"><label>${t("Name")} <input data-k="${k("name")}" value="${esc(s.name || "")}"></label>
@@ -600,32 +630,26 @@ class EspSprinklerPlannerCard extends HTMLElement {
       <div class="row"><button data-act="addslot">${t("+ Add slot")}</button></div>
       <div class="lbl">${t("Preview \u2013 next 7 days")} ${this.dirty ? t("(unsaved)") : ""}</div>
       <div data-preview="week"></div>
-      <details class="runs" open><summary>${t("Runs and conflicts")}</summary><div data-preview="runs"></div></details>`;
+      <details class="runs" data-d="runs_slots" ${this._open_("runs_slots", false)}><summary>${t("Runs and conflicts")}</summary><div data-preview="runs"></div></details>`;
   }
 
-  _tab_zones() {
-    const d = this.data; const days = []; const start = dayOf(d.now);
-    for (let i = 6; i >= 0; i--) days.push(addDays(start, -i));
-    const hist = d.history || {};
+  _zonesSection() {
     const zones = this._zones();
-    const maxM = Math.max(1, ...zones.flatMap((z) => days.map((x) => (hist[x] || {})[z.id] || 0)));
     return `<datalist id="iconlist">${ICONS.map((i) => `<option value="${i}"></option>`).join("")}</datalist>` + zones.map((z) => {
       const k = (f) => `zones.${z.id}.${f}`;
       const zc = this.draft.zones[z.id] || {};
-      return `<div class="zbox ${z.enabled ? "" : "dis"}">
+      const follow = zc.weather !== false;
+      const sum = `${this._mark(z, true)}<b>${esc(z.name)}</b><span class="muted">${t("ESP position {0}", z.order)}${z.enabled ? "" : " \u00b7 " + t("(disabled)")}${follow ? "" : " \u00b7 " + t("ignores weather")}${zc.max_per_run ? ` \u00b7 ${t("max per run")} ${zc.max_per_run}\u2032` : ""}</span>`;
+      return this._det(`z_${z.id}`, false, sum, `
         <div class="row"><input type="color" data-k="${k("color")}" value="${esc(z.color)}" data-r="1">
-          ${this._mark(z, true)}
           <input class="name" data-k="${k("name")}" value="${esc(zc.name || "")}" placeholder="${esc(z.name)}">
-          <label><input type="checkbox" data-k="${k("enabled")}" data-t="bool" ${z.enabled ? "checked" : ""}> ${t("use")}</label>
-          <span class="grow"></span><span class="muted">${t("ESP position {0}", z.order)}${z.max_minutes ? ` \u00b7 ${t("ESP max {0}\u2032", z.max_minutes)}` : ""}</span></div>
+          <label><input type="checkbox" class="tog" data-k="${k("enabled")}" data-t="bool" data-r="1" ${z.enabled ? "checked" : ""}> ${t("use")}</label>
+          <label title="${esc(t("Off for a greenhouse or indoor zone: the weather never shortens, lengthens or skips it."))}"><input type="checkbox" class="tog" data-k="${k("weather")}" data-t="bool" data-r="1" ${follow ? "checked" : ""}> ${t("follow weather")}</label>
+          <span class="grow"></span><span class="muted">${z.max_minutes ? t("ESP max {0}\u2032", z.max_minutes) : ""}</span></div>
         <div class="row"><label>${t("icon")} <input class="icon" list="iconlist" data-k="${k("icon")}" data-r="1" value="${esc(zc.icon || "")}" placeholder="mdi:flower"></label>
-          <span class="iconpick">${ICONS.slice(0, 14).map((i) => `<button class="ib ${zc.icon === i ? "on" : ""}" data-act="seticon" data-zone="${esc(z.id)}" data-icon="${i}" title="${i}"><ha-icon icon="${i}" style="color:${z.color}"></ha-icon></button>`).join("")}${zc.icon ? `<button class="x" data-act="seticon" data-zone="${esc(z.id)}" data-icon="">\u2715</button>` : ""}</span></div>
+          <span class="iconpick">${ICONS.slice(0, 16).map((i) => `<button class="ib ${zc.icon === i ? "on" : ""}" data-act="seticon" data-zone="${esc(z.id)}" data-icon="${i}" title="${i}"><ha-icon icon="${i}" style="color:${z.color}"></ha-icon></button>`).join("")}${zc.icon ? `<button class="x" data-act="seticon" data-zone="${esc(z.id)}" data-icon="">\u2715</button>` : ""}</span></div>
         <div class="row"><label>${t("max per run")} <input type="number" class="n" min="0" data-k="${k("max_per_run")}" data-t="num" value="${esc(zc.max_per_run ?? "")}"> min</label>
-          <label>${t("max per day")} <input type="number" class="n" min="0" data-k="${k("max_per_day")}" data-t="num" value="${esc(zc.max_per_day ?? "")}"> min</label>
-          <span class="grow"></span><input type="number" class="n" min="0.1" step="0.5" id="rz-${esc(z.id)}" value="5"><button data-act="runzone" data-zone="${esc(z.id)}">${t("Run now (min)")}</button></div>
-        <div class="strip">${days.map((x) => { const m = (hist[x] || {})[z.id] || 0;
-          return `<div class="sc" title="${fmtDay(x)}: ${Math.round(m)} min"><div class="sb" style="height:${Math.round(m / maxM * 100)}%;background:${z.color}"></div><span>${DAYS()[wd(x)]}</span><em>${m ? Math.round(m) : ""}</em></div>`; }).join("")}</div>
-      </div>`;
+          <label>${t("max per day")} <input type="number" class="n" min="0" data-k="${k("max_per_day")}" data-t="num" value="${esc(zc.max_per_day ?? "")}"> min</label></div>`, "sub");
     }).join("");
   }
 
@@ -643,7 +667,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
     const unitRe = (re) => (e) => e.startsWith("sensor.") && re.test(this._unitOf(e));
     const evRows = meta.events.map((ev) => {
       const e = { ...(meta.defaults[ev] || {}), ...((full.events || {})[ev] || {}), ...(((n.events || {})[ev]) || {}) };
-      return `<details class="ev"><summary><label><input type="checkbox" data-ne="${ev}|enabled" ${e.enabled ? "checked" : ""}> ${esc(t(ev + "_ev"))}</label>
+      return `<details class="ev" data-d="ev_${ev}" ${this._open_("ev_" + ev, false)}><summary><label><input type="checkbox" data-ne="${ev}|enabled" ${e.enabled ? "checked" : ""}> ${esc(t(ev + "_ev"))}</label>
           <span class="muted">${esc(e.targets ? (e.targets.length ? e.targets.map((x) => x.slice(7)).join(", ") : t("nobody")) : t("default recipients"))}</span></summary>
         <div class="row"><label class="wide">${t("Title")} <input data-ne="${ev}|title" value="${esc(e.title || "")}"></label></div>
         <div class="row"><label class="wide">${t("Message")} <input data-ne="${ev}|message" value="${esc(e.message || "")}"></label></div>
@@ -656,58 +680,65 @@ class EspSprinklerPlannerCard extends HTMLElement {
       </details>`;
     }).join("");
     const wk = (f) => `weather.${f}`;
-    const wnum = (f, dflt, attrs) => `<input type="number" class="n" data-k="${wk(f)}" data-t="num" value="${esc(w[f] ?? dflt)}" ${attrs || ""}>`;
+    const sl = (f, dflt, mn, mx, st, u) => this._slider(wk(f), w[f] ?? dflt, mn, mx, st, u);
     const mode = w.mode || "off";
+    const sec = (key, icon, title, sum, body, dflt) => this._det(key, dflt, `<ha-icon icon="${icon}"></ha-icon><b>${title}</b><span class="muted">${sum}</span>`, body);
+    const modeName = { off: t("off"), suggest: t("suggest (Accept / Dismiss)"), auto: t("automatic") }[mode];
+    const meterCount = ["flow", "water_total", "pump_power", "pump_energy"].filter((x) => m[x]).length;
+    const mm = st.merge_mode || "window";
+    const mergeNames = { window: "merge when closer than", overlap: "merge only when overlapping", shift: "never merge, shift the later run" };
     return `
-      <div class="lbl">${t("Planner")}</div>
-      <div class="row"><label><input type="checkbox" data-flag="enabled" ${flags.enabled ? "checked" : ""}> ${t("Planner enabled")}</label>
-        <label><input type="checkbox" data-flag="dry_run" ${flags.dry_run ? "checked" : ""}> ${t("Dry run (send nothing to the ESP)")}</label>
-        <span class="grow"></span><label>${t("Language")} <select data-k="ui.language" data-r="1">${[["auto", t("automatic")], ["en", "English"], ["sk", "Slovensky"]].map(([v, l]) => `<option value="${v}" ${(ui.language || "auto") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label></div>
-      <div class="lbl">${t("Merging slots")}</div>
-      <div class="row">
-        <select data-k="settings.merge_mode">${[["window", "merge when closer than"], ["overlap", "merge only when overlapping"], ["shift", "never merge, shift the later run"]].map(([v, l]) => `<option value="${v}" ${(st.merge_mode || "window") === v ? "selected" : ""}>${t(l)}</option>`).join("")}</select>
-        <label><input type="number" class="n" min="0" data-k="settings.merge_window" data-t="int" value="${esc(st.merge_window ?? 60)}"> min</label>
-        <label>${t("same zone in both")} <select data-k="settings.same_zone">${["longer", "sum", "separate"].map((v) => `<option value="${v}" ${(st.same_zone || "longer") === v ? "selected" : ""}>${t(v)}</option>`).join("")}</select></label>
-      </div>
-      <div class="muted small">${t("Timing uses valve overlap {0} s (integration options) and pump delay {1} s.", d.timing.valve_overlap, d.timing.pump_delay)}</div>
-
-      <div class="lbl">${t("Weather")}</div>
-      <div class="row"><label>${t("Mode")} <select data-k="${wk("mode")}" data-r="1">${[["off", t("off")], ["suggest", t("suggest (Accept / Dismiss)")], ["auto", t("automatic")]].map(([v, l]) => `<option value="${v}" ${mode === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
-        ${mode !== "off" ? `<span class="grow"></span><span class="muted small">${wn.updated ? t("forecast {0} \u00b7 {1} hourly items", hm(new Date(wn.updated).toLocaleString("sv").replace(" ", "T")), wn.hourly || 0) : ""}${wn.error ? ` <span class="err">${esc(wn.error)}</span>` : ""}</span><button data-act="wxrefresh">${t("Refresh")}</button>` : ""}</div>
-      ${mode !== "off" ? `
-      <div class="row"><span class="fl">${t("Forecast")}</span>${this._picker(wk("entity"), w.entity, (e) => e.startsWith("weather."), "wxlist", "weather.home")}</div>
-      <div class="row"><span class="fl">${t("Rain sensor (fallen)")}</span>${this._picker(wk("rain_sensor"), w.rain_sensor, unitRe(/mm|in/), "rainlist")}</div>
-      <div class="row"><span class="fl">${t("Temperature sensor")}</span>${this._picker(wk("temp_sensor"), w.temp_sensor, unitRe(/\u00b0|C$|F$/), "templist")}</div>
-      <div class="row"><label>${t("skip at")} ${wnum("skip_rain", 4, 'min="0" step="0.5"')} ${t("mm rain (fallen + expected)")}</label>
-        <label><input type="checkbox" data-k="${wk("scale_rain")}" data-t="bool" ${w.scale_rain !== false ? "checked" : ""}> ${t("less rain reduces the minutes")}</label></div>
-      <div class="row"><label>${t("count forecast")} ${wnum("window", 12, 'min="0" max="72"')} ${t("h ahead")}</label>
-        <label>${t("only hours with probability \u2265")} ${wnum("min_probability", 50, 'min="0" max="100"')} %</label></div>
-      <div class="row"><label>${t("skip at wind \u2265")} ${wnum("skip_wind", 40, 'min="0"')} km/h</label>
-        <label>${t("skip below")} ${wnum("skip_cold", 4)} ${t("\u00b0C (frost)")}</label></div>
-      <div class="row"><label>${t("100 % at a daily max of")} ${wnum("base_temp", 22)} ${t("\u00b0C, change per degree")} ${wnum("per_degree", 4, 'min="0" max="25"')} %</label>
-        <label>${t("limits")} ${wnum("min_factor", 50, 'min="0" max="100"')}\u2013${wnum("max_factor", 160, 'min="100" max="300"')} %</label></div>
-      ${mode === "suggest" ? `<div class="row"><label>${t("suggest for runs within")} ${wnum("horizon", 24, 'min="1" max="168"')} h</label></div>` : ""}` : ""}
-
-      <div class="lbl">${t("Pump")}</div>
-      <div class="row">${this._picker("pump.entity", p.entity, (e) => /^(switch|input_boolean|light|fan)\./.test(e), "pumplist")}</div>
-      <div class="row">
-        ${p.entity ? `<label><input type="checkbox" data-k="pump.auto_on" data-t="bool" ${p.auto_on !== false ? "checked" : ""}> ${t("on before a run")}</label>
-          <label>${t("then wait")} <input type="number" class="n" min="0" max="600" data-k="pump.delay" data-t="int" value="${esc(p.delay || 0)}"> s</label>
-          <label><input type="checkbox" data-k="pump.auto_off" data-t="bool" ${p.auto_off !== false ? "checked" : ""}> ${t("off after")}</label>
-          <label><input type="checkbox" data-k="pump.warn_if_off" data-t="bool" ${p.warn_if_off !== false ? "checked" : ""}> ${t("warn if off")}</label>` : ""}</div>
-
-      <div class="lbl">${t("Meters (optional)")}</div>
-      <div class="row"><span class="fl">${t("Water flow")}</span>${this._picker("meters.flow", m.flow, unitRe(/\/(min|h|s)$/), "flowlist", "L/min, m\u00b3/h")}</div>
-      <div class="row"><span class="fl">${t("Water meter (total)")}</span>${this._picker("meters.water_total", m.water_total, unitRe(/^(L|m\u00b3|m3|gal)$/), "wtlist", "L, m\u00b3")}</div>
-      <div class="row"><span class="fl">${t("Pump power")}</span>${this._picker("meters.pump_power", m.pump_power, unitRe(/^k?W$/), "pwlist", "W")}</div>
-      <div class="row"><span class="fl">${t("Pump energy (total)")}</span>${this._picker("meters.pump_energy", m.pump_energy, unitRe(/^k?Wh$/), "enlist", "kWh")}</div>
-      <div class="row"><label>${t("warn when a zone's flow differs by")} <input type="number" class="n" min="0" max="100" data-k="meters.flow_warn" data-t="num" value="${esc(m.flow_warn ?? 30)}"> ${t("% from usual")}</label></div>
-      <div class="muted small">${t("Totals are preferred; without them the rate is integrated while a zone is open.")}</div>
-
-      <div class="lbl">${t("Notifications")}</div>
-      <div class="row"><b>${t("Send to")}</b> <span class="muted">${t("(default for every event, pick any number)")}</span></div>
-      <div class="svcs">${services.map((x) => `<label class="svc ${targets.has(x) ? "on" : ""}"><input type="checkbox" data-nt="${esc(x)}" ${targets.has(x) ? "checked" : ""}>${esc(x.slice(7))}</label>`).join("") || `<span class="muted">${t("no notify services")}</span>`}</div>
-      ${evRows}`;
+      ${sec("s_planner", "mdi:tune-variant", t("Planner"), `${flags.enabled ? t("enabled") : t("off")}${flags.dry_run ? " \u00b7 " + t("Dry run") : ""}`, `
+        <div class="row"><label><input type="checkbox" class="tog" data-flag="enabled" ${flags.enabled ? "checked" : ""}> ${t("Planner enabled")}</label>
+          <label><input type="checkbox" class="tog" data-flag="dry_run" ${flags.dry_run ? "checked" : ""}> ${t("Dry run (send nothing to the ESP)")}</label></div>
+        <div class="row"><label>${t("Name")} <input class="name" data-k="ui.title" value="${esc(ui.title || "")}" placeholder="${esc(d.title)}"></label>
+          <label>${t("Language")} <select data-k="ui.language" data-r="1">${[["auto", t("automatic")], ["en", "English"], ["sk", "Slovensky"]].map(([v, l]) => `<option value="${v}" ${(ui.language || "auto") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label></div>`, true)}
+      ${sec("s_zones", "mdi:sprinkler", t("Zones"), t("{0} zones", this._zones().length), this._zonesSection(), false)}
+      ${sec("s_merge", "mdi:call-merge", t("Merging slots"), `${t(mergeNames[mm])}${mm === "window" ? ` ${st.merge_window ?? 60} min` : ""}`, `
+        <div class="row">
+          <select data-k="settings.merge_mode" data-r="1">${Object.entries(mergeNames).map(([v, l]) => `<option value="${v}" ${mm === v ? "selected" : ""}>${t(l)}</option>`).join("")}</select>
+          ${mm === "window" ? this._slider("settings.merge_window", st.merge_window ?? 60, 0, 240, 5, " min") : ""}
+          <label>${t("same zone in both")} <select data-k="settings.same_zone">${["longer", "sum", "separate"].map((v) => `<option value="${v}" ${(st.same_zone || "longer") === v ? "selected" : ""}>${t(v)}</option>`).join("")}</select></label>
+        </div>
+        <div class="muted small">${t("Timing uses valve overlap {0} s (integration options) and pump delay {1} s.", d.timing.valve_overlap, d.timing.pump_delay)}</div>`, false)}
+      ${sec("s_weather", "mdi:weather-partly-rainy", t("Weather"), `${modeName}${mode !== "off" && w.entity ? " \u00b7 " + esc(this._fname(w.entity)) : ""}`, `
+        <div class="row"><label>${t("Mode")} <select data-k="${wk("mode")}" data-r="1">${[["off", t("off")], ["suggest", t("suggest (Accept / Dismiss)")], ["auto", t("automatic")]].map(([v, l]) => `<option value="${v}" ${mode === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+          ${mode !== "off" ? `<span class="grow"></span><span class="muted small">${wn.updated ? t("forecast {0} \u00b7 {1} hourly items", hm(new Date(wn.updated).toLocaleString("sv").replace(" ", "T")), wn.hourly || 0) : ""}${wn.error ? ` <span class="err">${esc(wn.error)}</span>` : ""}</span><button data-act="wxrefresh">${t("Refresh")}</button>` : ""}</div>
+        ${mode !== "off" ? `
+        <div class="row"><span class="fl">${t("Forecast")}</span>${this._picker(wk("entity"), w.entity, (e) => e.startsWith("weather."), "wxlist", "weather.home")}</div>
+        <div class="row"><span class="fl">${t("Rain sensor (fallen)")}</span>${this._picker(wk("rain_sensor"), w.rain_sensor, unitRe(/mm|in/), "rainlist")}</div>
+        <div class="row"><span class="fl">${t("Temperature sensor")}</span>${this._picker(wk("temp_sensor"), w.temp_sensor, unitRe(/\u00b0|C$|F$/), "templist")}</div>
+        <div class="grid">
+          <span class="fl">${t("Skip when rain reaches")}</span>${sl("skip_rain", 4, 0, 20, 0.5, " mm")}
+          <span class="fl">${t("count forecast")}</span>${sl("window", 12, 0, 48, 1, " h")}
+          <span class="fl">${t("only hours with probability \u2265")}</span>${sl("min_probability", 50, 0, 100, 5, " %")}
+          <span class="fl">${t("skip at wind \u2265")}</span>${sl("skip_wind", 40, 0, 80, 5, " km/h")}
+          <span class="fl">${t("skip below")} ${t("\u00b0C (frost)")}</span>${sl("skip_cold", 4, -5, 15, 1, " \u00b0C")}
+          <span class="fl">${t("100 % at a daily max of")}</span>${sl("base_temp", 22, 10, 35, 1, " \u00b0C")}
+          <span class="fl">${t("change per degree")}</span>${sl("per_degree", 4, 0, 10, 0.5, " %")}
+          <span class="fl">${t("at least")}</span>${sl("min_factor", 50, 0, 100, 5, " %")}
+          <span class="fl">${t("at most")}</span>${sl("max_factor", 160, 100, 250, 5, " %")}
+          ${mode === "suggest" ? `<span class="fl">${t("suggest for runs within")}</span>${sl("horizon", 24, 1, 72, 1, " h")}` : ""}
+        </div>
+        <div class="row"><label><input type="checkbox" class="tog" data-k="${wk("scale_rain")}" data-t="bool" ${w.scale_rain !== false ? "checked" : ""}> ${t("less rain reduces the minutes")}</label></div>
+        <div class="muted small">${t("Zones with follow weather off are never changed.")}</div>` : ""}`, false)}
+      ${sec("s_pump", "mdi:pump", t("Pump"), p.entity ? esc(this._fname(p.entity)) : "\u2013", `
+        <div class="row">${this._picker("pump.entity", p.entity, (e) => /^(switch|input_boolean|light|fan)\./.test(e), "pumplist")}</div>
+        ${p.entity ? `<div class="row"><label><input type="checkbox" class="tog" data-k="pump.auto_on" data-t="bool" ${p.auto_on !== false ? "checked" : ""}> ${t("on before a run")}</label>
+          <label><input type="checkbox" class="tog" data-k="pump.auto_off" data-t="bool" ${p.auto_off !== false ? "checked" : ""}> ${t("off after")}</label>
+          <label><input type="checkbox" class="tog" data-k="pump.warn_if_off" data-t="bool" ${p.warn_if_off !== false ? "checked" : ""}> ${t("warn if off")}</label></div>
+        <div class="grid"><span class="fl">${t("then wait")}</span>${this._slider("pump.delay", p.delay || 0, 0, 120, 1, " s")}</div>` : ""}`, false)}
+      ${sec("s_meters", "mdi:gauge", t("Meters (optional)"), meterCount ? `${meterCount} / 4` : "\u2013", `
+        <div class="row"><span class="fl">${t("Water flow")}</span>${this._picker("meters.flow", m.flow, unitRe(/\/(min|h|s)$/), "flowlist", "L/min, m\u00b3/h")}</div>
+        <div class="row"><span class="fl">${t("Water meter (total)")}</span>${this._picker("meters.water_total", m.water_total, unitRe(/^(L|m\u00b3|m3|gal)$/), "wtlist", "L, m\u00b3")}</div>
+        <div class="row"><span class="fl">${t("Pump power")}</span>${this._picker("meters.pump_power", m.pump_power, unitRe(/^k?W$/), "pwlist", "W")}</div>
+        <div class="row"><span class="fl">${t("Pump energy (total)")}</span>${this._picker("meters.pump_energy", m.pump_energy, unitRe(/^k?Wh$/), "enlist", "kWh")}</div>
+        <div class="grid"><span class="fl">${t("warn when a zone's flow differs by")}</span>${this._slider("meters.flow_warn", m.flow_warn ?? 30, 0, 100, 5, " %")}</div>
+        <div class="muted small">${t("Totals are preferred; without them the rate is integrated while a zone is open.")}</div>`, false)}
+      ${sec("s_notify", "mdi:bell-outline", t("Notifications"), (n.targets || []).map((x) => esc(x.slice(7))).join(", ") || t("nobody"), `
+        <div class="row"><b>${t("Send to")}</b> <span class="muted">${t("(default for every event, pick any number)")}</span></div>
+        <div class="svcs">${services.map((x) => `<label class="svc ${targets.has(x) ? "on" : ""}"><input type="checkbox" data-nt="${esc(x)}" ${targets.has(x) ? "checked" : ""}>${esc(x.slice(7))}</label>`).join("") || `<span class="muted">${t("no notify services")}</span>`}</div>
+        ${evRows}`, false)}`;
   }
 
   // ------------------------------------------------------------------ events
@@ -740,10 +771,12 @@ class EspSprinklerPlannerCard extends HTMLElement {
     if (t0.dataset.k !== undefined) {
       if (!isChange && (t0.type === "checkbox" || t0.tagName === "SELECT" || t0.type === "color")) return;
       let v = t0.type === "checkbox" ? t0.checked : t0.value;
+      if (t0.type === "range" && t0.nextElementSibling) t0.nextElementSibling.textContent = t0.value + (t0.dataset.u || "");
       const ty = t0.dataset.t;
       if (ty === "num") v = num(v);
       else if (ty === "int") v = v === "" ? null : parseInt(v, 10);
       this._setPath(t0.dataset.k, v);
+      if (t0.dataset.k === "ui.title") { const h = this.shadowRoot.querySelector(".head .title"); if (h) h.textContent = this._title(); }
       this._markDirty(isChange && t0.dataset.r === "1");
       return;
     }
@@ -820,7 +853,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
     const tg = e.target.closest("[data-tab],[data-act]");
     if (!tg) return;
     if (tg.dataset.tab) { this._tab = tg.dataset.tab; if (this._tab === "stats") this._stats = null; this._render(); return; }
-    if (e.target.closest("label.sw")) return;     // the enable checkbox inside a slot header
+    if (e.target.closest("label.sw, label.master")) return;     // switches inside clickable headers
     const act = tg.dataset.act;
     const svc = (s, data) => this._hass.callService(DOMAIN, s, { ...(this._cfg.entry_id ? { config_entry_id: this._cfg.entry_id } : {}), ...data });
     const real = () => !(this.data.flags || {}).dry_run;
@@ -885,6 +918,25 @@ ha-card { overflow:hidden; }
 .pad { padding:12px 0; }
 .head { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .title { font-size:18px; font-weight:600; margin-right:auto; }
+.hicon { --mdc-icon-size:26px; color:var(--primary-color,#03a9f4); } .hicon.off { color:var(--disabled-text-color,#888); }
+.master { display:inline-flex; margin-left:4px; }
+input.tog { appearance:none; -webkit-appearance:none; width:34px; height:18px; border-radius:9px; background:var(--divider-color,#bbb); position:relative; cursor:pointer; border:0; padding:0; margin:0 4px 0 0; flex:none; vertical-align:middle; transition:background .15s; }
+input.tog::after { content:""; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#fff; transition:left .15s; }
+input.tog:checked { background:var(--primary-color,#03a9f4); } input.tog:checked::after { left:18px; }
+details.sec { border:1px solid var(--divider-color,#ddd); border-radius:10px; margin:6px 0; }
+details.sec > summary, details.sub > summary { list-style:none; cursor:pointer; display:flex; align-items:center; gap:8px; padding:9px 12px; }
+details.sec > summary::-webkit-details-marker, details.sub > summary::-webkit-details-marker { display:none; }
+details.sec > summary::after, details.sub > summary::after { content:"\u25b8"; margin-left:auto; color:var(--secondary-text-color,#888); }
+details.sec[open] > summary::after, details.sub[open] > summary::after { content:"\u25be"; }
+details.sec > summary ha-icon { --mdc-icon-size:20px; color:var(--primary-color,#03a9f4); }
+details.sec > summary .muted, details.sub > summary .muted { font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.secb { padding:0 12px 8px; border-top:1px solid var(--divider-color,#eee); }
+details.sub { border-bottom:1px solid var(--divider-color,#eee); } details.sub > summary { padding:7px 2px; } details.sub .secb { border:0; padding:0 2px 6px 26px; }
+.sl { display:inline-flex; align-items:center; gap:8px; } .sl input[type=range] { width:200px; accent-color:var(--primary-color,#03a9f4); padding:0; border:0; background:none; }
+.sl output { min-width:62px; font-variant-numeric:tabular-nums; font-weight:600; }
+.grid { display:grid; grid-template-columns:minmax(150px,240px) 1fr; gap:6px 10px; align-items:center; margin:8px 0; }
+.grid .fl { width:auto; }
+details.skp > summary { cursor:pointer; margin:2px 0; } details.skp > summary .muted { margin-left:6px; }
 .chip { font-size:11px; font-weight:600; padding:2px 8px; border-radius:10px; background:var(--secondary-background-color,#eee); color:var(--primary-text-color,#333); }
 .chip.small { font-size:10px; padding:1px 6px; margin-left:4px; }
 .chip.warn { background:#f5a52433; color:#c47a00; }
@@ -929,15 +981,20 @@ ha-icon.zi { --mdc-icon-size:16px; margin-right:4px; flex:none; } ha-icon.zi.big
 .ticks { position:absolute; left:0; right:0; bottom:-15px; height:14px; font-size:10px; color:var(--secondary-text-color,#888); }
 .ticks span { position:absolute; transform:translateX(-2px); }
 .wrow { display:flex; align-items:center; gap:8px; margin:4px 0; } .wday { width:66px; font-size:12px; flex:none; } .wtl { flex:1; }
-.wwx { width:120px; flex:none; font-size:12px; text-align:right; white-space:nowrap; }
+.wwx { width:200px; flex:none; font-size:12px; display:grid; grid-template-columns:20px 30px 50px 1fr; align-items:center; white-space:nowrap; }
+.wwx ha-icon { --mdc-icon-size:16px; } .wxt { text-align:right; padding-right:4px; } .wxm { display:flex; gap:3px; }
+.rm { display:inline-block; min-width:34px; text-align:center; font-size:11px; font-weight:700; border-radius:6px; padding:1px 3px; background:var(--secondary-background-color,#eee); }
+.rm.ok { color:#2fbf71; } .rm.skip { color:#fff; background:#e5484d; } .rm.adj { color:#fff; background:#c47a00; } .rm.user { color:var(--secondary-text-color,#888); }
+.rm.pend { background:transparent; box-shadow:inset 0 0 0 1px currentColor; } .rm.skip.pend { color:#e5484d; } .rm.adj.pend { color:#c47a00; }
 .wx ha-icon { --mdc-icon-size:16px; vertical-align:-3px; margin-right:2px; } .rain { color:#4e9cf5; }
 .legend { display:flex; gap:10px; flex-wrap:wrap; margin:8px 0; font-size:12px; align-items:center; } .legend > span { display:inline-flex; align-items:center; } .legend i { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:4px; }
 .list { list-style:none; padding:0; margin:4px 0; } .list li.past { opacity:.45; } .list li { padding:6px 0; border-bottom:1px solid var(--divider-color,#eee); } .note { font-size:12px; color:#c47a00; } .note.wxn { color:#4e9cf5; }
 .list .muted { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
 .dis { opacity:.55; }
 .slot { border:1px solid var(--divider-color,#ddd); border-radius:10px; margin:6px 0; }
-.shead { display:flex; align-items:center; gap:8px; padding:8px 10px; cursor:pointer; flex-wrap:wrap; } .caret { width:12px; }
-.zicons { display:inline-flex; align-items:center; }
+.shead { display:grid; grid-template-columns:auto 12px minmax(70px,max-content) minmax(0,1fr) auto; align-items:center; gap:8px; padding:8px 10px; cursor:pointer; } .caret { width:12px; }
+.ssum { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .sn { white-space:nowrap; }
+.zicons { display:inline-flex; align-items:center; justify-content:flex-end; } .zicons em { font-style:normal; font-size:11px; color:var(--secondary-text-color,#888); margin-left:2px; }
 .sbody { padding:0 10px 8px; border-top:1px solid var(--divider-color,#eee); }
 label.day { display:inline-flex; align-items:center; gap:2px; font-size:12px; }
 .zt { border-collapse:collapse; width:100%; margin:6px 0; } .zt td, .zt th { padding:3px 4px; text-align:left; border-bottom:1px solid var(--divider-color,#eee); font-weight:normal; } .zt th { font-size:11px; color:var(--secondary-text-color,#888); }
@@ -981,7 +1038,7 @@ input.picker { width:300px; } input.bad { border-color:#e5484d; }
 .stt { background:var(--secondary-background-color,#f4f4f4); border-radius:10px; padding:6px 10px; } .stt .lbl { margin:2px 0; } .sv { font-size:19px; font-weight:600; }
 .bar { position:sticky; bottom:0; display:none; gap:8px; align-items:center; padding:8px 14px; margin:0 -14px; background:var(--card-background-color,#fff); border-top:1px solid var(--divider-color,#ddd); }
 .bar.show { display:flex; }
-@media (max-width:520px) { .grid2 { grid-template-columns:1fr; } .fl { width:auto; } .wwx { width:70px; } }
+@media (max-width:520px) { .grid2 { grid-template-columns:1fr; } .fl { width:auto; } .wwx { width:130px; grid-template-columns:18px 26px 0 1fr; } .wxr { display:none; } .grid { grid-template-columns:1fr; } .sl input[type=range] { width:150px; } }
 `;
 
 customElements.define("esp-sprinkler-planner-card", EspSprinklerPlannerCard);

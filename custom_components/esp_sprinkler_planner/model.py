@@ -116,6 +116,7 @@ def zones_from(valves: List[Dict[str, Any]], zone_cfg: Dict[str, Dict[str, Any]]
             max_per_run=_num(c.get("max_per_run"), where + " max_per_run"),
             max_per_day=_num(c.get("max_per_day"), where + " max_per_day"),
             hard_max=_num(v.get("max_minutes"), where + " max"),
+            weather=bool(c.get("weather", True)),
         ))
     return out
 
