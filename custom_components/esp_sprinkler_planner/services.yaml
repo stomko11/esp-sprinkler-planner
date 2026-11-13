@@ -13,6 +13,27 @@ configure:
     settings:
       selector:
         object:
+    notifications:
+      selector:
+        object:
+    pump:
+      selector:
+        object:
+test_notification:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: esp_sprinkler_planner
+    event:
+      required: true
+      selector:
+        select:
+          options: [planned, started, zone_changed, finished, skipped, stopped, error, pump_off, dry_run]
+    targets:
+      selector:
+        text:
+          multiple: true
 get_plan:
   fields:
     config_entry_id:

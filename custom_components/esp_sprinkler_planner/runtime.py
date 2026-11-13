@@ -14,9 +14,11 @@ from homeassistant.helpers.event import (async_track_point_in_utc_time, async_tr
                                          async_track_time_interval)
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.sun import get_astral_event_date
+from homeassistant.helpers.template import Template
+from homeassistant.util import slugify
 from homeassistant.util import dt as dt_util
 
-from . import executor, model, planner
+from . import executor, model, notify_logic, planner
 from .const import (CONF_CONTROLLER, CONF_VALVE_OVERLAP, CONF_VALVES, DEFAULT_WATCHDOG, DOMAIN, EVENT, OPT_RESTORE,
                     OPT_WATCHDOG, PLAN_DAYS, STORAGE_VERSION)
 
@@ -46,6 +48,13 @@ class Runtime:
         self._watchdog = None
         self._dry_timer = None
         self._confirmed = False   # main switch seen ON for the active run
+        self.history: Dict[str, Dict[str, float]] = {}    # "YYYY-MM-DD" -> zone id -> minutes actually watered
+        self.last_run: Dict[str, Dict[str, Any]] = {}     # zone id -> {"start", "end", "minutes"}
+        self.active_zone: Optional[Dict[str, Any]] = None
+        self._zone_on: Dict[str, datetime] = {}
+        self._valve_of: Dict[str, str] = {}
+        self._planned_timer = None
+        self._noticed: set = set()
 
     # ------------------------------------------------------------------ properties
     @property
@@ -89,13 +98,151 @@ class Runtime:
 
     async def _save(self) -> None:
         await self.store.async_save({"config": self.config, "flags": self.flags, "skip": self.skip,
-                                     "active": self.active})
+                                     "active": self.active, "history": self.history, "last_run": self.last_run})
 
     def _event(self, kind: str, **data) -> None:
         payload = {"entry_id": self.entry.entry_id, "type": kind, **data}
         self.last_event = {**payload, "time": dt_util.utcnow().isoformat()}
         self.hass.bus.async_fire(EVENT, payload)
         _LOGGER.info("%s: %s %s", self.entry.title, kind, data.get("reason") or "")
+        if kind in notify_logic.EVENTS:
+            extra = {k: v for k, v in data.items() if k not in ("run", "calls")}
+            if kind == "dry_run":
+                extra["calls"] = len(data.get("calls") or [])
+            self.notify(kind, data.get("run"), **extra)
+
+    # ------------------------------------------------------------------ notifications
+    def notify(self, event: str, run: Optional[Dict[str, Any]] = None, **extra) -> None:
+        self.hass.async_create_task(self._send(event, run, extra))
+
+    def _render(self, text: str, variables: Dict[str, Any]) -> str:
+        try:
+            return str(Template(text, self.hass).async_render(variables, parse_result=False))
+        except Exception as err:  # noqa: BLE001 - a broken template must not stop irrigation
+            _LOGGER.warning("%s: notification template error (%s): %s", self.entry.title, err, text)
+            return text
+
+    def _platform(self, target: str) -> str:
+        over = ((self.config.get("notifications") or {}).get("platforms") or {}).get(target)
+        if over in ("android", "ios", "other"):
+            return over
+        svc = target.split(".", 1)[1]
+        if not svc.startswith("mobile_app_"):
+            return "other"
+        for ent in self.hass.config_entries.async_entries("mobile_app"):
+            if "mobile_app_" + slugify(ent.data.get("device_name") or "") == svc:
+                os_name = str(ent.data.get("os_name") or "").lower()
+                return "ios" if ("ios" in os_name or "ipados" in os_name) else "android"
+        return "android"
+
+    async def _send(self, event: str, run: Optional[Dict[str, Any]], extra: Dict[str, Any], force=None) -> List[str]:
+        try:
+            full = notify_logic.merged(self.config.get("notifications"))
+        except notify_logic.NotifyConfigError as err:
+            _LOGGER.warning("%s: notifications not sent: %s", self.entry.title, err)
+            return []
+        targets = force if force is not None else notify_logic.targets_for(full, event)
+        e = full["events"][event]
+        slot_names = {x["id"]: x.get("name") or x["id"] for x in self.config.get("slots") or []}
+        v = notify_logic.variables(event, run, slot_names, self.entry.title, extra)
+        title, msg = self._render(e["title"], v), self._render(e["message"], v)
+        sent = []
+        for t in targets:
+            data = notify_logic.payload(self._platform(t), title, msg, e.get("actions") or [], self.entry.entry_id,
+                                        tag=f"esp_sprinkler_{self.entry.entry_id}")
+            dom, svc = t.split(".", 1)
+            try:
+                await self.hass.services.async_call(dom, svc, data, blocking=False)
+                sent.append(t)
+                _LOGGER.info("%s: notified %s (%s): %s - %s", self.entry.title, t, event, data["title"], data["message"])
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.warning("%s: notification to %s failed: %s", self.entry.title, t, err)
+        return sent
+
+    async def test_notification(self, event: str, targets: Optional[List[str]] = None) -> List[str]:
+        run = self.next_run or (self.plan.runs[0] if self.plan and self.plan.runs else None)
+        rd = model.run_to_dict(run, self.zone_names()) if run else None
+        extra = {"reason": "test", "source": "test", "zone": (rd or {}).get("zones", [{}])[0].get("name") if rd else None,
+                 "zone_minutes": 5, "actual_minutes": 0, "pump": (self.config.get("pump") or {}).get("entity"),
+                 "lead": 30, "calls": 0}
+        return await self._send(event, rd, extra, force=targets)
+
+    @callback
+    def _on_action(self, event: Event) -> None:
+        parsed = notify_logic.parse_action(event.data.get("action") or event.data.get("actionName") or "")
+        if not parsed or parsed[1] != self.entry.entry_id:
+            return
+        name = parsed[0]
+        _LOGGER.info("%s: notification action %s", self.entry.title, name)
+        if name == "stop":
+            self.hass.async_create_task(self.stop())
+        elif name == "skip":
+            self.hass.async_create_task(self.skip_next())
+        elif name == "pump_on":
+            self.hass.async_create_task(self._pump_switch(True, by_user=True))
+
+    # ------------------------------------------------------------------ pump
+    @property
+    def pump(self) -> Dict[str, Any]:
+        try:
+            return model.pump_from_dict(self.config.get("pump"))
+        except model.ConfigError:
+            return {}
+
+    def _pump_is_on(self) -> bool:
+        p = self.pump
+        st = self.hass.states.get(p["entity"]) if p else None
+        return bool(st and st.state == "on")
+
+    async def _pump_switch(self, on: bool, by_user: bool = False) -> None:
+        p = self.pump
+        if not p:
+            return
+        try:
+            await self.hass.services.async_call("homeassistant", "turn_on" if on else "turn_off",
+                                                {"entity_id": p["entity"]}, blocking=True)
+            if on and by_user and self.active:
+                self.active["pump_started"] = True   # turned on for this run -> off after it (auto_off)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("%s: pump %s failed: %s", self.entry.title, "on" if on else "off", err)
+
+    # ------------------------------------------------------------------ valve tracking
+    @callback
+    def _on_valve(self, event: Event) -> None:
+        zid = self._valve_of.get(event.data.get("entity_id"))
+        new, old = event.data.get("new_state"), event.data.get("old_state")
+        if zid is None or new is None or old is None:
+            return
+        if new.state == "on" and old.state != "on":
+            self._zone_on[zid] = new.last_changed
+            planned = None
+            if self.active:
+                planned = next((z["minutes"] for z in self.active["run"]["zones"] if z["zone"] == zid), None)
+            self.active_zone = {"zone": zid, "name": self.zone_names().get(zid, zid),
+                                "since": new.last_changed.isoformat(), "minutes": planned,
+                                "until": (new.last_changed + timedelta(minutes=planned)).isoformat() if planned else None}
+            if self.active and not self.active.get("dry_run"):
+                self.notify("zone_changed", self.active["run"], zone=self.active_zone["name"], zone_minutes=planned)
+            self._changed()
+        elif new.state != "on" and old.state == "on":
+            since = self._zone_on.pop(zid, None) or old.last_changed
+            minutes = round(max(0.0, (new.last_changed - since).total_seconds()) / 60, 2)
+            day = dt_util.as_local(since).date().isoformat()
+            self.history.setdefault(day, {})
+            self.history[day][zid] = round(self.history[day].get(zid, 0) + minutes, 2)
+            for d in sorted(self.history)[:-14]:
+                del self.history[d]
+            self.last_run[zid] = {"start": since.isoformat(), "end": new.last_changed.isoformat(), "minutes": minutes}
+            if self.active and not self.active.get("dry_run"):
+                act = self.active.setdefault("actual", {})
+                act[zid] = round(act.get(zid, 0) + minutes, 2)
+            if self.active_zone and self.active_zone["zone"] == zid:
+                self.active_zone = None
+            self.hass.async_create_task(self._save())
+            self._changed()
+
+    def minutes_today(self, zid: str) -> float:
+        return self.history.get(dt_util.now().date().isoformat(), {}).get(zid, 0.0)
 
     # ------------------------------------------------------------------ lifecycle
     async def async_start(self) -> None:
@@ -104,6 +251,13 @@ class Runtime:
         self.flags.update(data.get("flags") or {})
         self.skip = data.get("skip") or []
         self.active = data.get("active")
+        self.history = data.get("history") or {}
+        self.last_run = data.get("last_run") or {}
+        self._valve_of = {v["valve_switch"]: v["id"] for v in self.valves if v.get("valve_switch")}
+        if self._valve_of:
+            self._unsubs.append(async_track_state_change_event(self.hass, list(self._valve_of), self._on_valve))
+        for ev in ("mobile_app_notification_action", "ios.notification_action_fired"):
+            self._unsubs.append(self.hass.bus.async_listen(ev, self._on_action))
         main = self.controller.get("main_switch")
         if main:
             self._unsubs.append(async_track_state_change_event(self.hass, [main], self._on_main))
@@ -115,10 +269,10 @@ class Runtime:
         for u in self._unsubs:
             u()
         self._unsubs.clear()
-        for t in (self._timer, self._watchdog, self._dry_timer):
+        for t in (self._timer, self._watchdog, self._dry_timer, self._planned_timer):
             if t:
                 t()
-        self._timer = self._watchdog = self._dry_timer = None
+        self._timer = self._watchdog = self._dry_timer = self._planned_timer = None
 
     async def _periodic(self, _now) -> None:
         await self.async_replan()
@@ -155,7 +309,35 @@ class Runtime:
         self.next_run = upcoming[0] if upcoming else None
         if self.next_run and not self.active:
             self._timer = async_track_point_in_utc_time(self.hass, self._fire, dt_util.as_utc(self.next_run.start))
+        self._arm_planned_notice(now)
         self._changed()
+
+    def _arm_planned_notice(self, now) -> None:
+        if self._planned_timer:
+            self._planned_timer()
+            self._planned_timer = None
+        run = self.next_run
+        if not run or self.active:
+            return
+        try:
+            full = notify_logic.merged(self.config.get("notifications"))
+        except notify_logic.NotifyConfigError:
+            return
+        e = full["events"]["planned"]
+        key = run_key(run)
+        if not notify_logic.targets_for(full, "planned") or key in self._noticed:
+            return
+        at = dt_util.as_utc(run.start) - timedelta(minutes=e["lead"])
+        if at <= now:
+            return
+        rd, lead = model.run_to_dict(run, self.zone_names()), e["lead"]
+
+        async def _fire(_now):
+            self._planned_timer = None
+            self._noticed.add(key)
+            self.notify("planned", rd, lead=lead)
+
+        self._planned_timer = async_track_point_in_utc_time(self.hass, _fire, at)
 
     async def _fire(self, _now) -> None:
         self._timer = None
@@ -190,9 +372,16 @@ class Runtime:
         calls = executor.start_calls(run, self.valves, self.controller, states)
         snapshot = executor.take_snapshot(self.valves, self.controller, states)
         texts = [c.as_text() for c in calls]
+        pump = self.pump
+        pump_off_warn = False
+        if pump:
+            if pump["auto_on"] and not self._pump_is_on():
+                texts.insert(0, f"homeassistant.turn_on {pump['entity']} (pump; then wait {pump['delay']} s)")
+            elif not pump["auto_on"] and pump["warn_if_off"] and not self._pump_is_on():
+                pump_off_warn = True
         self.active = {"run": rd, "dry_run": self.flags["dry_run"], "snapshot": snapshot, "source": source,
                        "started": dt_util.utcnow().isoformat(), "expected_end": dt_util.as_utc(run.end).isoformat(),
-                       "calls": texts}
+                       "calls": texts, "actual": {}, "pump_started": False}
         self._confirmed = False
         await self._save()
         if self.active["dry_run"]:
@@ -202,6 +391,11 @@ class Runtime:
             self._dry_timer = async_track_point_in_utc_time(self.hass, self._dry_done, dt_util.as_utc(run.end))
             self._changed()
             return
+        if pump and pump["auto_on"] and not self._pump_is_on():
+            await self._pump_switch(True)
+            self.active["pump_started"] = True
+            if pump["delay"]:
+                await asyncio.sleep(pump["delay"])
         try:
             for c in calls:
                 await self.hass.services.async_call(c.domain, c.service, {"entity_id": c.entity_id, **c.data},
@@ -223,6 +417,8 @@ class Runtime:
             return
         self._arm_watchdog()
         self._event("started", run=rd, source=source)
+        if pump_off_warn and not self._pump_is_on():
+            self._event("pump_off", run=rd, pump=pump["entity"], source=source)
         self._changed()
 
     def _arm_watchdog(self) -> None:
@@ -266,8 +462,12 @@ class Runtime:
                                                         blocking=True)
                 except Exception:  # noqa: BLE001
                     _LOGGER.warning("%s: restore failed for %s", self.entry.title, c.entity_id)
+        p = self.pump
+        if active and not active.get("dry_run") and p and p["auto_off"] and active.get("pump_started"):
+            await self._pump_switch(False)
         await self._save()
-        self._event(kind, reason=reason, run=(active or {}).get("run"))
+        actual = round(sum(((active or {}).get("actual") or {}).values()), 1)
+        self._event(kind, reason=reason, run=(active or {}).get("run"), actual_minutes=actual)
         await self.async_replan()
 
     @callback
@@ -307,8 +507,16 @@ class Runtime:
         await self._save()
         await self.async_replan()
 
-    async def configure(self, zones=None, slots=None, settings=None) -> planner.Plan:
+    async def configure(self, zones=None, slots=None, settings=None, notifications=None, pump=None) -> planner.Plan:
         new = copy.deepcopy(self.config)
+        if notifications is not None:
+            try:
+                notify_logic.merged(notifications)
+            except notify_logic.NotifyConfigError as err:
+                raise model.ConfigError(str(err)) from err
+            new["notifications"] = notifications
+        if pump is not None:
+            new["pump"] = model.pump_from_dict(pump)
         if zones is not None:
             new["zones"] = zones
         if slots is not None:
@@ -366,6 +574,16 @@ class Runtime:
         self._event("skip_set", run=model.run_to_dict(self.next_run, self.zone_names()))
         await self.async_replan()
         return key
+
+    def zone_next(self, zid: str):
+        """(start, minutes) of the next planned run that waters this zone, or (None, None)."""
+        now = dt_util.utcnow()
+        for r in (self.plan.runs if self.plan else []):
+            if r.start > now and run_key(r) not in self.skip:
+                for st in r.steps:
+                    if st.zone_id == zid:
+                        return r.start, st.minutes
+        return None, None
 
     def plan_dict(self, days: int = 7) -> Dict[str, Any]:
         try:

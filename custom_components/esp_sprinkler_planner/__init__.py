@@ -11,15 +11,19 @@ from homeassistant.helpers import config_validation as cv
 
 from .const import DOMAIN
 from .model import ConfigError
+from .notify_logic import EVENTS
 from .runtime import Runtime
 
-PLATFORMS = [Platform.SENSOR, Platform.SWITCH]
+PLATFORMS = [Platform.SENSOR, Platform.SWITCH, Platform.BUTTON]
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 ENTRY = vol.Optional("config_entry_id")
 SCHEMAS = {
     "configure": vol.Schema({ENTRY: cv.string, vol.Optional("zones"): dict, vol.Optional("slots"): list,
-                             vol.Optional("settings"): dict}),
+                             vol.Optional("settings"): dict, vol.Optional("notifications"): dict,
+                             vol.Optional("pump"): dict}),
+    "test_notification": vol.Schema({ENTRY: cv.string, vol.Required("event"): vol.In(EVENTS),
+                                     vol.Optional("targets"): [cv.string]}),
     "get_plan": vol.Schema({ENTRY: cv.string, vol.Optional("days", default=7): vol.All(int, vol.Range(1, 31))}),
     "run_slot": vol.Schema({ENTRY: cv.string, vol.Required("slot"): cv.string}),
     "run_zone": vol.Schema({ENTRY: cv.string, vol.Required("zone"): cv.string,
@@ -46,8 +50,11 @@ async def async_setup(hass: HomeAssistant, config) -> bool:
         d = call.data
         try:
             if call.service == "configure":
-                plan = await rt.configure(d.get("zones"), d.get("slots"), d.get("settings"))
+                plan = await rt.configure(d.get("zones"), d.get("slots"), d.get("settings"),
+                                          d.get("notifications"), d.get("pump"))
                 return {"runs": len(plan.runs), "conflicts": [c.message for c in plan.conflicts]}
+            if call.service == "test_notification":
+                return {"sent_to": await rt.test_notification(d["event"], d.get("targets"))}
             if call.service == "get_plan":
                 return rt.plan_dict(d["days"])
             if call.service == "run_slot":
@@ -66,7 +73,8 @@ async def async_setup(hass: HomeAssistant, config) -> bool:
 
     for name, schema in SCHEMAS.items():
         support = {"get_plan": SupportsResponse.ONLY, "configure": SupportsResponse.OPTIONAL,
-                   "skip_next": SupportsResponse.OPTIONAL}.get(name, SupportsResponse.NONE)
+                   "skip_next": SupportsResponse.OPTIONAL,
+                   "test_notification": SupportsResponse.OPTIONAL}.get(name, SupportsResponse.NONE)
         hass.services.async_register(DOMAIN, name, handle, schema=schema, supports_response=support)
     return True
 

@@ -73,6 +73,11 @@ class Variables(unittest.TestCase):
         self.assertEqual(v["slots"], "Morning")
         self.assertNotIn("reason", v)
 
+    def test_whole_minutes_have_no_decimals(self):
+        v = N.variables("zone_changed", RUN, {}, "Garden", {"zone": "Lawn West", "zone_minutes": 1.0})
+        self.assertEqual(v["zone_minutes"], 1)
+        self.assertEqual(N.variables("zone_changed", RUN, {}, "G", {"zone_minutes": 2.5})["zone_minutes"], 2.5)
+
     def test_only_variables_of_the_event(self):
         v = N.variables("skipped", RUN, {}, "Garden", {"reason": "standby", "pump": "x"})
         self.assertEqual(v["reason"], "standby")

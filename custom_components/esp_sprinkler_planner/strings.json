@@ -77,6 +77,14 @@
         "settings": {
           "name": "Settings",
           "description": "merge_mode, merge_window, same_zone."
+        },
+        "notifications": {
+          "name": "Notifications",
+          "description": "targets (notify.* services), platforms (optional override per target: android / ios / other) and events: per event enabled, targets, title, message, actions."
+        },
+        "pump": {
+          "name": "Pump",
+          "description": "entity, auto_on, auto_off, delay (s), warn_if_off."
         }
       }
     },
@@ -153,6 +161,24 @@
         "config_entry_id": {
           "name": "Planner",
           "description": "Only needed with more than one planner."
+        }
+      }
+    },
+    "test_notification": {
+      "name": "Test notification",
+      "description": "Send one notification of the given event with example values from the next run.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Planner",
+          "description": "Only needed with more than one planner."
+        },
+        "event": {
+          "name": "Event",
+          "description": "Which notification."
+        },
+        "targets": {
+          "name": "Targets",
+          "description": "notify.* services; default: the configured ones."
         }
       }
     }

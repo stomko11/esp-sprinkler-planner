@@ -43,6 +43,27 @@ class ConfigError(ValueError):
     """Invalid configuration; the message says where."""
 
 
+PUMP_DOMAINS = ("switch", "input_boolean", "light", "fan")
+
+
+def pump_from_dict(d: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Validate the pump settings. Empty / no entity = no pump."""
+    d = dict(d or {})
+    ent = d.get("entity")
+    if not ent:
+        return {}
+    if not isinstance(ent, str) or ent.split(".", 1)[0] not in PUMP_DOMAINS:
+        raise ConfigError(f"pump.entity: a {' / '.join(PUMP_DOMAINS)} entity, got {ent!r}")
+    bad = set(d) - {"entity", "auto_on", "auto_off", "delay", "warn_if_off"}
+    if bad:
+        raise ConfigError(f"pump: unknown field(s) {', '.join(sorted(bad))}")
+    delay = _num(d.get("delay", 0), "pump.delay") or 0
+    if delay > 600:
+        raise ConfigError("pump.delay: at most 600 seconds")
+    return {"entity": ent, "auto_on": bool(d.get("auto_on", True)), "auto_off": bool(d.get("auto_off", True)),
+            "delay": int(delay), "warn_if_off": bool(d.get("warn_if_off", True))}
+
+
 def _num(v, where: str, minimum: float = 0) -> Optional[float]:
     if v is None or v == "":
         return None
@@ -156,7 +177,9 @@ def parse(cfg: Dict[str, Any], valves: List[Dict[str, Any]], valve_overlap: int 
             raise ConfigError(f"slot id {slot.id!r} is used twice")
         seen.add(slot.id)
         slots.append(slot)
-    return zones, slots, settings_from_dict(cfg.get("settings") or {}, valve_overlap)
+    pump = cfg.get("pump") or {}
+    delay = int(pump.get("delay") or 0) if pump.get("entity") and pump.get("auto_on") else 0
+    return zones, slots, settings_from_dict(cfg.get("settings") or {}, valve_overlap, delay)
 
 
 def run_to_dict(run: Run, names: Dict[str, str]) -> Dict[str, Any]:

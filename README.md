@@ -5,7 +5,7 @@ Home Assistant integration + dashboard card that plans and runs irrigation on to
 running the valves; the planner decides **when**, **which zones**, **how long** and **in what
 order** - without input_booleans, scripts or automations.
 
-Status: **0.1 - planner core + integration (dry run by default)**. No card, weather or notifications yet.
+Status: **0.2 - planner, integration, notifications, pump (dry run by default)**. No card or weather yet.
 
 - Home Assistant 2026.8+, installed through HACS (custom repository) or by copying
   `custom_components/esp_sprinkler_planner` into the config folder
@@ -192,6 +192,62 @@ data:
 Invalid input is rejected with a message saying exactly what is wrong. Other services:
 `get_plan` (response: runs and conflicts for N days), `run_slot`, `run_zone`, `stop`,
 `skip_next`, `replan`.
+
+### Per-zone entities and buttons
+
+Per zone: `sensor.<name>_planner_<zone>_next_run`, `..._last_run` (with minutes) and
+`..._minutes_today` (actually watered, measured from the valve switch; attribute
+`last_7_days`). `sensor.<name>_planner_active_zone` shows the valve that is open now
+(attributes: since, planned minutes, until). Buttons: **Stop**, **Skip next run**.
+
+Watering time is measured from the valve switches whoever started them, so manual runs count
+too. History is kept 14 days.
+
+### Notifications
+
+```yaml
+action: esp_sprinkler_planner.configure
+data:
+  notifications:
+    targets: [notify.mobile_app_pixel, notify.mobile_app_iphone]   # default for every event
+    platforms: {notify.my_telegram: other}                         # optional override
+    events:
+      planned:      {enabled: true, lead: 30}                      # 30 min before a run
+      started:      {message: "{{ zone_list }} until <b>{{ end_time }}</b>"}
+      zone_changed: {enabled: true, targets: [notify.mobile_app_pixel]}
+      finished:     {enabled: true}
+      skipped:      {enabled: true}
+```
+
+Events: `planned`, `started`, `zone_changed`, `finished`, `skipped`, `stopped`, `error`,
+`pump_off`, `dry_run`. Per event: `enabled`, `targets` (else the global ones), `title`,
+`message` (templates) and `actions` (`stop`, `skip`, `pump_on`). Defaults: started,
+finished, skipped, stopped, error and pump_off on; planned, zone_changed and dry_run off.
+Nothing is sent until `targets` is set.
+
+Variables: every event has `planner`, `slots`, `zones`, `zone_list`, `start_time`,
+`end_time`, `duration_min`, `day`, `source`; plus `lead` (planned), `zone`,
+`zone_minutes` (zone_changed), `actual_minutes` (finished), `reason` (skipped, stopped,
+error), `pump` (pump_off), `calls` (dry_run).
+
+The platform of a `notify.mobile_app_*` target is read from the Companion app registration:
+Android gets icon, channel `Irrigation`, simple HTML and at most 3 buttons; iOS gets plain
+text and the buttons; any other notify service gets title and plain message. Buttons work from
+both apps (`mobile_app_notification_action` / `ios.notification_action_fired`). All
+notifications of one planner use the same tag, so the next one replaces the previous one.
+
+`esp_sprinkler_planner.test_notification` sends one event with example values.
+
+### Pump
+
+```yaml
+  pump: {entity: switch.well_pump, auto_on: true, auto_off: true, delay: 10, warn_if_off: true}
+```
+
+`auto_on`: switched on before the valves, then `delay` seconds (counted in the run timing).
+`auto_off`: switched off after the run when the planner turned it on (or the "Turn pump ON"
+button did). Without `auto_on`, `warn_if_off` sends `pump_off` with a Turn pump ON button
+when a run starts with the pump off. Any switch / input_boolean / light / fan entity.
 
 ### What a run does on the ESP
 

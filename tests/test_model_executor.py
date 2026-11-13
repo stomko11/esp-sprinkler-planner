@@ -67,6 +67,22 @@ class Model(unittest.TestCase):
                 M.parse(cfg, VALVES)
             self.assertIn(text, str(cm.exception))
 
+    def test_pump_delay_counts_in_timing_only_with_auto_on(self):
+        cfg = {"slots": [{"id": "m", "anchor": {"at": "05:00"}, "zones": [{"zone": "zone_1", "minutes": 10}]}],
+               "pump": {"entity": "switch.pump", "auto_on": True, "delay": 30}}
+        self.assertEqual(M.parse(cfg, VALVES)[2].pump_delay, 30)
+        cfg["pump"]["auto_on"] = False
+        self.assertEqual(M.parse(cfg, VALVES)[2].pump_delay, 0)
+
+    def test_pump_validation(self):
+        self.assertEqual(M.pump_from_dict(None), {})
+        self.assertEqual(M.pump_from_dict({"entity": "input_boolean.p"})["auto_off"], True)
+        for bad, text in (({"entity": "sensor.p"}, "pump.entity"), ({"entity": "switch.p", "delay": 900}, "600"),
+                          ({"entity": "switch.p", "speed": 1}, "unknown field")):
+            with self.assertRaises(M.ConfigError) as cm:
+                M.pump_from_dict(bad)
+            self.assertIn(text, str(cm.exception))
+
     def test_run_to_dict(self):
         zones, slots, settings = M.parse(self.CFG, VALVES)
         sun = lambda d: (P.datetime.combine(d, time(6, 0), TZ), P.datetime.combine(d, time(19, 0), TZ))

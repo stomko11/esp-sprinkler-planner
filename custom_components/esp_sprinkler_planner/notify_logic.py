@@ -184,5 +184,7 @@ def variables(event: str, run: Optional[Dict[str, Any]], slot_names: Dict[str, s
         "day": run.get("day"), "source": (extra or {}).get("source"),
     }
     for k, val in (extra or {}).items():
+        if isinstance(val, float) and val == int(val):
+            val = int(val)          # 1.0 min -> 1 min
         v[k] = val
     return {k: v.get(k) for k in VARIABLES[event]}
