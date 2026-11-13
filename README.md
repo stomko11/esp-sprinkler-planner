@@ -5,11 +5,28 @@ Home Assistant integration + dashboard card that plans and runs irrigation on to
 running the valves; the planner decides **when**, **which zones**, **how long** and **in what
 order** - without input_booleans, scripts or automations.
 
-Status: **0.4 - planner, card, notifications, pump, weather, quick run, statistics (dry run by default)**.
+Status: **0.5** - planner, card, notifications, pump, weather, quick run, statistics. Dry run
+is on after install: nothing is sent to the ESP until you switch it off.
 
-- Home Assistant 2026.8+, installed through HACS (custom repository) or by copying
-  `custom_components/esp_sprinkler_planner` into the config folder
-- Domain: `esp_sprinkler_planner`
+[![Open your Home Assistant instance and add this repository to the Marketplace.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=stomko11&repository=esp-sprinkler-planner&category=integration)
+
+## Install
+
+**Marketplace (Home Assistant 2026.11+) or HACS**
+
+1. Settings → Marketplace (or HACS) → ⋮ → **Custom repositories** →
+   `https://github.com/stomko11/esp-sprinkler-planner`, type **Integration** - or use the button above.
+2. Open **ESP Sprinkler Planner** → **Download**, then restart Home Assistant.
+3. Settings → Devices & services → **Add integration** → ESP Sprinkler Planner.
+
+Updates appear under Settings → Updates with the release notes.
+
+**Manual:** copy `custom_components/esp_sprinkler_planner` into `<config>/custom_components/`
+and restart.
+
+The dashboard card is served by the integration itself - no resource to add.
+
+Requirements: Home Assistant 2026.8 or newer, an ESPHome device with a `sprinkler:` controller.
 
 ---
 

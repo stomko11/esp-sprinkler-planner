@@ -1,0 +1,20 @@
+name: Release check
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag matches manifest version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          ver=$(python3 -c "import json;print(json.load(open('custom_components/esp_sprinkler_planner/manifest.json'))['version'])")
+          echo "tag=$tag manifest=$ver"
+          test "$tag" = "$ver"
