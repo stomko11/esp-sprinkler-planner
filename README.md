@@ -229,6 +229,11 @@ X % raises the `flow_warning` notification (leak or blocked valve). Service `get
 - Default titles start with an emoji per event; on Android each event also has its own
   status-bar icon and colour. Changed texts stay as written.
 - Week / preview marks: filled ✕ or -50 % = applied; dashed with a bulb = only a suggestion.
+- Click a forecast day on Overview to see its runs with Skip / Undo / Run anyway, or Accept /
+  Dismiss for a suggestion (service `skip_run` skips one run by key). Clicking a dashed
+  suggestion mark in Week / preview accepts it.
+- Slot editor explains start / finish, offset (minutes before / after the time, sunrise or
+  sunset) and "adjust by weather" (off = always the exact minutes).
 - The master switch stops the schedule; manual and quick runs still work. When off, the next
   run is struck through.
 - Every notification event has editable title and message (templates), own recipients

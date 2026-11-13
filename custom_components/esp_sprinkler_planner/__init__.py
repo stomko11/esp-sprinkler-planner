@@ -36,6 +36,7 @@ SCHEMAS = {
         vol.Required("minutes"): vol.All(vol.Coerce(float), vol.Range(min=0.1, max=600))})],
         vol.Optional("reverse", default=False): cv.boolean}),
     "unskip": vol.Schema({ENTRY: cv.string, vol.Optional("run"): cv.string}),
+    "skip_run": vol.Schema({ENTRY: cv.string, vol.Required("run"): cv.string}),
     "answer_suggestion": vol.Schema({ENTRY: cv.string, vol.Required("run"): cv.string,
                                      vol.Required("accept"): cv.boolean}),
     "refresh_weather": vol.Schema({ENTRY: cv.string}),
@@ -96,6 +97,8 @@ async def async_setup(hass: HomeAssistant, config) -> bool:
                 await rt.run_zone(d["zone"], d["minutes"])
             elif call.service == "quick_run":
                 await rt.quick_run(d["zones"], d["reverse"])
+            elif call.service == "skip_run":
+                return {"skipped": await rt.skip_run(d["run"])}
             elif call.service == "unskip":
                 return {"unskipped": await rt.unskip(d.get("run"))}
             elif call.service == "answer_suggestion":
@@ -120,7 +123,7 @@ async def async_setup(hass: HomeAssistant, config) -> bool:
 
     for name, schema in SCHEMAS.items():
         support = {"get_plan": SupportsResponse.ONLY, "configure": SupportsResponse.OPTIONAL,
-                   "skip_next": SupportsResponse.OPTIONAL, "unskip": SupportsResponse.OPTIONAL,
+                   "skip_next": SupportsResponse.OPTIONAL, "unskip": SupportsResponse.OPTIONAL, "skip_run": SupportsResponse.OPTIONAL,
                    "get_stats": SupportsResponse.ONLY,
                    "test_notification": SupportsResponse.OPTIONAL}.get(name, SupportsResponse.NONE)
         hass.services.async_register(DOMAIN, name, handle, schema=schema, supports_response=support)

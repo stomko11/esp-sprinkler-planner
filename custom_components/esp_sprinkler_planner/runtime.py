@@ -1016,6 +1016,18 @@ class Runtime:
             if self.active:   # the state listener may not have fired yet
                 await self._finish("stopped", reason="stopped by user")
 
+    async def skip_run(self, key: str) -> str:
+        """Skip one planned run (key 'YYYY-MM-DD|slot[+slot]')."""
+        run = next((r for r in (self.plan.runs if self.plan else []) if run_key(r) == key), None)
+        if run is None or run.start <= dt_util.utcnow():
+            raise model.ConfigError(f"no upcoming run {key}")
+        if key not in self.skip:
+            self.skip.append(key)
+            await self._save()
+            self._event("skip_set", run=model.run_to_dict(run, self.zone_names()))
+            await self.async_replan()
+        return key
+
     async def skip_next(self) -> Optional[str]:
         if not self.next_run:
             return None
