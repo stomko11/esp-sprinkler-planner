@@ -27,7 +27,9 @@ const SK = {
   "Raining now (binary or mm/h)": "Pr\u00e1ve pr\u0161\u00ed (bin\u00e1rny alebo mm/h)", "skip at gusts \u2265": "presko\u010di\u0165 pri n\u00e1razoch \u2265",
   "Live sensors": "Aktu\u00e1lne senzory", "Prices": "Ceny", "water per m\u00b3": "voda za m\u00b3", "energy per kWh": "energia za kWh",
   "Cost": "N\u00e1klady", "Last 12 months": "Posledn\u00fdch 12 mesiacov", "less": "menej", "more": "viac",
-  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Click to accept": "Kliknut\u00edm prijme\u0161", "Accepted. Click to take back.": "Prijat\u00e9. Kliknut\u00edm vr\u00e1ti\u0161.",
+  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Click to accept": "Kliknut\u00edm prijme\u0161", "Skipped by you. Click to undo.": "Presko\u010dil si. Kliknut\u00edm vr\u00e1ti\u0161.",
+  "Undo skip": "Zru\u0161i\u0165 presko\u010denie", "Clear all": "Vymaza\u0165 v\u0161etko", "Undo all your skips and forget all weather answers?": "Zru\u0161i\u0165 v\u0161etky tvoje presko\u010denia a zabudn\u00fa\u0165 v\u0161etky odpovede na po\u010dasie?",
+  "Totals": "S\u00fahrny", "per day": "po d\u0148och", "per week": "po t\u00fd\u017ed\u0148och", "per month": "po mesiacoch", "per year": "po rokoch", "Accepted. Click to take back.": "Prijat\u00e9. Kliknut\u00edm vr\u00e1ti\u0161.",
   "Dismissed: runs as planned. Click to take back.": "Zamietnut\u00e9: be\u017e\u00ed pod\u013ea pl\u00e1nu. Kliknut\u00edm vr\u00e1ti\u0161.",
   "Take back accept": "Zru\u0161i\u0165 prijatie", "Take back dismiss": "Zru\u0161i\u0165 zamietnutie",
   "When the forecast changes after I answered": "Ke\u010f sa predpove\u010f po odpovedi zmen\u00ed",
@@ -382,7 +384,10 @@ class EspSprinklerPlannerCard extends HTMLElement {
   _wxDay(day) { return ((this.data.weather_now || {}).days || []).find((x) => x.day === day); }
   _runMark(r, plan) {
     const k = runKey(r);
-    if ((plan.skipped || []).includes(k)) return `<span class="rm user" title="${esc(t("skipped by you"))}">\u2715</span>`;
+    if ((plan.skipped || []).includes(k)) {
+      if (r.start <= this.data.now) return `<span class="rm user" title="${esc(t("skipped by you"))}">\u2715</span>`;
+      return `<span class="rm user ans" data-act="unskip" data-key="${esc(k)}" title="${esc(t("Skipped by you. Click to undo."))}">\u2715</span>`;
+    }
     const dec = this._decision(r, plan);
     const tip = `${hm(r.start)} ${r.slots.map((x) => this._slotName(x)).join(" + ")}${dec && dec.reasons.length ? ": " + dec.reasons.join(", ") : ""}`;
     if (dec && dec.status === "dismissed")
@@ -572,8 +577,9 @@ class EspSprinklerPlannerCard extends HTMLElement {
     const now = this.data.now;
     const user = new Set(plan.skipped || []); const wx = new Set(plan.weather_skipped || []);
     const runs = (plan.runs || []).filter((r) => r.start > now && (user.has(runKey(r)) || wx.has(runKey(r)))).slice(0, 6);
-    if (!runs.length) return "";
-    return `<details class="box skp" data-d="skipped" ${this._open_("skipped", false)}><summary class="lbl">${t("Skipped")} <span class="muted">${runs.map((r) => `${DAYS()[wd(r.day)]} ${hm(r.start)}`).join(", ")}</span></summary>${runs.map((r) => {
+    const answers = Object.values(plan.weather || {}).filter((v) => v.status === "accepted" || v.status === "dismissed").length;
+    if (!runs.length && !answers) return "";
+    return `<details class="box skp" data-d="skipped" ${this._open_("skipped", false)}><summary class="lbl lrow">${t("Skipped")} <span class="muted">${runs.map((r) => `${DAYS()[wd(r.day)]} ${hm(r.start)}`).join(", ")}</span><span class="grow"></span><button class="ab clr" data-act="clearall"><ha-icon icon="mdi:broom"></ha-icon>${t("Clear all")}</button></summary>${runs.map((r) => {
       const k = runKey(r); const isWx = wx.has(k) && !user.has(k); const dec = this._decision(r, plan);
       return `<div class="row"><b>${fmtDay(r.day)} ${hm(r.start)}</b> ${r.slots.map((x) => esc(this._slotName(x))).join(" + ")}
         <span class="muted">${isWx ? `${t("weather skip")}${dec ? ": " + esc(dec.reasons.join(", ")) : ""}` : t("skipped by you")}</span><span class="grow"></span>
@@ -609,11 +615,15 @@ class EspSprinklerPlannerCard extends HTMLElement {
     const rows = runs.map((r) => {
       const k = runKey(r); const dec = this._decision(r, plan); const past = r.end < now;
       const answered = dec && (dec.status === "accepted" || dec.status === "dismissed");
-      const btns = past ? "" : answered ? `<button class="ab" data-act="sugreset" data-key="${esc(k)}"><ha-icon icon="mdi:undo"></ha-icon>${t(dec.status === "accepted" ? "Take back accept" : "Take back dismiss")}</button>`
-        : sug[k] ? `<button class="ab" data-act="sugno" data-key="${esc(k)}">${t("Dismiss")}</button><button class="ab primary" data-act="sugyes" data-key="${esc(k)}">${t("Accept")}</button>`
-        : user.has(k) ? `<button class="ab" data-act="unskip" data-key="${esc(k)}"><ha-icon icon="mdi:undo"></ha-icon>${t("Undo")}</button>`
-        : wx.has(k) ? `<button class="ab" data-act="unskip" data-key="${esc(k)}"><ha-icon icon="mdi:play"></ha-icon>${t("Run anyway")}</button>`
-        : `<button class="ab" data-act="skiprun" data-key="${esc(k)}"><ha-icon icon="mdi:skip-next-circle-outline"></ha-icon>${t("Skip")}</button>`;
+      const B = [];
+      if (!past) {
+        if (user.has(k)) B.push(`<button class="ab" data-act="unskip" data-key="${esc(k)}"><ha-icon icon="mdi:undo"></ha-icon>${t("Undo skip")}</button>`);
+        if (answered) B.push(`<button class="ab" data-act="sugreset" data-key="${esc(k)}"><ha-icon icon="mdi:undo"></ha-icon>${t(dec.status === "accepted" ? "Take back accept" : "Take back dismiss")}</button>`);
+        else if (sug[k] || (dec && dec.status === "pending")) B.push(`<button class="ab" data-act="sugno" data-key="${esc(k)}">${t("Dismiss")}</button><button class="ab primary" data-act="sugyes" data-key="${esc(k)}">${t("Accept")}</button>`);
+        if (wx.has(k) && !answered) B.push(`<button class="ab" data-act="unskip" data-key="${esc(k)}"><ha-icon icon="mdi:play"></ha-icon>${t("Run anyway")}</button>`);
+        if (!user.has(k) && !wx.has(k)) B.push(`<button class="ab" data-act="skiprun" data-key="${esc(k)}"><ha-icon icon="mdi:skip-next-circle-outline"></ha-icon>${t("Skip")}</button>`);
+      }
+      const btns = B.join("");
       return `<div class="dprow ${past ? "past" : ""}">
         <span class="dpt"><b>${hm(r.start)}\u2013${hm(r.end)}</b> ${r.slots.map((x) => esc(this._slotName(x))).join(" + ")} ${this._runMark(r, plan)}</span>
         <span class="nz">${r.zones.map((z) => `<span>${this._mark(this._zone(z.zone))}${z.minutes}\u2032</span>`).join("")}</span>
@@ -701,8 +711,10 @@ class EspSprinklerPlannerCard extends HTMLElement {
           ${hasK ? `<td class="r">${p.kwh ? fmtKwh(p.kwh) : "\u2013"}</td><td class="r">${p.kwh && p.emin ? Math.round(p.kwh * 1000 / (p.emin / 60)) : "\u2013"}</td>` : ""}</tr>`; }).join("")}</table>`;
     const saved = skMin ? `<div class="muted small">${t("saved by skips")}: ${fmtMin(skMin)}${allL && allMin ? ` \u2248 ${fmtL(skMin * allL / allMin)}` : ""}</div>` : "";
     const sel = (k, opts) => `<span class="seg">${opts.map(([v, l, i]) => `<button class="ab ${String(this._sp[k]) === String(v) ? "on" : ""}" data-act="sp" data-k="${k}" data-v="${v}">${i ? `<ha-icon icon="${i}"></ha-icon>` : ""}${l}</button>`).join("")}</span>`;
-    return `<div class="stiles">${tile("This week", tot.week)}${tile("This month", tot.month)}${tile("This year", tot.year)}${tile("All time", tot.all)}</div>
-      <div class="abar">${sel("period", [["day", t("day")], ["week", t("week")], ["month", t("month")], ["year", t("year")]])}
+    const allT = tot.all || {};
+    return `${this._det("totals", false, `<ha-icon icon="mdi:sigma"></ha-icon><b>${t("Totals")}</b><span class="muted">${t("All time")}: ${fmtMin(allT.min)}${allT.l ? " \u00b7 " + fmtL(allT.l) : ""}${allT.kwh ? " \u00b7 " + fmtKwh(allT.kwh) : ""}</span>`,
+      `<div class="stiles">${tile("This week", tot.week)}${tile("This month", tot.month)}${tile("This year", tot.year)}${tile("All time", tot.all)}</div>`)}
+      <div class="abar wrapok"><select class="psel" data-sp="period">${[["day", t("per day")], ["week", t("per week")], ["month", t("per month")], ["year", t("per year")]].map(([v, l]) => `<option value="${v}" ${this._sp.period === v ? "selected" : ""}>${l}</option>`).join("")}</select>
         <span class="grow"></span>${sel("metric", [["min", t("Time"), "mdi:timer-outline"], ...(hasL ? [["l", t("Water"), "mdi:water"]] : []), ...(hasK ? [["kwh", t("Energy"), "mdi:flash"]] : [])])}</div>
       ${s && s.error ? `<div class="err">${esc(s.error)}</div>` : chart}
       ${metric === "kwh" ? "" : this._legend()}
@@ -723,8 +735,9 @@ class EspSprinklerPlannerCard extends HTMLElement {
       return `<i class="h${lv}" title="${fmtDay(r.key)} ${r.key.slice(0, 4)}: ${metric === "min" ? fmtMin(x) : metric === "l" ? fmtL(x) : fmtKwh(x)}${r.skips ? ` \u00b7 ${r.skips} ${t("skips")}` : ""}"></i>`;
     }));
     const months = []; let last = -1;
-    rows.forEach((r, i) => { const mo = +r.key.slice(5, 7); if (mo !== last && +r.key.slice(8, 10) <= 7) { months.push(`<span style="grid-column:${Math.floor((i + pad) / 7) + 1}">${(LANG === "sk" ? MON_SK : MON_EN)[mo - 1]}</span>`); last = mo; } });
-    return `<div class="heat"><div class="hm">${months.join("")}</div><div class="hg">${cells.join("")}</div>
+    const weeks = Math.ceil((rows.length + pad) / 7);
+    rows.forEach((r, i) => { const mo = +r.key.slice(5, 7); if (mo !== last && +r.key.slice(8, 10) <= 7) { months.push(`<span style="grid-column:${Math.floor((i + pad) / 7) + 1} / span 4">${(LANG === "sk" ? MON_SK : MON_EN)[mo - 1]}</span>`); last = mo; } });
+    return `<div class="heat" style="--w:${weeks}"><div class="hm">${months.join("")}</div><div class="hg">${cells.join("")}</div>
       <div class="hl muted small">${t("less")} <i class="h0"></i><i class="h1"></i><i class="h2"></i><i class="h3"></i><i class="h4"></i> ${t("more")}</div></div>`;
   }
 
@@ -927,7 +940,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
     if (t0.dataset.sp !== undefined) {
       if (!isChange) return;
       this._sp[t0.dataset.sp] = t0.dataset.sp === "count" ? +t0.value : t0.value;
-      if (t0.dataset.sp === "period") this._sp.count = { day: 14, week: 12, month: 12, year: 7 }[t0.value];
+      if (t0.dataset.sp === "period") this._sp.count = { day: 14, week: 12, month: 12, year: 5 }[t0.value];
       if (t0.dataset.sp === "metric") this._render(); else this._loadStats();
       return;
     }
@@ -1041,6 +1054,10 @@ class EspSprinklerPlannerCard extends HTMLElement {
       } else if (act === "sp") { this._sp[tg.dataset.k] = tg.dataset.v;
         if (tg.dataset.k === "period") { this._sp.count = { day: 14, week: 12, month: 12, year: 5 }[tg.dataset.v]; this._loadStats(); } else this._render();
       } else if (act === "fday") { this._fday = this._fday === tg.dataset.day ? null : tg.dataset.day; this._render();
+      } else if (act === "clearall") {
+        e.preventDefault(); e.stopPropagation();
+        if (!confirm(t("Undo all your skips and forget all weather answers?"))) return;
+        await svc("clear_skips", { answers: true }); setTimeout(() => this._load(), 800);
       } else if (act === "skiprun") { await svc("skip_run", { run: tg.dataset.key }); setTimeout(() => this._load(), 800);
       } else if (act === "zview") { this._zv = tg.dataset.v; localStorage.setItem("esp_sprinkler_zview", this._zv); this._render();
       } else if (act === "seticon") { this._setPath(`zones.${tg.dataset.zone}.icon`, tg.dataset.icon || null); this._markDirty(true);
@@ -1261,7 +1278,10 @@ input.picker { width:300px; } input.bad { border-color:#e5484d; }
 .ab ha-icon { --mdc-icon-size:18px; } .ab.on { border-color:var(--primary-color,#03a9f4); color:var(--primary-color,#03a9f4); }
 .ab .muted { font-weight:400; font-size:12px; }
 .ag { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--divider-color,#ccc); border-radius:18px; padding:2px 2px 2px 10px; margin-left:auto; }
-.seg { display:inline-flex; gap:4px; } .seg .ab { padding:5px 11px; }
+.seg { display:inline-flex; gap:4px; flex-wrap:wrap; } .seg .ab { padding:5px 11px; }
+.abar.wrapok { flex-wrap:wrap; overflow:visible; }
+.psel { border-radius:18px; padding:6px 12px; font-weight:600; }
+.ab.clr { padding:2px 10px; font-size:12px; text-transform:none; letter-spacing:0; font-weight:500; }
 .ag > ha-icon { --mdc-icon-size:18px; color:var(--secondary-text-color,#888); } .agl { font-size:12px; color:var(--secondary-text-color,#888); }
 .ag select { border:0; background:transparent; font-weight:600; } .ag .ab { padding:5px 9px; }
 .nz { display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; font-size:12px; } .nz span { display:inline-flex; align-items:center; }
@@ -1298,9 +1318,9 @@ input.picker { width:300px; } input.bad { border-color:#e5484d; }
 details.ev > summary { display:flex; align-items:center; gap:10px; } details.ev > summary .tb1 { width:24px; height:24px; }
 .toast { position:absolute; left:50%; bottom:14px; transform:translateX(-50%); background:var(--primary-text-color,#222); color:var(--card-background-color,#fff); padding:6px 14px; border-radius:16px; font-size:13px; z-index:5; box-shadow:0 2px 8px #0005; }
 ha-card { position:relative; }
-.heat { overflow-x:auto; } .hm { display:grid; grid-auto-flow:column; grid-auto-columns:12px; gap:0; white-space:nowrap; font-size:10px; color:var(--secondary-text-color,#888); height:13px; }
-.hg { display:grid; grid-template-rows:repeat(7,10px); grid-auto-flow:column; grid-auto-columns:10px; gap:2px; }
-.hg i, .hl i { display:inline-block; width:10px; height:10px; border-radius:2px; }
+.heat { width:100%; } .hm { display:grid; grid-template-columns:repeat(var(--w),1fr); gap:2px; font-size:10px; color:var(--secondary-text-color,#888); height:13px; white-space:nowrap; }
+.hg { display:grid; grid-template-columns:repeat(var(--w),1fr); grid-template-rows:repeat(7,auto); grid-auto-flow:column; gap:2px; }
+.hg i { display:block; width:100%; aspect-ratio:1; border-radius:2px; } .hl i { display:inline-block; width:10px; height:10px; border-radius:2px; }
 .h0 { background:var(--secondary-background-color,#eee); } .h1 { background:#4e9cf555; } .h2 { background:#4e9cf599; } .h3 { background:#4e9cf5cc; } .h4 { background:#4e9cf5; } .hx { visibility:hidden; }
 .hl { display:flex; align-items:center; gap:3px; margin-top:4px; }
 .compact .cbody { display:flex; align-items:center; gap:12px; padding:4px 0 10px; }

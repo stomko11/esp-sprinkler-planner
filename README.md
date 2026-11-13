@@ -232,6 +232,9 @@ X % raises the `flow_warning` notification (leak or blocked valve). Service `get
 - Click a forecast day on Overview to see its runs with Skip / Undo / Run anyway, or Accept /
   Dismiss for a suggestion (service `skip_run` skips one run by key). Clicking a dashed
   suggestion mark in Week / preview accepts it.
+- Your own skips (grey ✕) undo on click. **Clear all** in the Skipped section (service
+  `clear_skips`) undoes every skip you set and forgets every weather answer.
+- Stats: totals are folded into one line; period is a dropdown; the heatmap fits the card width.
 - Clicking an answered mark (filled = accepted, ✓ = dismissed) takes the answer back; the
   run is undecided again (service `answer_suggestion` with `reset: true`).
 - Weather → "When the forecast changes after I answered": **keep** (default, the answer and

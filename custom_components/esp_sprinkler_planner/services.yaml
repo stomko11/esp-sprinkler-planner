@@ -172,3 +172,13 @@ skip_run:
       example: "2026-11-15|morning"
       selector:
         text:
+clear_skips:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: esp_sprinkler_planner
+    answers:
+      default: true
+      selector:
+        boolean:

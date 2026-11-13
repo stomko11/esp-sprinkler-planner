@@ -1038,6 +1038,17 @@ class Runtime:
             if self.active:   # the state listener may not have fired yet
                 await self._finish("stopped", reason="stopped by user")
 
+    async def clear_skips(self, answers: bool = True) -> Dict[str, int]:
+        """Undo every skip you set for upcoming runs and (optionally) every weather answer."""
+        n_skip, n_ans = len(self.skip), 0
+        self.skip = []
+        if answers:
+            n_ans = len(self.suggestions)
+            self.suggestions = {}
+        await self._save()
+        await self.async_replan()
+        return {"skips": n_skip, "answers": n_ans}
+
     async def skip_run(self, key: str) -> str:
         """Skip one planned run (key 'YYYY-MM-DD|slot[+slot]')."""
         run = next((r for r in (self.plan.runs if self.plan else []) if run_key(r) == key), None)

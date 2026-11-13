@@ -290,6 +290,20 @@
           "description": "Run key, e.g. 2026-11-15|morning."
         }
       }
+    },
+    "clear_skips": {
+      "name": "Clear skips",
+      "description": "Undo all skips you set and (optionally) all weather answers.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Planner",
+          "description": "Only with more than one planner."
+        },
+        "answers": {
+          "name": "Also weather answers",
+          "description": "Also forget accepted / dismissed suggestions."
+        }
+      }
     }
   }
 }
