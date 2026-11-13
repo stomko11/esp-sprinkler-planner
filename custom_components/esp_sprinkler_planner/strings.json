@@ -1,0 +1,160 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "ESP Sprinkler Planner",
+        "description": "Pick the ESPHome device that runs the sprinkler controller.",
+        "data": {
+          "device_id": "ESPHome device",
+          "name": "Name"
+        }
+      },
+      "controller": {
+        "title": "Controller",
+        "description": "Entities of the sprinkler controller. Proposed from the device - change them if the names did not match.",
+        "data": {
+          "main_switch": "Main switch (starts / stops a cycle)",
+          "reverse": "Reverse switch",
+          "standby": "Standby switch",
+          "multiplier": "Multiplier number",
+          "repeat": "Repeat number",
+          "valve_overlap": "Valve overlap set on the ESP (seconds)"
+        }
+      },
+      "valve": {
+        "title": "Valve {index} of {total}",
+        "description": "Detected: {detected}. The order is the position of the valve on the ESP (0 = first). Tick 'skip' to leave this valve out, 'add another' to map a valve that was not detected.",
+        "data": {
+          "name": "Zone name",
+          "enable_switch": "Enable switch",
+          "duration": "Run duration number",
+          "valve_switch": "Valve switch (optional, for status)",
+          "order": "Position on the ESP",
+          "enabled": "Use this zone",
+          "skip": "Skip this valve",
+          "add_another": "Add another valve after this one"
+        }
+      }
+    },
+    "error": {
+      "no_switches": "This device has no switches - is it the sprinkler controller?",
+      "required": "Required"
+    },
+    "abort": {
+      "already_configured": "This device already has a planner.",
+      "no_valves": "No valve was mapped."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Planner options",
+        "data": {
+          "restore": "Put durations, enable switches and multiplier back after a run",
+          "watchdog_margin": "Stop a run this long after its planned end (minutes)",
+          "valve_overlap": "Valve overlap set on the ESP (seconds)"
+        }
+      }
+    }
+  },
+  "services": {
+    "configure": {
+      "name": "Configure",
+      "description": "Replace zones, slots and/or settings of a planner. Returns the number of runs in the next 7 days and any conflicts.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Planner",
+          "description": "Only needed with more than one planner."
+        },
+        "zones": {
+          "name": "Zones",
+          "description": "Per zone id: name, enabled, max_per_run, max_per_day."
+        },
+        "slots": {
+          "name": "Slots",
+          "description": "List of slots."
+        },
+        "settings": {
+          "name": "Settings",
+          "description": "merge_mode, merge_window, same_zone."
+        }
+      }
+    },
+    "get_plan": {
+      "name": "Get plan",
+      "description": "The planned runs and conflicts for the next days.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Planner",
+          "description": "Only needed with more than one planner."
+        },
+        "days": {
+          "name": "Days",
+          "description": "How many days, from today."
+        }
+      }
+    },
+    "run_slot": {
+      "name": "Run slot now",
+      "description": "Start a slot now, ignoring its time and days.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Planner",
+          "description": "Only needed with more than one planner."
+        },
+        "slot": {
+          "name": "Slot",
+          "description": "Slot id."
+        }
+      }
+    },
+    "run_zone": {
+      "name": "Run zone now",
+      "description": "Run one zone now for the given minutes (no multiplier).",
+      "fields": {
+        "config_entry_id": {
+          "name": "Planner",
+          "description": "Only needed with more than one planner."
+        },
+        "zone": {
+          "name": "Zone",
+          "description": "Zone id."
+        },
+        "minutes": {
+          "name": "Minutes",
+          "description": "Run time."
+        }
+      }
+    },
+    "stop": {
+      "name": "Stop",
+      "description": "Stop the active run.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Planner",
+          "description": "Only needed with more than one planner."
+        }
+      }
+    },
+    "skip_next": {
+      "name": "Skip next run",
+      "description": "Skip the next planned run.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Planner",
+          "description": "Only needed with more than one planner."
+        }
+      }
+    },
+    "replan": {
+      "name": "Re-plan",
+      "description": "Recompute the plan now.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Planner",
+          "description": "Only needed with more than one planner."
+        }
+      }
+    }
+  }
+}

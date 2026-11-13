@@ -1,0 +1,12 @@
+{
+  "domain": "esp_sprinkler_planner",
+  "name": "ESP Sprinkler Planner",
+  "after_dependencies": ["esphome", "sun"],
+  "codeowners": [],
+  "config_flow": true,
+  "documentation": "https://github.com/stomko11/esp-sprinkler-planner",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/stomko11/esp-sprinkler-planner/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

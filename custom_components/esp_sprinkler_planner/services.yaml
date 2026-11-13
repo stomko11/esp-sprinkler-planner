@@ -1,0 +1,73 @@
+configure:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: esp_sprinkler_planner
+    zones:
+      selector:
+        object:
+    slots:
+      selector:
+        object:
+    settings:
+      selector:
+        object:
+get_plan:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: esp_sprinkler_planner
+    days:
+      default: 7
+      selector:
+        number:
+          min: 1
+          max: 31
+run_slot:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: esp_sprinkler_planner
+    slot:
+      required: true
+      selector:
+        text:
+run_zone:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: esp_sprinkler_planner
+    zone:
+      required: true
+      selector:
+        text:
+    minutes:
+      required: true
+      selector:
+        number:
+          min: 0.1
+          max: 600
+          step: 0.1
+          unit_of_measurement: min
+stop:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: esp_sprinkler_planner
+skip_next:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: esp_sprinkler_planner
+replan:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: esp_sprinkler_planner

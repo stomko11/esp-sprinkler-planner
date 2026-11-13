@@ -5,9 +5,10 @@ Home Assistant integration + dashboard card that plans and runs irrigation on to
 running the valves; the planner decides **when**, **which zones**, **how long** and **in what
 order** - without input_booleans, scripts or automations.
 
-Status: **design** (nothing implemented yet). This file is the spec we agree on first.
+Status: **0.1 - planner core + integration (dry run by default)**. No card, weather or notifications yet.
 
-- Home Assistant 2026.11+, installed through HACS (custom repository)
+- Home Assistant 2026.8+, installed through HACS (custom repository) or by copying
+  `custom_components/esp_sprinkler_planner` into the config folder
 - Domain: `esp_sprinkler_planner`
 
 ---
@@ -133,6 +134,76 @@ enabled. Buttons: run now, skip next, stop.
 - Optional header row with extra entities (pressure, flow, pump power…).
 
 ---
+
+## Using 0.1
+
+### Install and set up
+
+1. Copy `custom_components/esp_sprinkler_planner` to `<config>/custom_components/`, restart.
+2. Settings → Devices & services → Add integration → **ESP Sprinkler Planner**.
+3. Pick the ESPHome device. Controller entities are proposed from the names; check them.
+   **Valve overlap** is the `valve_overlap` from the ESPHome YAML (it is not exposed as an
+   entity), used for timing only.
+4. One step per detected valve: name, enable switch, run duration number, valve switch
+   (optional), **position on the ESP** (0 = first), use / skip. "Add another" maps a valve that
+   was not detected.
+
+The planner starts with **dry run on**: it plans, logs and fires events, but sends nothing to
+the ESP. Turn `switch.<name>_planner_dry_run` off only when you want it to really water.
+
+### Entities
+
+| entity | |
+|---|---|
+| `sensor.<name>_planner_next_run` | timestamp of the next run; attributes: end, zones (name, minutes), slots, merged, reverse, notes, conflicts |
+| `sensor.<name>_planner_status` | idle / scheduled / running / dry_run / disabled / error; attributes: active run, the service calls of the current (dry) run, last event |
+| `switch.<name>_planner_planner_enabled` | off = scheduled runs are skipped |
+| `switch.<name>_planner_dry_run` | on = nothing is sent to the ESP |
+
+Event `esp_sprinkler_planner_event` with `type`: `started`, `finished`, `stopped`, `skipped`
+(with `reason`), `dry_run` (with the calls it would make), `error`, `skip_set`.
+
+### Configuration (services until the card exists)
+
+`esp_sprinkler_planner.configure` replaces `zones`, `slots` and/or `settings`:
+
+```yaml
+action: esp_sprinkler_planner.configure
+data:
+  zones:                      # optional, per zone id (zone_1 ... as created in the flow)
+    zone_5: {name: "Lawn West", enabled: true, max_per_run: 45, max_per_day: 90}
+  slots:
+    - id: morning
+      name: Morning
+      reverse: true            # ESP order reversed
+      anchor: {mode: start, ref: time, at: "05:00"}      # or mode: finish; ref: sunrise / sunset
+      days: [0, 1, 2, 3, 4, 5, 6]                       # weekdays 0=Mon; or every_n_days: 2 + every_n_from
+      use_multiplier: true
+      zones:
+        - {zone: zone_5, minutes: 15}
+        - {zone: zone_1, minutes: 60, days: [0, 3]}     # optional own days inside the slot
+    - id: evening
+      name: Evening
+      anchor: {mode: finish, ref: sunset, offset: 180}  # finish 3 h after sunset
+      zones: [{zone: zone_5, minutes: 5}]
+  settings: {merge_mode: window, merge_window: 60, same_zone: longer}
+```
+
+Invalid input is rejected with a message saying exactly what is wrong. Other services:
+`get_plan` (response: runs and conflicts for N days), `run_slot`, `run_zone`, `stop`,
+`skip_next`, `replan`.
+
+### What a run does on the ESP
+
+Multiplier → 1, repeat → 0, each zone's duration into its duration number, enable switches off
+for the other zones and on for the run's zones, reverse switch, main switch on. The ESP runs
+the cycle. When the main switch goes off, durations, enable switches and multiplier are put
+back (option). Before starting it checks: main switch not already on, standby off, every entity
+available. A **watchdog** turns the main switch off when the run is still on N minutes (option,
+default 10) after its planned end. After a Home Assistant restart an active run is picked up
+again.
+
+Options: restore after a run, watchdog margin, valve overlap.
 
 ## Architecture
 
