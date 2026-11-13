@@ -37,20 +37,18 @@ def one_day(slots, zones=ZONES, settings=PLAIN, **kw):
 
 
 class BasicRuns(unittest.TestCase):
-    def test_start_at_default_order(self):
+    def test_start_at_esp_order(self):
         p = one_day([slot("m", time(5, 0), [("z2", 10), ("z1", 20)])])
         self.assertEqual(len(p.runs), 1)
         r = p.runs[0]
-        self.assertEqual(r.zone_ids(), ["z1", "z2"])          # default order, not slot order
+        self.assertEqual(r.zone_ids(), ["z1", "z2"])          # ESP order, not the order in the slot
         self.assertEqual((hm(r.start), hm(r.end)), ("05:00:00", "05:30:00"))
         self.assertEqual(r.start.tzinfo, TZ)
 
-    def test_reverse_and_custom_order(self):
-        rev = one_day([slot("m", time(5, 0), [("z1", 1), ("z2", 1), ("z3", 1)], order="reverse")])
+    def test_reverse(self):
+        rev = one_day([slot("m", time(5, 0), [("z1", 1), ("z2", 1), ("z3", 1)], reverse=True)])
         self.assertEqual(rev.runs[0].zone_ids(), ["z3", "z2", "z1"])
-        cus = one_day([slot("m", time(5, 0), [("z1", 1), ("z2", 1), ("z3", 1)], order="custom",
-                            custom_order=("z2",))])
-        self.assertEqual(cus.runs[0].zone_ids(), ["z2", "z1", "z3"])  # unlisted zones follow in default order
+        self.assertTrue(rev.runs[0].reverse)
 
     def test_finish_by_with_pump_delay_and_overlap(self):
         s = P.Settings(pump_delay=30, valve_overlap=5)
@@ -161,12 +159,26 @@ class Merging(unittest.TestCase):
         self.assertEqual(r.zone_ids(), ["z1", "z2", "z3"])
         self.assertEqual((hm(r.start), hm(r.end)), ("05:00:00", "05:30:00"))
 
-    def test_smaller_earlier_run_is_prepended_and_bigger_keeps_its_time(self):
-        p = one_day([slot("a", time(5, 0), [("z1", 10)]),
-                     slot("b", time(5, 20), [("z2", 10), ("z3", 10)])])
+    def test_merged_run_follows_esp_order_and_starts_at_the_earlier_start(self):
+        p = one_day([slot("a", time(5, 0), [("z3", 10)]),
+                     slot("b", time(5, 20), [("z1", 10), ("z2", 10)])])
         r = p.runs[0]
-        self.assertEqual(r.zone_ids(), ["z1", "z2", "z3"])
-        self.assertEqual((hm(r.start), hm(r.end)), ("05:10:00", "05:40:00"))   # z2 still at 05:20
+        self.assertEqual(r.zone_ids(), ["z1", "z2", "z3"])                     # one ESP cycle
+        self.assertEqual((hm(r.start), hm(r.end)), ("05:00:00", "05:30:00"))
+
+    def test_merge_with_finish_by_finishes_by_the_earliest_finish(self):
+        p = one_day([slot("a", time(5, 0), [("z1", 10)]),
+                     slot("b", time(5, 40), [("z2", 10), ("z3", 10)], mode="finish")])
+        r = p.runs[0]
+        self.assertEqual((hm(r.start), hm(r.end)), ("05:10:00", "05:40:00"))
+
+    def test_merge_mixed_directions_takes_the_bigger_parts_direction(self):
+        p = one_day([slot("a", time(5, 0), [("z1", 10), ("z2", 10)], reverse=True),
+                     slot("b", time(5, 30), [("z3", 10)])])
+        r = p.runs[0]
+        self.assertTrue(r.reverse)
+        self.assertEqual(r.zone_ids(), ["z3", "z2", "z1"])
+        self.assertTrue(any("reversed" in n for n in r.notes))
 
     def test_finish_anchored_bigger_keeps_its_finish(self):
         p = one_day([slot("a", time(8, 0), [("z1", 10), ("z2", 10)], mode="finish"),
@@ -249,7 +261,7 @@ class CurrentSetupScenario(unittest.TestCase):
 
     def test_morning_and_evening(self):
         s = P.Settings(valve_overlap=5)
-        p = one_day([slot("morning", time(5, 0), self.ALL, order="reverse"),
+        p = one_day([slot("morning", time(5, 0), self.ALL, reverse=True),
                      slot("evening", time(19, 0), self.ALL)], zones=self.ZONES, settings=s)
         morning, evening = p.runs
         self.assertEqual(morning.zone_ids(), ["lawn_w", "lawn_s", "field", "drippers_b", "drippers_a"])

@@ -18,8 +18,11 @@ Status: **design** (nothing implemented yet). This file is the spec we agree on 
   per valve the **enable switch**, **valve switch** and **run duration number**; for the
   controller the **main switch**, **multiplier**, **reverse**, **standby**, **auto advance**,
   **repeat** (whatever the device exposes).
-- Each valve is mapped to a **logical zone**: name, icon, colour, default position in the
-  order. Names on the ESP do not matter - another user's valves map the same way.
+- Each valve is mapped to a **logical zone**: name, icon, colour. Names on the ESP do not
+  matter - another user's valves map the same way.
+- **Order = the order the valves are defined on the ESP.** The ESP sprinkler controller runs
+  the enabled valves in that order, or reversed with its reverse switch; the planner works
+  with exactly that.
 - **Disable a zone** without touching the ESP config: it is never enabled or run, and is
   hidden from planning. Unmapped valves are ignored.
 - **Limits per zone** (safety + bounds for suggestions): max minutes **per run** and
@@ -34,12 +37,14 @@ Status: **design** (nothing implemented yet). This file is the spec we agree on 
   - **days**: weekdays, or every N days
   - **zones** in the slot, each with its **own duration** for this slot
     (Lawn West 15 min in the morning, 5 min in the evening) and optionally its own days
-  - **order**: default zone order, **⇅ reverse**, or custom (drag)
+  - **order**: ESP order, or **⇅ reverse**
   - weather rules: inherit the global ones, or override / switch off per slot
   - enabled on/off
-- Before a run the planner writes the durations into the ESP duration numbers, sets the
-  enable switches and the reverse switch, then starts the cycle. Durations go back to the
-  previous values afterwards (configurable).
+- **How a run is started:** the planner writes the durations into the ESP duration numbers,
+  turns the run's zones' enable switches on and all others off, sets the reverse switch and
+  the multiplier to 1 (durations are already final), then starts **one cycle**. The ESP does
+  the rest - sequence, valve overlap, timing - and finishes even if Home Assistant drops out.
+  Durations go back to the previous values afterwards (configurable).
 
 ## 3. Merging and conflicts
 
@@ -49,9 +54,10 @@ become one **run**. Configurable:
 - **Merge window**: two runs are merged when the gap between the first one's end and the
   next one's start is N minutes (e.g. 60) or less, or when they overlap. The check is repeated
   on the merged result, so a chain of slots merges only as long as each next gap still fits.
-- **Placement**: the run with fewer zones joins the bigger one on the side where it was
-  planned - earlier → added at the start, later → added at the end. Equal size: earlier
-  slot's order first.
+- **One cycle**: the merged run contains all zones of both, in ESP order, in the direction
+  of the part with more zones (equal: the earlier one). Timing: if either part is
+  "finish by", the merged run finishes by the earliest finish-by time; otherwise it starts at
+  the earlier start.
 - **Alternatives**: "never merge, shift the later run" or "merge only on overlap".
 - **Same zone in both**: longer duration (default) / sum / keep as two runs.
 - Anything the planner cannot resolve inside the limits is a **conflict**: shown in the card,

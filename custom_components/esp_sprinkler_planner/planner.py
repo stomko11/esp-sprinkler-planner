@@ -7,6 +7,11 @@ optionally sun times and a multiplier. Output: a Plan - the runs that will actua
 started (ordered steps with final minutes, start and end) and the conflicts / notices the
 card and notifications can show.
 
+Order: the ESP sprinkler controller runs the enabled valves in the order they are defined on the
+device, or reversed via its reverse switch. A run therefore always follows the zone order
+(Zone.order = position on the ESP) or its reverse - the executor only sets the enable switches,
+the durations and the reverse switch, then starts one cycle.
+
 Minutes in a Step are FINAL: multiplier and limits are already applied. The executor writes
 them to the ESP duration numbers and runs the ESP with multiplier 1, so a slot can opt out of
 the heat multiplier without affecting the other slots in the same run.
@@ -70,8 +75,7 @@ class Slot:
     days: Optional[frozenset] = None   # weekdays; None = every day
     every_n_days: Optional[int] = None  # instead of weekdays: every N days ...
     every_n_from: Optional[date] = None  # ... counted from this date
-    order: str = "default"             # default | reverse | custom
-    custom_order: Tuple[str, ...] = ()  # zone ids, for order=custom
+    reverse: bool = False              # run the zones in reverse ESP order
     enabled: bool = True
     use_multiplier: bool = True
 
@@ -110,6 +114,7 @@ class Run:
     anchor_mode: str           # which edge is fixed: "start" or "finish"
     target: datetime           # the anchored edge as planned (start or finish time)
     notes: List[str] = field(default_factory=list)
+    reverse: bool = False      # run in reverse ESP order (sets the ESP reverse switch)
 
     @property
     def merged(self) -> bool:
@@ -177,16 +182,10 @@ def anchor_time(anchor: Anchor, day: date, tz: tzinfo, sun: Optional[SunTimes]) 
     return base + timedelta(minutes=anchor.offset)
 
 
-def _ordered(slot: Slot, zones: Dict[str, Zone], entries: List[SlotZone]) -> List[SlotZone]:
-    by_default = sorted(entries, key=lambda e: (zones[e.zone_id].order, e.zone_id))
-    if slot.order == "reverse":
-        return list(reversed(by_default))
-    if slot.order == "custom":
-        pos = {zid: i for i, zid in enumerate(slot.custom_order)}
-        listed = sorted((e for e in by_default if e.zone_id in pos), key=lambda e: pos[e.zone_id])
-        rest = [e for e in by_default if e.zone_id not in pos]
-        return listed + rest
-    return by_default
+def _ordered(zones: Dict[str, Zone], items, reverse: bool, key=lambda x: x.zone_id):
+    """ESP order (Zone.order), or its reverse."""
+    out = sorted(items, key=lambda x: (zones[key(x)].order, key(x)))
+    return list(reversed(out)) if reverse else out
 
 
 def _cap_run(zone: Zone, minutes: float) -> Tuple[float, Optional[str]]:
@@ -240,14 +239,14 @@ def _initial_runs(zones, slots, settings, first_day, days, tz, sun, multiplier, 
                                           f"{slot.name or slot.id}: no sunrise/sunset data for {day}"))
                 continue
             steps, notes = [], []
-            for e in _ordered(slot, zones, entries):
+            for e in _ordered(zones, entries, slot.reverse):
                 minutes = e.minutes * (mult if slot.use_multiplier else 1.0)
                 minutes, note = _cap_run(zones[e.zone_id], minutes)
                 if note:
                     notes.append(note)
                     conflicts.append(Conflict("limit", day, (slot.id,), note))
                 steps.append(Step(e.zone_id, round(minutes, 2), e.minutes, slot.id))
-            run = Run(day, at, at, steps, [slot.id], slot.anchor.mode, at, notes)
+            run = Run(day, at, at, steps, [slot.id], slot.anchor.mode, at, notes, slot.reverse)
             _place(run, settings)
             runs.append(run)
     return runs
@@ -283,44 +282,40 @@ def _shift(a: Run, b: Run, settings: Settings, conflicts: List[Conflict]) -> Non
 
 
 def _merge(a: Run, b: Run, settings: Settings, zones: Dict[str, Zone], conflicts) -> Run:
-    """a starts first. The run with more zones keeps its anchored edge; the smaller one joins
-    on the side where it was planned (earlier -> in front, later -> behind). Equal size: a."""
-    big, small = (a, b) if len(a.steps) >= len(b.steps) else (b, a)
-    prepend = small is a
-    steps = (small.steps + big.steps) if prepend else (big.steps + small.steps)
-    big_ids = {id(s) for s in big.steps}
+    """a starts first. One ESP cycle for both:
+    - order: the bigger run's direction (more zones; equal -> a's), zones in ESP order;
+    - a zone in both: one step (longer or sum, see Settings.same_zone);
+    - timing: if any part is finish-by, the merged run finishes by the earliest finish-by time,
+      otherwise it starts at a's start."""
+    big = a if len(a.steps) >= len(b.steps) else b
     notes = list(a.notes) + list(b.notes)
-
-    # same zone in both: one step, at the position it has in the bigger run
     groups: Dict[str, List[Step]] = {}
-    for st in steps:
+    for st in a.steps + b.steps:
         groups.setdefault(st.zone_id, []).append(st)
-    result: List[Step] = []
-    for st in steps:
-        group = groups[st.zone_id]
+    steps: List[Step] = []
+    for zid, group in groups.items():
         if len(group) == 1:
-            result.append(st)
-            continue
-        pos = next((x for x in group if id(x) in big_ids), group[0])
-        if st is not pos:
-            continue
-        if settings.same_zone == "sum":
-            capped, note = _cap_run(zones[st.zone_id], sum(x.minutes for x in group))
+            steps.append(group[0])
+        elif settings.same_zone == "sum":
+            capped, note = _cap_run(zones[zid], sum(x.minutes for x in group))
             if note:
                 notes.append(note)
                 conflicts.append(Conflict("limit", a.day, tuple(a.slot_ids + b.slot_ids), note))
-            result.append(Step(st.zone_id, round(capped, 2), sum(x.base_minutes for x in group), pos.slot_id))
+            steps.append(Step(zid, round(capped, 2), sum(x.base_minutes for x in group), group[0].slot_id))
         else:  # longer
             keep = max(group, key=lambda x: x.minutes)
-            result.append(Step(st.zone_id, keep.minutes, keep.base_minutes, keep.slot_id))
-
-    merged = Run(a.day, big.start, big.end, result, a.slot_ids + b.slot_ids, big.anchor_mode, big.target,
-                 notes + [f"merged {', '.join(a.slot_ids)} + {', '.join(b.slot_ids)}"])
-    if merged.anchor_mode == "start" and prepend:
-        # the bigger run's own zones keep their time: the run starts earlier by what was put in front
-        added = run_length(merged.steps, settings) - run_length(big.steps, settings)
-        merged.target = big.target - max(added, timedelta(0))
+            steps.append(Step(zid, keep.minutes, keep.base_minutes, keep.slot_id))
+    steps = _ordered(zones, steps, big.reverse)
+    finishes = [r.target for r in (a, b) if r.anchor_mode == "finish"]
+    if finishes:
+        mode, target = "finish", min(finishes)
+    else:
+        mode, target = "start", a.target
+    merged = Run(a.day, a.start, a.end, steps, a.slot_ids + b.slot_ids, mode, target,
+                 notes + [f"merged {', '.join(a.slot_ids)} + {', '.join(b.slot_ids)}"], big.reverse)
     _place(merged, settings)
+    if a.reverse != b.reverse:
+        merged.notes.append(f"runs {'reversed' if big.reverse else 'in ESP order'} (direction of the bigger part)")
     return merged
 
 
