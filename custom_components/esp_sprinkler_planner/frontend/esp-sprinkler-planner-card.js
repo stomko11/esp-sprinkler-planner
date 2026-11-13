@@ -467,7 +467,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
         <div class="box ${(d.flags || {}).enabled ? "" : "boxoff"}">
           <div class="lbl">${t("Next run")}${(d.flags || {}).enabled ? "" : ` <span class="chip offc">${t("Planner off")}</span>`}</div>
           ${next ? `<div class="big ${(d.flags || {}).enabled ? "" : "struck"}">${fmtDay(next.day)} ${hm(next.start)} ${this._runMark(next, plan)}</div><div class="muted">${next.slots.map((x) => esc(this._slotName(x))).join(" + ")} \u00b7 ${t("until {0}", hm(next.end))}</div>
-                    <div class="nz">${next.zones.map((z) => `<span title="${esc(z.name)} ${z.minutes}\u2032">${this._mark(this._zone(z.zone))}${z.minutes}\u2032</span>`).join("")}</div>`
+                    ${this._zoneStrip(next.zones)}`
                  : `<div class="big muted">\u2013</div>`}
         </div>
       </div>
@@ -484,6 +484,17 @@ class EspSprinklerPlannerCard extends HTMLElement {
         <button class="vt ${this._zview() === "list" ? "on" : ""}" data-act="zview" data-v="list" title="${t("list")}"><ha-icon icon="mdi:view-list"></ha-icon></button>
         <button class="vt ${this._zview() === "tiles" ? "on" : ""}" data-act="zview" data-v="tiles" title="${t("tiles")}"><ha-icon icon="mdi:view-grid"></ha-icon></button></div>
       ${this._zonesToday(zones, plan, todayHist, today, blocked, az)}`;
+  }
+
+  _zoneStrip(zs) {
+    const total = zs.reduce((a, z) => a + z.minutes, 0) || 1;
+    const MAX = 6;
+    const shown = zs.slice(0, MAX);
+    const more = zs.slice(MAX);
+    return `<div class="zbar" title="${esc(zs.map((z) => `${z.name}: ${z.minutes}\u2032`).join("\n"))}">${zs.map((z) => `<i style="flex:${z.minutes};background:${this._color(z.zone)}"></i>`).join("")}</div>
+      <div class="nz">${shown.map((z) => `<span title="${esc(z.name)} ${z.minutes}\u2032">${this._mark(this._zone(z.zone))}${z.minutes}\u2032</span>`).join("")}
+      ${more.length ? `<span class="chip small more" title="${esc(more.map((z) => `${z.name}: ${z.minutes}\u2032`).join("\n"))}">+${more.length}</span>` : ""}
+      <span class="muted nzt">${t("{0} zones", zs.length)} \u00b7 ${fmtMin(total)}</span></div>`;
   }
 
   _zview() { return this._zv || localStorage.getItem("esp_sprinkler_zview") || this._cfg.zones || "list"; }
@@ -1189,7 +1200,22 @@ button { border:1px solid var(--divider-color,#ccc); background:var(--card-backg
 button.primary { background:var(--primary-color,#03a9f4); color:#fff; border-color:transparent; }
 button.danger { color:#e5484d; border-color:#e5484d66; }
 button.x { padding:2px 7px; }
-input, select { border:1px solid var(--divider-color,#ccc); border-radius:6px; padding:3px 6px; background:var(--card-background-color,#fff); color:var(--primary-text-color,#222); }
+input, select { border:1px solid var(--divider-color,#ccc); border-radius:8px; padding:4px 8px; background:var(--card-background-color,#fff); color:var(--primary-text-color,#222); }
+input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]), select { min-height:30px; box-sizing:border-box; }
+select { appearance:none; -webkit-appearance:none; padding-right:28px; cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath fill='%23888' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:right 8px center; background-size:16px; }
+select:hover, input:not([type=checkbox]):not([type=range]):hover { border-color:var(--secondary-text-color,#999); } select:focus, input:focus { outline:none; border-color:var(--primary-color,#03a9f4); }
+select option { background:var(--card-background-color,#fff); color:var(--primary-text-color,#222); }
+@supports (appearance: base-select) {
+  select { appearance:base-select; background-image:none; padding-right:8px; display:inline-flex; align-items:center; gap:6px; }
+  select::picker-icon { content:"\u25be"; color:var(--secondary-text-color,#888); transition:rotate .15s; } select:open::picker-icon { rotate:180deg; }
+  select::picker(select) { appearance:base-select; border:1px solid var(--divider-color,#444); border-radius:10px; padding:4px; background:var(--card-background-color,#fff); box-shadow:0 6px 18px #0006; }
+  select option { border-radius:6px; padding:6px 10px; } select option:hover { background:var(--secondary-background-color,#eee); }
+  select option:checked { background:color-mix(in srgb, var(--primary-color,#03a9f4) 18%, transparent); color:var(--primary-color,#03a9f4); font-weight:600; }
+  select option::checkmark { content:""; }
+}
+.ag select { border:0; min-height:0; }
 input.n { width:64px; } input.name { width:180px; } input.icon { width:170px; } input[type=color] { width:34px; height:26px; padding:1px; }
 label.wide { flex:1; display:flex; gap:6px; align-items:center; } label.wide input { flex:1; }
 .fl { width:190px; flex:none; color:var(--secondary-text-color,#777); }
@@ -1280,11 +1306,13 @@ input.picker { width:300px; } input.bad { border-color:#e5484d; }
 .ag { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--divider-color,#ccc); border-radius:18px; padding:2px 2px 2px 10px; margin-left:auto; }
 .seg { display:inline-flex; gap:4px; flex-wrap:wrap; } .seg .ab { padding:5px 11px; }
 .abar.wrapok { flex-wrap:wrap; overflow:visible; }
-.psel { border-radius:18px; padding:6px 12px; font-weight:600; }
+.psel { font-weight:600; }
 .ab.clr { padding:2px 10px; font-size:12px; text-transform:none; letter-spacing:0; font-weight:500; }
 .ag > ha-icon { --mdc-icon-size:18px; color:var(--secondary-text-color,#888); } .agl { font-size:12px; color:var(--secondary-text-color,#888); }
 .ag select { border:0; background:transparent; font-weight:600; } .ag .ab { padding:5px 9px; }
-.nz { display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; font-size:12px; } .nz span { display:inline-flex; align-items:center; }
+.nz { display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; font-size:12px; align-items:center; } .nz > span { display:inline-flex; align-items:center; }
+.zbar { display:flex; height:6px; border-radius:3px; overflow:hidden; margin-top:8px; gap:1px; } .zbar i { display:block; }
+.nz .more { cursor:default; } .nzt { margin-left:auto; }
 .big .rm { font-size:11px; }
 .prog { position:relative; height:10px; margin-top:8px; border-radius:5px; overflow:hidden; }
 .psegs { display:flex; height:100%; opacity:.45; } .psegs i { display:block; }

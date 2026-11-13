@@ -591,6 +591,8 @@ class Runtime:
             stats_mod.seed_from_history(self.stats, self.history)
         self.flow_samples = data.get("flow_samples") or {}
         self.suggestions = data.get("suggestions") or {}
+        if (self.config.get("weather") or {}).get("mode", "off") != "suggest":
+            self.suggestions = {k: v for k, v in self.suggestions.items() if v.get("status") != "pending"}
         self.skip_done = data.get("skip_done") or []
         # a zone removed by Reconfigure: drop it from the slots instead of failing the whole plan
         known = {v["id"] for v in self.valves}
@@ -961,6 +963,10 @@ class Runtime:
             new["settings"] = settings
         result = self.compute(days=7, config=new)   # raises ConfigError
         resub = (new.get("weather"), new.get("meters")) != (self.config.get("weather"), self.config.get("meters"))
+        if (new.get("weather") or {}).get("mode", "off") != "suggest":
+            # leaving suggest mode: open questions are gone (auto decides, off ignores the weather);
+            # answers stay - a dismissed skip still means "run anyway" in auto mode
+            self.suggestions = {k: v for k, v in self.suggestions.items() if v.get("status") != "pending"}
         self.config = new
         await self._save()
         if resub:
@@ -1091,4 +1097,5 @@ class Runtime:
                 "conflicts": [{"kind": c.kind, "day": c.day.isoformat(), "slots": list(c.slot_ids), "message": c.message}
                               for c in p.conflicts],
                 "skipped": list(self.skip) + list(self.skip_done), "weather": decisions, "weather_skipped": wx_skip,
-                "suggestions": {k: v for k, v in self.suggestions.items() if v.get("status") == "pending"}}
+                "suggestions": {k: v for k, v in self.suggestions.items() if v.get("status") == "pending"}
+                if self.weather_cfg["mode"] == "suggest" else {}}
