@@ -526,7 +526,12 @@ class Runtime:
     async def answer_suggestion(self, key: str, accept: bool) -> None:
         sug = self.suggestions.get(key)
         if sug is None:
-            raise model.ConfigError(f"no suggestion for {key}")
+            # runs beyond the suggestion horizon show the weather decision too: answering creates it
+            d = self.decisions.get(key)
+            if d is None or d["action"] == "run":
+                raise model.ConfigError(f"no weather suggestion for {key}")
+            sug = self.suggestions[key] = {"action": d["action"], "factor": d["factor"], "reasons": d["reasons"],
+                                           "created": dt_util.utcnow().isoformat()}
         sug["status"] = "accepted" if accept else "dismissed"
         await self._save()
         await self.async_replan()
