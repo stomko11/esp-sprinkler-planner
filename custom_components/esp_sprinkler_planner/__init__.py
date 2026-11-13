@@ -10,6 +10,7 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
 from .const import DOMAIN
+from . import websocket as ws_api
 from .model import ConfigError
 from .notify_logic import EVENTS
 from .runtime import Runtime
@@ -44,7 +45,25 @@ def _runtime(hass: HomeAssistant, call: ServiceCall) -> Runtime:
     return entries[0].runtime_data
 
 
+CARD_URL = f"/{DOMAIN}/esp-sprinkler-planner-card.js"
+
+
+async def _register_card(hass: HomeAssistant) -> None:
+    """Serve the card from the integration and load it on every dashboard (no manual resource)."""
+    from pathlib import Path
+
+    from homeassistant.components.frontend import add_extra_js_url
+    from homeassistant.components.http import StaticPathConfig
+
+    path = Path(__file__).parent / "frontend" / "esp-sprinkler-planner-card.js"
+    version = str(int(path.stat().st_mtime)) if path.exists() else "0"
+    await hass.http.async_register_static_paths([StaticPathConfig(CARD_URL, str(path), False)])
+    add_extra_js_url(hass, f"{CARD_URL}?v={version}")
+
+
 async def async_setup(hass: HomeAssistant, config) -> bool:
+    ws_api.async_register(hass)
+    await _register_card(hass)
     async def handle(call: ServiceCall):
         rt = _runtime(hass, call)
         d = call.data

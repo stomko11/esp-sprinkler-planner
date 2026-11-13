@@ -5,7 +5,7 @@ Home Assistant integration + dashboard card that plans and runs irrigation on to
 running the valves; the planner decides **when**, **which zones**, **how long** and **in what
 order** - without input_booleans, scripts or automations.
 
-Status: **0.2 - planner, integration, notifications, pump (dry run by default)**. No card or weather yet.
+Status: **0.3 - planner, integration, notifications, pump, card (dry run by default)**. Weather and suggestions next.
 
 - Home Assistant 2026.8+, installed through HACS (custom repository) or by copying
   `custom_components/esp_sprinkler_planner` into the config folder
@@ -163,7 +163,33 @@ the ESP. Turn `switch.<name>_planner_dry_run` off only when you want it to reall
 Event `esp_sprinkler_planner_event` with `type`: `started`, `finished`, `stopped`, `skipped`
 (with `reason`), `dry_run` (with the calls it would make), `error`, `skip_set`.
 
-### Configuration (services until the card exists)
+### Card
+
+The integration serves its own card - no resource to add. On any dashboard add a manual card:
+
+```yaml
+type: custom:esp-sprinkler-planner-card
+# entry_id: ...   only with more than one planner
+# tab: today      start tab: today | week | slots | zones | settings
+# title: Garden
+```
+
+- **Today**: what runs now (zone, until when), next run, Stop / Skip next / Run slot now,
+  today's timeline (runs coloured per zone, merged runs outlined, sunrise / sunset / now
+  lines), per zone minutes today, last and next run.
+- **Week**: seven timelines and the list of runs with notes (caps, merges, shifts).
+- **Slots**: add / edit / delete slots - start at or finish by a time / sunrise / sunset
+  with offset, weekdays or every N days, zones with their own minutes, reverse, multiplier,
+  enabled. The preview (timelines, runs, conflicts) updates while you edit, before saving.
+- **Zones**: name, colour, use / disable, max per run and per day, last 7 days of watering,
+  run now.
+- **Settings**: planner enabled, dry run, merge mode / window / same zone, pump, notification
+  targets and every event (title, message, targets, buttons, test).
+
+Changes are kept as a draft until **Save**; invalid values are rejected with the reason in
+the save bar. Saving needs an admin user. With dry run off, "run now" asks for confirmation.
+
+### Configuration by service
 
 `esp_sprinkler_planner.configure` replaces `zones`, `slots` and/or `settings`:
 

@@ -585,9 +585,9 @@ class Runtime:
                         return r.start, st.minutes
         return None, None
 
-    def plan_dict(self, days: int = 7) -> Dict[str, Any]:
+    def plan_dict(self, days: int = 7, config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         try:
-            p = self.compute(days=days)
+            p = self.compute(days=days, config=config)
         except model.ConfigError as err:
             return {"error": str(err), "runs": [], "conflicts": []}
         names = self.zone_names()
