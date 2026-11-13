@@ -205,7 +205,7 @@
         },
         "zones": {
           "name": "Zones",
-          "description": "List of {zone, minutes}."
+          "description": "List of items with zone and minutes."
         },
         "reverse": {
           "name": "Reverse",
