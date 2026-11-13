@@ -19,6 +19,15 @@ configure:
     pump:
       selector:
         object:
+    ui:
+      selector:
+        object:
+    meters:
+      selector:
+        object:
+    weather:
+      selector:
+        object:
 test_notification:
   fields:
     config_entry_id:
@@ -92,3 +101,61 @@ replan:
       selector:
         config_entry:
           integration: esp_sprinkler_planner
+quick_run:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: esp_sprinkler_planner
+    zones:
+      required: true
+      example: '[{"zone": "zone_1", "minutes": 5}, {"zone": "zone_3", "minutes": 10}]'
+      selector:
+        object:
+    reverse:
+      selector:
+        boolean:
+unskip:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: esp_sprinkler_planner
+    run:
+      selector:
+        text:
+answer_suggestion:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: esp_sprinkler_planner
+    run:
+      required: true
+      selector:
+        text:
+    accept:
+      required: true
+      selector:
+        boolean:
+refresh_weather:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: esp_sprinkler_planner
+get_stats:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: esp_sprinkler_planner
+    period:
+      selector:
+        select:
+          options: [day, week, month, year]
+    count:
+      selector:
+        number:
+          min: 1
+          max: 400

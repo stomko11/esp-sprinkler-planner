@@ -14,7 +14,9 @@ from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .model import ConfigError
-from .notify_logic import ACTIONS, DEFAULTS, EVENTS, VARIABLES, merged
+from .notify_logic import ACTIONS, EVENTS, VARIABLES, defaults, merged
+from . import stats as stats_mod
+from . import weather as wx_mod
 
 
 def _runtime(hass: HomeAssistant, entry_id: Optional[str]):
@@ -43,7 +45,7 @@ def snapshot(hass, rt, days: int) -> Dict[str, Any]:
         sun.append({"day": d.isoformat(), "sunrise": dt_util.as_local(rise).isoformat() if rise else None,
                     "sunset": dt_util.as_local(sset).isoformat() if sset else None})
     try:
-        notif = merged(rt.config.get("notifications"))
+        notif = merged(rt.config.get("notifications"), rt.lang)
     except Exception:  # noqa: BLE001 - show what is stored, the card reports the error
         notif = None
     notify_services = sorted(f"notify.{s}" for s in hass.services.async_services().get("notify", {}))
@@ -52,7 +54,7 @@ def snapshot(hass, rt, days: int) -> Dict[str, Any]:
         "valves": [{k: v.get(k) for k in ("id", "name", "order", "enabled", "max_minutes", "valve_switch")}
                    for v in rt.valves],
         "config": rt.config, "notifications_full": notif,
-        "notify_meta": {"events": list(EVENTS), "actions": ACTIONS, "variables": VARIABLES, "defaults": DEFAULTS},
+        "notify_meta": {"events": list(EVENTS), "actions": ACTIONS, "variables": VARIABLES, "defaults": defaults(rt.lang)},
         "notify_services": notify_services,
         "plan": rt.plan_dict(days),
         "timing": {"valve_overlap": rt.valve_overlap,
@@ -62,7 +64,36 @@ def snapshot(hass, rt, days: int) -> Dict[str, Any]:
         "active_zone": rt.active_zone, "next_run_key": None,
         "history": {d: rt.history[d] for d in sorted(rt.history)[-7:]}, "last_run": rt.last_run,
         "entities": _entities(hass, rt.entry.entry_id),
+        "lang": rt.lang,
+        "weather_full": rt.weather_cfg,
+        "weather_now": _wx_summary(rt),
+        "meters": rt.meters,
+        "usual_flow": {z: sorted(v)[len(v) // 2] for z, v in rt.flow_samples.items() if v},
+        "stats_totals": stats_mod.totals(rt.stats, today),
+        "stats_days": stats_mod.aggregate(rt.stats, today, "day", 14)["rows"],
     }
+
+
+def _wx_summary(rt) -> Dict[str, Any]:
+    w = rt.wx
+    days = []
+    for d in w.get("daily") or []:
+        days.append({"day": d["t"].date().isoformat() if d["t"].tzinfo is None
+                     else dt_util.as_local(d["t"]).date().isoformat(),
+                     "tmax": d.get("temp"), "tmin": d.get("low"), "rain": round(d.get("rain") or 0, 1),
+                     "prob": d.get("prob"), "wind": d.get("wind"), "cond": d.get("cond")})
+    if not days and w.get("hourly"):
+        by = {}
+        for h in w["hourly"]:
+            k = dt_util.as_local(h["t"]).date().isoformat()
+            b = by.setdefault(k, {"day": k, "tmax": None, "tmin": None, "rain": 0.0, "prob": None, "wind": None, "cond": h.get("cond")})
+            if h.get("temp") is not None:
+                b["tmax"] = h["temp"] if b["tmax"] is None else max(b["tmax"], h["temp"])
+                b["tmin"] = h["temp"] if b["tmin"] is None else min(b["tmin"], h["temp"])
+            b["rain"] = round(b["rain"] + (h.get("rain") or 0), 1)
+        days = list(by.values())
+    return {"updated": w.get("updated"), "error": w.get("error"), "temp": w.get("temp"), "fallen": w.get("fallen"),
+            "days": days[:8], "hourly": len(w.get("hourly") or [])}
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/get", vol.Optional("entry_id"): str,
@@ -107,7 +138,8 @@ async def ws_save(hass, connection, msg):
         return
     c = msg["config"]
     try:
-        await rt.configure(c.get("zones"), c.get("slots"), c.get("settings"), c.get("notifications"), c.get("pump"))
+        await rt.configure(c.get("zones"), c.get("slots"), c.get("settings"), c.get("notifications"), c.get("pump"),
+                           c.get("weather"), c.get("meters"), c.get("ui"))
     except ConfigError as err:
         connection.send_error(msg["id"], "invalid", str(err))
         return
@@ -127,6 +159,20 @@ async def ws_flag(hass, connection, msg):
     connection.send_result(msg["id"], {"flags": rt.flags})
 
 
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/stats", vol.Optional("entry_id"): str,
+                                  vol.Optional("period", default="week"): vol.In(["day", "week", "month", "year"]),
+                                  vol.Optional("count", default=12): vol.All(int, vol.Range(1, 400))})
+@callback
+def ws_stats(hass, connection, msg):
+    rt = _runtime(hass, msg.get("entry_id"))
+    if rt is None:
+        connection.send_error(msg["id"], "not_found", "no planner found")
+        return
+    today = dt_util.now().date()
+    connection.send_result(msg["id"], {**stats_mod.aggregate(rt.stats, today, msg["period"], msg["count"]),
+                                       "totals": stats_mod.totals(rt.stats, today)})
+
+
 def async_register(hass: HomeAssistant) -> None:
-    for cmd in (ws_get, ws_list, ws_preview, ws_save, ws_flag):
+    for cmd in (ws_get, ws_list, ws_preview, ws_save, ws_flag, ws_stats):
         websocket_api.async_register_command(hass, cmd)

@@ -5,7 +5,7 @@ Home Assistant integration + dashboard card that plans and runs irrigation on to
 running the valves; the planner decides **when**, **which zones**, **how long** and **in what
 order** - without input_booleans, scripts or automations.
 
-Status: **0.3 - planner, integration, notifications, pump, card (dry run by default)**. Weather and suggestions next.
+Status: **0.4 - planner, card, notifications, pump, weather, quick run, statistics (dry run by default)**.
 
 - Home Assistant 2026.8+, installed through HACS (custom repository) or by copying
   `custom_components/esp_sprinkler_planner` into the config folder
@@ -162,6 +162,48 @@ the ESP. Turn `switch.<name>_planner_dry_run` off only when you want it to reall
 
 Event `esp_sprinkler_planner_event` with `type`: `started`, `finished`, `stopped`, `skipped`
 (with `reason`), `dry_run` (with the calls it would make), `error`, `skip_set`.
+
+### Weather
+
+Settings tab, **Weather**. Mode `off`, `suggest` or `auto`:
+
+- Source: a `weather.*` entity (hourly forecast preferred, daily as fallback), optional rain
+  sensor (mm that already fell) and temperature sensor. Units are converted (°F, in, mph, m/s).
+- **Skip** a run when fallen + expected rain (next N h, only hours with probability ≥ X %)
+  reaches the limit, at strong wind, or below a frost temperature at the start (beyond the
+  hourly forecast, morning runs use the daily low).
+- **Adjust** the minutes: 100 % at a daily maximum of `base_temp`, ± `per_degree` % per
+  degree, less rain shortens proportionally, clamped to min / max %. Applied per day to the
+  slots that use the multiplier.
+- `suggest`: runs within the horizon get a suggestion (card + notification with
+  Accept / Dismiss buttons). Nothing changes until accepted.
+- `auto`: applied directly; the weather is read again at the run start. "Run anyway" undoes it.
+
+### Quick run, skips
+
+**Quick run** on the Today tab: tick zones, set minutes, ESP order or reverse, run once.
+Service `quick_run` with `zones: [{zone, minutes}]`. Skipped runs (by you or by the weather)
+are listed with **Undo** / **Run anyway** (service `unskip`).
+
+### Statistics and meters
+
+Stats tab: this week / month / year / all time, a chart by day / week / month / year
+(watering time, water, pump energy) and a per-zone table (time, valve openings, litres,
+average and usual flow, kWh, average power). Data is kept for 3 years.
+
+Optional meters (Settings): water flow (L/min, m³/h), water meter total (L, m³), pump power
+(W, kW), pump energy total (kWh, Wh). Totals are used when present, otherwise the rate is
+integrated while a zone is open. A zone whose flow differs from its usual flow by more than
+X % raises the `flow_warning` notification (leak or blocked valve). Service `get_stats`.
+
+### Zones, language, notifications
+
+- Zone colour plus an optional **icon** (`mdi:*`), shown in the colour of the zone.
+- **Language** auto / English / Slovensky: card, default notification texts and buttons,
+  weather reasons. Changed notification texts stay as you wrote them.
+- Every notification event has editable title and message (templates), own recipients
+  (any number of `notify.*` services) and buttons. New events: `suggestion`, `weather`,
+  `flow_warning`.
 
 ### Changing the valve mapping
 

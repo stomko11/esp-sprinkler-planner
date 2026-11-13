@@ -22,13 +22,24 @@ ENTRY = vol.Optional("config_entry_id")
 SCHEMAS = {
     "configure": vol.Schema({ENTRY: cv.string, vol.Optional("zones"): dict, vol.Optional("slots"): list,
                              vol.Optional("settings"): dict, vol.Optional("notifications"): dict,
-                             vol.Optional("pump"): dict}),
+                             vol.Optional("pump"): dict, vol.Optional("weather"): dict,
+                             vol.Optional("meters"): dict, vol.Optional("ui"): dict}),
     "test_notification": vol.Schema({ENTRY: cv.string, vol.Required("event"): vol.In(EVENTS),
                                      vol.Optional("targets"): [cv.string]}),
     "get_plan": vol.Schema({ENTRY: cv.string, vol.Optional("days", default=7): vol.All(int, vol.Range(1, 31))}),
     "run_slot": vol.Schema({ENTRY: cv.string, vol.Required("slot"): cv.string}),
     "run_zone": vol.Schema({ENTRY: cv.string, vol.Required("zone"): cv.string,
                             vol.Required("minutes"): vol.All(vol.Coerce(float), vol.Range(min=0.1, max=600))}),
+    "quick_run": vol.Schema({ENTRY: cv.string, vol.Required("zones"): [vol.Schema({
+        vol.Required("zone"): cv.string,
+        vol.Required("minutes"): vol.All(vol.Coerce(float), vol.Range(min=0.1, max=600))})],
+        vol.Optional("reverse", default=False): cv.boolean}),
+    "unskip": vol.Schema({ENTRY: cv.string, vol.Optional("run"): cv.string}),
+    "answer_suggestion": vol.Schema({ENTRY: cv.string, vol.Required("run"): cv.string,
+                                     vol.Required("accept"): cv.boolean}),
+    "refresh_weather": vol.Schema({ENTRY: cv.string}),
+    "get_stats": vol.Schema({ENTRY: cv.string, vol.Optional("period", default="week"): vol.In(["day", "week", "month", "year"]),
+                             vol.Optional("count", default=12): vol.All(int, vol.Range(1, 400))}),
     "stop": vol.Schema({ENTRY: cv.string}),
     "skip_next": vol.Schema({ENTRY: cv.string}),
     "replan": vol.Schema({ENTRY: cv.string}),
@@ -70,7 +81,8 @@ async def async_setup(hass: HomeAssistant, config) -> bool:
         try:
             if call.service == "configure":
                 plan = await rt.configure(d.get("zones"), d.get("slots"), d.get("settings"),
-                                          d.get("notifications"), d.get("pump"))
+                                          d.get("notifications"), d.get("pump"), d.get("weather"),
+                                          d.get("meters"), d.get("ui"))
                 return {"runs": len(plan.runs), "conflicts": [c.message for c in plan.conflicts]}
             if call.service == "test_notification":
                 return {"sent_to": await rt.test_notification(d["event"], d.get("targets"))}
@@ -80,6 +92,20 @@ async def async_setup(hass: HomeAssistant, config) -> bool:
                 await rt.run_slot(d["slot"])
             elif call.service == "run_zone":
                 await rt.run_zone(d["zone"], d["minutes"])
+            elif call.service == "quick_run":
+                await rt.quick_run(d["zones"], d["reverse"])
+            elif call.service == "unskip":
+                return {"unskipped": await rt.unskip(d.get("run"))}
+            elif call.service == "answer_suggestion":
+                await rt.answer_suggestion(d["run"], d["accept"])
+            elif call.service == "refresh_weather":
+                await rt.refresh_weather()
+                await rt.async_replan()
+            elif call.service == "get_stats":
+                from homeassistant.util import dt as dt_util
+                from .stats import aggregate, totals
+                today = dt_util.now().date()
+                return {**aggregate(rt.stats, today, d["period"], d["count"]), "totals": totals(rt.stats, today)}
             elif call.service == "stop":
                 await rt.stop()
             elif call.service == "skip_next":
@@ -92,7 +118,8 @@ async def async_setup(hass: HomeAssistant, config) -> bool:
 
     for name, schema in SCHEMAS.items():
         support = {"get_plan": SupportsResponse.ONLY, "configure": SupportsResponse.OPTIONAL,
-                   "skip_next": SupportsResponse.OPTIONAL,
+                   "skip_next": SupportsResponse.OPTIONAL, "unskip": SupportsResponse.OPTIONAL,
+                   "get_stats": SupportsResponse.ONLY,
                    "test_notification": SupportsResponse.OPTIONAL}.get(name, SupportsResponse.NONE)
         hass.services.async_register(DOMAIN, name, handle, schema=schema, supports_response=support)
     return True

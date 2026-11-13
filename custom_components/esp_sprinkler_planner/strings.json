@@ -86,6 +86,18 @@
         "pump": {
           "name": "Pump",
           "description": "entity, auto_on, auto_off, delay (s), warn_if_off."
+        },
+        "weather": {
+          "name": "Weather",
+          "description": "Weather settings (see README)."
+        },
+        "meters": {
+          "name": "Meters",
+          "description": "Meters settings (see README)."
+        },
+        "ui": {
+          "name": "Interface",
+          "description": "Interface settings (see README)."
         }
       }
     },
@@ -180,6 +192,84 @@
         "targets": {
           "name": "Targets",
           "description": "notify.* services; default: the configured ones."
+        }
+      }
+    },
+    "quick_run": {
+      "name": "Quick run",
+      "description": "Run the chosen zones once, now (ESP order or reverse).",
+      "fields": {
+        "config_entry_id": {
+          "name": "Planner",
+          "description": "Only with more than one planner."
+        },
+        "zones": {
+          "name": "Zones",
+          "description": "List of {zone, minutes}."
+        },
+        "reverse": {
+          "name": "Reverse",
+          "description": "Reverse ESP order."
+        }
+      }
+    },
+    "unskip": {
+      "name": "Undo skip",
+      "description": "Undo a skip (the given run, or the earliest one).",
+      "fields": {
+        "config_entry_id": {
+          "name": "Planner",
+          "description": "Only with more than one planner."
+        },
+        "run": {
+          "name": "Run",
+          "description": "Run key YYYY-MM-DD|slot."
+        }
+      }
+    },
+    "answer_suggestion": {
+      "name": "Answer weather suggestion",
+      "description": "Accept or dismiss a weather suggestion.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Planner",
+          "description": "Only with more than one planner."
+        },
+        "run": {
+          "name": "Run",
+          "description": "Run key."
+        },
+        "accept": {
+          "name": "Accept",
+          "description": "Accept (on) or dismiss (off)."
+        }
+      }
+    },
+    "refresh_weather": {
+      "name": "Refresh weather",
+      "description": "Read the forecast now and replan.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Planner",
+          "description": "Only with more than one planner."
+        }
+      }
+    },
+    "get_stats": {
+      "name": "Get statistics",
+      "description": "Watering minutes, water and pump energy per day/week/month/year.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Planner",
+          "description": "Only with more than one planner."
+        },
+        "period": {
+          "name": "Period",
+          "description": "day, week, month or year."
+        },
+        "count": {
+          "name": "Count",
+          "description": "How many periods back."
         }
       }
     }

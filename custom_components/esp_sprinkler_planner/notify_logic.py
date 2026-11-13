@@ -26,13 +26,19 @@ import copy
 import re
 from typing import Any, Dict, List, Optional
 
-EVENTS = ("planned", "started", "zone_changed", "finished", "skipped", "stopped", "error", "pump_off", "dry_run")
+EVENTS = ("planned", "started", "zone_changed", "finished", "skipped", "stopped", "error", "pump_off", "dry_run",
+          "suggestion", "weather", "flow_warning")
+LANGUAGES = ("en", "sk")
 
 ACTIONS = {
     "stop": "Stop",
     "skip": "Skip",
     "pump_on": "Turn pump ON",
+    "accept": "Accept",
+    "dismiss": "Dismiss",
 }
+ACTIONS_SK = {"stop": "Zastavi\u0165", "skip": "Presko\u010di\u0165", "pump_on": "Zapn\u00fa\u0165 \u010derpadlo",
+              "accept": "Prija\u0165", "dismiss": "Zamietnu\u0165"}
 
 COMMON_VARS = ["planner", "slots", "zones", "zone_list", "start_time", "end_time", "duration_min", "day", "source"]
 VARIABLES: Dict[str, List[str]] = {
@@ -45,6 +51,9 @@ VARIABLES: Dict[str, List[str]] = {
     "error": COMMON_VARS + ["reason"],
     "pump_off": COMMON_VARS + ["pump"],
     "dry_run": COMMON_VARS + ["calls"],
+    "suggestion": COMMON_VARS + ["action", "factor", "reason"],
+    "weather": COMMON_VARS + ["action", "factor", "reason"],
+    "flow_warning": ["planner", "zone", "flow", "usual", "direction"],
 }
 
 DEFAULTS: Dict[str, Dict[str, Any]] = {
@@ -66,7 +75,39 @@ DEFAULTS: Dict[str, Dict[str, Any]] = {
                  "message": "{{ zone_list }} until {{ end_time }}, but the pump is off.", "actions": ["pump_on", "stop"]},
     "dry_run": {"enabled": False, "title": "Irrigation dry run",
                 "message": "Would run {{ zone_list }} until {{ end_time }}.", "actions": []},
+    "suggestion": {"enabled": True, "title": "Weather: {{ action }} {{ slots }} {{ start_time }}?",
+                   "message": "{{ reason }}.", "actions": ["accept", "dismiss"]},
+    "weather": {"enabled": True, "title": "Weather: {{ slots }} {{ action }}",
+                "message": "{{ reason }}.", "actions": []},
+    "flow_warning": {"enabled": True, "title": "{{ zone }}: flow too {{ direction }}",
+                     "message": "{{ flow }} L/min, usually {{ usual }} L/min. Check for a leak or a blocked valve.",
+                     "actions": []},
 }
+
+_SK = {
+    "planned": ("Zavla\u017eovanie o {{ start_time }}", "{{ zone_list }} do {{ end_time }}."),
+    "started": ("Zavla\u017eovanie spusten\u00e9", "{{ zone_list }}. Skon\u010d\u00ed o <b>{{ end_time }}</b>."),
+    "zone_changed": ("Zavla\u017eovanie: {{ zone }}", "{{ zone }} na {{ zone_minutes }} min."),
+    "finished": ("Zavla\u017eovanie skon\u010dilo", "{{ zone_list }} - {{ duration_min }} min."),
+    "skipped": ("Zavla\u017eovanie presko\u010den\u00e9", "{{ slots }}: {{ reason }}."),
+    "stopped": ("Zavla\u017eovanie zastaven\u00e9", "{{ reason }}."),
+    "error": ("Chyba zavla\u017eovania", "{{ reason }}."),
+    "pump_off": ("Zavla\u017eovanie be\u017e\u00ed - <b>\u010derpadlo je VYPNUT\u00c9</b>",
+                 "{{ zone_list }} do {{ end_time }}, ale \u010derpadlo je vypnut\u00e9."),
+    "dry_run": ("Sk\u00fa\u0161ka zavla\u017eovania", "Spustilo by sa {{ zone_list }} do {{ end_time }}."),
+    "suggestion": ("Po\u010dasie: {{ action }} {{ slots }} {{ start_time }}?", "{{ reason }}."),
+    "weather": ("Po\u010dasie: {{ slots }} {{ action }}", "{{ reason }}."),
+    "flow_warning": ("{{ zone }}: pr\u00edtok je pr\u00edli\u0161 {{ direction }}",
+                     "{{ flow }} L/min, zvy\u010dajne {{ usual }} L/min. Skontroluj \u00fanik alebo upchat\u00fd ventil."),
+}
+
+
+def defaults(lang: str = "en") -> Dict[str, Dict[str, Any]]:
+    out = copy.deepcopy(DEFAULTS)
+    if lang == "sk":
+        for ev, (t, m) in _SK.items():
+            out[ev]["title"], out[ev]["message"] = t, m
+    return out
 
 ANDROID_MAX_ACTIONS = 3
 FIELDS = ("enabled", "targets", "title", "message", "actions", "lead")
@@ -76,9 +117,12 @@ class NotifyConfigError(ValueError):
     pass
 
 
-def merged(cfg: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    """Stored (partial) notification config -> full config with defaults. Validates."""
+def merged(cfg: Optional[Dict[str, Any]], lang: str = "en") -> Dict[str, Any]:
+    """Stored (partial) notification config -> full config with defaults (in lang). Validates.
+    A stored text equal to a default of any language counts as 'not changed' and follows lang."""
     cfg = cfg or {}
+    base = defaults(lang)
+    all_defaults = {(ev, k): {defaults(x)[ev][k] for x in LANGUAGES} for ev in EVENTS for k in ("title", "message")}
     targets = cfg.get("targets") or []
     if not isinstance(targets, list) or not all(isinstance(t, str) and t.startswith("notify.") for t in targets):
         raise NotifyConfigError("notifications.targets: a list of notify.* services")
@@ -89,9 +133,12 @@ def merged(cfg: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         raise NotifyConfigError(f"notifications.events: unknown event(s) {', '.join(sorted(unknown))}; "
                                 f"known: {', '.join(EVENTS)}")
     for ev in EVENTS:
-        e = copy.deepcopy(DEFAULTS[ev])
+        e = copy.deepcopy(base[ev])
         e["targets"] = None
-        over = given.get(ev) or {}
+        over = dict(given.get(ev) or {})
+        for k in ("title", "message"):
+            if over.get(k) in all_defaults[(ev, k)]:
+                del over[k]
         bad = set(over) - set(FIELDS)
         if bad:
             raise NotifyConfigError(f"notifications.events.{ev}: unknown field(s) {', '.join(sorted(bad))}")
@@ -142,22 +189,23 @@ def parse_action(action: str):
 
 
 def payload(platform: str, title: str, message: str, actions: List[str], entry_id: str,
-            tag: Optional[str] = None) -> Dict[str, Any]:
+            tag: Optional[str] = None, lang: str = "en") -> Dict[str, Any]:
     """Service data for notify.<target>. platform: android | ios | other."""
+    names = ACTIONS_SK if lang == "sk" else ACTIONS
     if platform == "android":
         data: Dict[str, Any] = {"notification_icon": "mdi:sprinkler", "channel": "Irrigation"}
         if tag:
             data["tag"] = tag
         acts = actions[:ANDROID_MAX_ACTIONS]
         if acts:
-            data["actions"] = [{"action": action_id(entry_id, a), "title": ACTIONS[a]} for a in acts]
+            data["actions"] = [{"action": action_id(entry_id, a), "title": names[a]} for a in acts]
         return {"title": title, "message": message, "data": data}
     if platform == "ios":
         data = {}
         if tag:
             data["tag"] = tag
         if actions:
-            data["actions"] = [{"action": action_id(entry_id, a), "title": ACTIONS[a]} for a in actions]
+            data["actions"] = [{"action": action_id(entry_id, a), "title": names[a]} for a in actions]
         out = {"title": plain(title), "message": plain(message)}
         if data:
             out["data"] = data
