@@ -202,6 +202,18 @@ X % raises the `flow_warning` notification (leak or blocked valve). Service `get
   the zone colour), use, **follow weather** (off for a greenhouse or indoor zone: never
   shortened, lengthened or skipped; in a weather-skipped run only these zones still run),
   max per run / day.
+- Overview tab: now / next run (with the weather mark and zones), action bar (Stop, Quick run,
+  Skip, Run slot), live sensor chips, forecast, today's timeline, zones as a compact list or
+  tiles (toggle, or `zones: list | tiles` in the card YAML). A progress bar fills while a run is on.
+- Weather sensors (all optional): temperature, humidity, wind, gusts, rain fallen, raining now
+  (binary sensor or mm/h). Raining now, gusts and wind are checked for runs starting within
+  the hour.
+- Prices per m³ and kWh (Settings → Meters) show costs on the Stats tab, next to a
+  12-month heatmap.
+- Zone colours: preset swatches plus the colours already used by other zones.
+- Compact card: `type: custom:esp-sprinkler-planner-compact` - progress ring, next run,
+  live sensors, Stop / Quick run / Skip.
+- Week chart: the past 7 days (watered) and the next 7 (planned).
 - Card header: integration icon, editable name (Settings → Planner), and the master switch
   that turns the planner on / off.
 - Week and slot preview show per run: ✓ as planned, ✕ skipped, ±50 % adjusted; a `?` means

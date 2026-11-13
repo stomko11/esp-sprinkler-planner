@@ -8,6 +8,7 @@
  * Served by the integration (no resource needed). Plain custom element, no build step.
  */
 const DOMAIN = "esp_sprinkler_planner";
+const SWATCHES = ["#1f6fd1", "#0aa5a5", "#147a44", "#7cb342", "#c47a00", "#ff5722", "#b3261e", "#8e24aa", "#5c6bc0", "#795548", "#9e9e9e", "#ffd600"];
 const PALETTE = ["#4e9cf5", "#2fbf71", "#f5a524", "#e5484d", "#a970ff", "#16c1c8", "#ff7ab6", "#c3e14b"];
 const ICONS = ["mdi:sprinkler", "mdi:sprinkler-variant", "mdi:water", "mdi:water-outline", "mdi:watering-can", "mdi:flower",
   "mdi:flower-tulip", "mdi:sprout", "mdi:grass", "mdi:tree", "mdi:pine-tree", "mdi:palm-tree", "mdi:leaf", "mdi:fruit-cherries",
@@ -20,7 +21,13 @@ const WX_ICON = { "clear-night": "night", cloudy: "cloudy", exceptional: "alert-
 
 // ------------------------------------------------------------------ language
 const SK = {
-  "Today": "Dnes", "Week": "T\u00fd\u017ede\u0148", "Stats": "\u0160tatistiky", "Slots": "Sloty", "Zones": "Z\u00f3ny", "Settings": "Nastavenia",
+  "Today": "Dnes", "Overview": "Preh\u013ead", "Skip": "Presko\u010di\u0165", "Run slot": "Spusti\u0165 slot", "Live": "Teraz",
+  "humidity": "vlhkos\u0165", "wind": "vietor", "gusts": "n\u00e1razy", "raining": "pr\u0161\u00ed", "dry": "sucho",
+  "Humidity sensor": "Senzor vlhkosti", "Wind sensor": "Senzor vetra", "Gust sensor": "Senzor n\u00e1razov vetra",
+  "Raining now (binary or mm/h)": "Pr\u00e1ve pr\u0161\u00ed (bin\u00e1rny alebo mm/h)", "skip at gusts \u2265": "presko\u010di\u0165 pri n\u00e1razoch \u2265",
+  "Live sensors": "Aktu\u00e1lne senzory", "Prices": "Ceny", "water per m\u00b3": "voda za m\u00b3", "energy per kWh": "energia za kWh",
+  "Cost": "N\u00e1klady", "Last 12 months": "Posledn\u00fdch 12 mesiacov", "less": "menej", "more": "viac",
+  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "left": "zost\u00e1va", "list": "zoznam", "tiles": "dla\u017edice", "Week": "T\u00fd\u017ede\u0148", "Stats": "\u0160tatistiky", "Slots": "Sloty", "Zones": "Z\u00f3ny", "Settings": "Nastavenia",
   "Idle": "Ne\u010dinn\u00e9", "Scheduled": "Napl\u00e1novan\u00e9", "Running": "Be\u017e\u00ed", "Dry run": "Sk\u00fa\u0161ka", "Disabled": "Vypnut\u00e9", "Error": "Chyba",
   "DRY RUN": "SK\u00da\u0160KA", "Nothing is sent to the ESP": "Do ESP sa ni\u010d neposiela", "planner off": "pl\u00e1nova\u010d vypnut\u00fd",
   "Loading\u2026": "Na\u010d\u00edtavam\u2026", "Now": "Teraz", "Starting\u2026": "Sp\u00fa\u0161\u0165am\u2026", "until {0}": "do {0}", "run ends {0}": "koniec behu {0}",
@@ -142,7 +149,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
     this.shadowRoot.addEventListener("toggle", (e) => { const k = e.target.dataset && e.target.dataset.d; if (k) this._dets[k] = e.target.open; }, true);
     this._load();
     this._timer = setInterval(() => this._load(), 60000);
-    this._tick = setInterval(() => this._moveNow(), 30000);
+    this._tick = setInterval(() => this._moveNow(), 10000);
   }
 
   disconnectedCallback() { clearInterval(this._timer); clearInterval(this._tick); this._timer = null; }
@@ -262,6 +269,14 @@ class EspSprinklerPlannerCard extends HTMLElement {
     const v = value ?? min;
     return `<span class="sl"><input type="range" data-k="${path}" data-t="num" data-u="${esc(unit || "")}" min="${min}" max="${max}" step="${step}" value="${esc(v)}"><output>${esc(v)}${esc(unit || "")}</output></span>`;
   }
+  _cur() { return ((this.data && this.data.weather_now) || {}).currency || "EUR"; }
+  _cost(x) {
+    const m = (this.data && this.data.meters) || {};
+    if (!x || (!m.water_price && !m.energy_price)) return null;
+    const c = (x.l ? x.l / 1000 * (m.water_price || 0) : 0) + (x.kwh ? x.kwh * (m.energy_price || 0) : 0);
+    if (!c) return null;
+    try { return new Intl.NumberFormat(LANG === "sk" ? "sk-SK" : "en-GB", { style: "currency", currency: this._cur() }).format(c); } catch (e) { return c.toFixed(2) + " " + this._cur(); }
+  }
   _title() { return this._cfg.title || ((this.draft && this.draft.ui) || {}).title || this.data.title; }
 
   // ------------------------------------------------------------------ rendering
@@ -273,7 +288,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
     const d = this.data;
     const flags = d.flags || {};
     const STATUS = { idle: "Idle", scheduled: "Scheduled", running: "Running", dry_run: "Dry run", disabled: "Disabled", error: "Error" };
-    const tabs = [["today", "Today"], ["week", "Week"], ["stats", "Stats"], ["slots", "Slots"], ["settings", "Settings"]];
+    const tabs = [["today", "Overview"], ["week", "Week"], ["stats", "Stats"], ["slots", "Slots"], ["settings", "Settings"]];
     root.innerHTML = `
       <div class="head">
         <ha-icon class="hicon ${flags.enabled ? "" : "off"}" icon="mdi:sprinkler-variant"></ha-icon>
@@ -406,41 +421,90 @@ class EspSprinklerPlannerCard extends HTMLElement {
         <div class="box">
           <div class="lbl">${t("Now")}</div>
           ${act ? `<div class="big">${az ? `${this._mark(this._zone(az.zone), true)}${esc(az.name)}` : act.dry_run ? t("Dry run") : t("Starting\u2026")}</div>
-                   <div class="muted">${az && az.until ? `${t("until {0}", hm(az.until))} \u00b7 ` : ""}${t("run ends {0}", hm(act.run.end))}</div>`
+                   <div class="muted">${az && az.until ? `${t("until {0}", hm(az.until))} \u00b7 ` : ""}${t("run ends {0}", hm(act.run.end))}</div>
+                   ${this._progress(act)}`
                 : `<div class="big muted">${t("Nothing running")}</div>`}
         </div>
         <div class="box">
           <div class="lbl">${t("Next run")}</div>
-          ${next ? `<div class="big">${fmtDay(next.day)} ${hm(next.start)}</div><div class="muted">${next.slots.map((x) => esc(this._slotName(x))).join(" + ")} \u00b7 ${t("until {0}", hm(next.end))}</div>`
+          ${next ? `<div class="big">${fmtDay(next.day)} ${hm(next.start)} ${this._runMark(next, plan)}</div><div class="muted">${next.slots.map((x) => esc(this._slotName(x))).join(" + ")} \u00b7 ${t("until {0}", hm(next.end))}</div>
+                    <div class="nz">${next.zones.map((z) => `<span title="${esc(z.name)} ${z.minutes}\u2032">${this._mark(this._zone(z.zone))}${z.minutes}\u2032</span>`).join("")}</div>`
                  : `<div class="big muted">\u2013</div>`}
         </div>
       </div>
-      <div class="actions">
-        ${act ? `<button class="danger" data-act="stop">${t("Stop")}</button>` : ""}
-        ${next ? `<button data-act="skip">${t("Skip next")}</button>` : ""}
-        <button data-act="qr">${t("Quick run")}</button>
-        ${slots.length ? `<select id="runslot">${slots.map((s) => `<option value="${esc(s.id)}">${esc(s.name || s.id)}</option>`).join("")}</select><button data-act="runslot">${t("Run slot now")}</button>` : ""}
-      </div>
+      ${this._actionBar(act, next, slots)}
       ${this._qr ? this._quickRun() : ""}
       ${this._suggestBox(plan)}
       ${this._skippedBox(plan)}
+      ${this._liveRow()}
       ${this._forecastStrip(plan)}
       <div class="lbl">${t("Today")}</div>
       ${this._timeline(today, plan, false)}
-      <div class="lbl">${t("Zones today")}</div>
-      <div class="tiles">${zones.map((z) => {
-        const nx = (plan.runs || []).find((r) => r.start > d.now && !blocked.has(runKey(r)) && r.zones.some((x) => x.zone === z.id));
-        const zm = nx && nx.zones.find((x) => x.zone === z.id);
-        const done = todayHist[z.id] || 0;
-        const left = (plan.runs || []).filter((r) => r.day === today && r.start > d.now && !blocked.has(runKey(r))).reduce((a, r) => a + ((r.zones.find((x) => x.zone === z.id) || {}).minutes || 0), 0);
-        const tot = Math.max(done + left, 1);
-        const on = az && az.zone === z.id;
-        return `<div class="tile ${z.enabled ? "" : "dis"} ${on ? "on" : ""}" title="${esc(z.name)}: ${esc(t("{0} min watered today, {1} min still planned today", Math.round(done), Math.round(left)))}">
-          <div class="tn">${this._mark(z, true)}${esc(z.name)}${on ? ` <span class="chip small run-on">ON</span>` : ""}</div>
-          <div class="pbar"><i style="width:${(done / tot * 100).toFixed(1)}%;background:${z.color}"></i><i class="plan" style="width:${(left / tot * 100).toFixed(1)}%;--c:${z.color}"></i></div>
-          <div class="tm"><b>${Math.round(done)}</b>${left ? `<span class="muted"> +${Math.round(left)}</span>` : ""} min<span class="grow"></span>${nx ? `<span class="muted" title="${t("next run")}">\u23f5 ${nx.day === today ? "" : fmtDay(nx.day) + " "}${hm(nx.start)} \u00b7 ${zm.minutes}\u2032</span>` : ""}</div>
-        </div>`;
-      }).join("")}</div>`;
+      <div class="lbl lrow">${t("Zones today")}<span class="grow"></span>
+        <button class="vt ${this._zview() === "list" ? "on" : ""}" data-act="zview" data-v="list" title="${t("list")}"><ha-icon icon="mdi:view-list"></ha-icon></button>
+        <button class="vt ${this._zview() === "tiles" ? "on" : ""}" data-act="zview" data-v="tiles" title="${t("tiles")}"><ha-icon icon="mdi:view-grid"></ha-icon></button></div>
+      ${this._zonesToday(zones, plan, todayHist, today, blocked, az)}`;
+  }
+
+  _zview() { return this._zv || localStorage.getItem("esp_sprinkler_zview") || this._cfg.zones || "list"; }
+
+  _zonesToday(zones, plan, todayHist, today, blocked, az) {
+    const d = this.data;
+    const info = zones.map((z) => {
+      const nx = (plan.runs || []).find((r) => r.start > d.now && !blocked.has(runKey(r)) && r.zones.some((x) => x.zone === z.id));
+      const zm = nx && nx.zones.find((x) => x.zone === z.id);
+      const done = todayHist[z.id] || 0;
+      const left = (plan.runs || []).filter((r) => r.day === today && r.start > d.now && !blocked.has(runKey(r))).reduce((a, r) => a + ((r.zones.find((x) => x.zone === z.id) || {}).minutes || 0), 0);
+      return { z, nx, zm, done, left, on: az && az.zone === z.id };
+    });
+    const maxT = Math.max(1, ...info.map((x) => x.done + x.left));
+    const nextTxt = (x) => (x.nx ? `${x.nx.day === today ? "" : DAYS()[wd(x.nx.day)] + " "}${hm(x.nx.start)} \u00b7 ${x.zm.minutes}\u2032` : "\u2013");
+    if (this._zview() === "tiles") {
+      return `<div class="tiles">${info.map((x) => { const tot = Math.max(x.done + x.left, 1);
+        return `<div class="tile ${x.z.enabled ? "" : "dis"} ${x.on ? "on" : ""}">
+          <div class="tn">${this._mark(x.z, true)}${esc(x.z.name)}${x.on ? ` <span class="chip small run-on">ON</span>` : ""}</div>
+          <div class="pbar"><i style="width:${(x.done / tot * 100).toFixed(1)}%;background:${x.z.color}"></i><i class="plan" style="width:${(x.left / tot * 100).toFixed(1)}%;--c:${x.z.color}"></i></div>
+          <div class="tm"><b>${Math.round(x.done)}</b>${x.left ? `<span class="muted"> +${Math.round(x.left)}</span>` : ""} min<span class="grow"></span><span class="muted">\u23f5 ${nextTxt(x)}</span></div></div>`; }).join("")}</div>`;
+    }
+    return `<div class="zlist">${info.map((x) => `<div class="zr ${x.z.enabled ? "" : "dis"} ${x.on ? "on" : ""}" title="${esc(x.z.name)}: ${esc(t("{0} min watered today, {1} min still planned today", Math.round(x.done), Math.round(x.left)))}">
+        <span class="zn">${this._mark(x.z)}${esc(x.z.name)}${x.on ? ` <span class="chip small run-on">ON</span>` : ""}</span>
+        <span class="pbar thin"><i style="width:${(x.done / maxT * 100).toFixed(1)}%;background:${x.z.color}"></i><i class="plan" style="width:${(x.left / maxT * 100).toFixed(1)}%;--c:${x.z.color}"></i></span>
+        <span class="zm"><b>${Math.round(x.done)}</b>${x.left ? `<span class="muted">+${Math.round(x.left)}</span>` : ""}\u2032</span>
+        <span class="muted zx">\u23f5 ${nextTxt(x)}</span></div>`).join("")}</div>`;
+  }
+
+  _actionBar(act, next, slots) {
+    return `<div class="abar">
+      ${act ? `<button class="ab danger" data-act="stop"><ha-icon icon="mdi:stop-circle"></ha-icon>${t("Stop")}</button>` : ""}
+      <button class="ab ${this._qr ? "on" : ""}" data-act="qr"><ha-icon icon="mdi:play-speed"></ha-icon>${t("Quick run")}</button>
+      ${next ? `<button class="ab" data-act="skip" title="${esc(t("Skip next"))}: ${fmtDay(next.day)} ${hm(next.start)}"><ha-icon icon="mdi:skip-next-circle-outline"></ha-icon>${t("Skip")} <span class="muted">${DAYS()[wd(next.day)]} ${hm(next.start)}</span></button>` : ""}
+      ${slots.length ? `<span class="ag" title="${esc(t("Run slot now"))}"><ha-icon icon="mdi:calendar-play"></ha-icon><span class="agl">${t("Run slot")}</span>
+        <select id="runslot">${slots.map((s) => `<option value="${esc(s.id)}">${esc(s.name || s.id)}</option>`).join("")}</select>
+        <button class="ab primary" data-act="runslot" title="${esc(t("Run slot now"))}"><ha-icon icon="mdi:play"></ha-icon></button></span>` : ""}
+    </div>`;
+  }
+
+  _progress(act) {
+    const r = act.run; const s = Date.parse(r.start), e = Date.parse(r.end);
+    const now = Date.now();
+    const f = Math.max(0, Math.min(1, (now - s) / Math.max(1, e - s)));
+    const left = Math.max(0, Math.round((e - now) / 60000));
+    return `<div class="prog" data-s="${s}" data-e="${e}"><div class="psegs">${r.zones.map((z) => `<i style="flex:${z.minutes};background:${this._color(z.zone)}"></i>`).join("")}</div>
+      <div class="pfill" style="left:${(f * 100).toFixed(2)}%"></div></div>
+      <div class="muted small"><span class="pleft">${fmtMin(left)}</span> ${t("left")}</div>`;
+  }
+
+  _liveRow() {
+    const c = (this.data.weather_now || {}).current || {};
+    const items = [];
+    if (c.temp !== undefined) items.push(["mdi:thermometer", `${r1(c.temp)} \u00b0C`, t("Temperature sensor")]);
+    if (c.humidity !== undefined) items.push(["mdi:water-percent", `${Math.round(c.humidity)} %`, t("humidity")]);
+    if (c.wind !== undefined) items.push(["mdi:weather-windy", `${Math.round(c.wind)} km/h`, t("wind")]);
+    if (c.gust !== undefined) items.push(["mdi:weather-windy-variant", `${Math.round(c.gust)} km/h`, t("gusts")]);
+    if (c.rain !== undefined) items.push(["mdi:weather-rainy", `${r1(c.rain)} mm`, t("Rain sensor (fallen)")]);
+    if (c.raining !== undefined) items.push([c.raining ? "mdi:weather-pouring" : "mdi:weather-sunny", c.raining ? (c.rain_rate ? `${r1(c.rain_rate)} mm/h` : t("raining")) : t("dry"), t("Raining now (binary or mm/h)")]);
+    if (!items.length) return "";
+    return `<div class="live">${items.map(([i, v, l]) => `<span class="lc" title="${esc(l)}"><ha-icon icon="${i}"></ha-icon>${esc(v)}</span>`).join("")}</div>`;
   }
 
   _quickRun() {
@@ -489,7 +553,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
     const today = dayOf(this.data.now);
     const days = (w.days || []).filter((x) => x.day >= today).slice(0, 7);
     return `<div class="lbl">${t("Weather")} <span class="muted">${w.temp !== null && w.temp !== undefined ? t("now {0} \u00b0C", r1(w.temp)) : ""}${w.fallen ? " \u00b7 " + t("fallen {0} mm", r1(w.fallen)) : ""}</span>${w.error ? ` <span class="err">${esc(w.error)}</span>` : ""}</div>
-      <div class="fc">${days.map((x) => {
+      <div class="fc" style="grid-template-columns:repeat(${Math.max(1, days.length)},1fr)">${days.map((x) => {
         const decs = (plan.runs || []).filter((r) => r.day === x.day).map((r) => this._decision(r, plan)).filter(Boolean);
         const sk = decs.some((v) => v.action === "skip" && v.status !== "dismissed" && v.status !== "none");
         const f = decs.find((v) => v.action === "adjust");
@@ -534,7 +598,8 @@ class EspSprinklerPlannerCard extends HTMLElement {
     if (!s) { this._loadStats(); }
     const tile = (label, x) => `<div class="stt"><div class="lbl">${t(label)}</div>
       <div class="sv">${fmtMin((x || {}).min)}</div>
-      <div class="muted small">${x && x.l !== null && x.l !== undefined ? fmtL(x.l) + " \u00b7 " : ""}${x && x.kwh !== null && x.kwh !== undefined ? fmtKwh(x.kwh) + " \u00b7 " : ""}${(x || {}).runs || 0} ${t("runs")}${(x || {}).skips ? ` \u00b7 ${x.skips} ${t("skips")}` : ""}</div></div>`;
+      <div class="muted small">${x && x.l !== null && x.l !== undefined ? fmtL(x.l) + " \u00b7 " : ""}${x && x.kwh !== null && x.kwh !== undefined ? fmtKwh(x.kwh) + " \u00b7 " : ""}${(x || {}).runs || 0} ${t("runs")}${(x || {}).skips ? ` \u00b7 ${x.skips} ${t("skips")}` : ""}</div>
+      ${this._cost(x) ? `<div class="cost">${esc(this._cost(x))}</div>` : ""}</div>`;
     const anyData = (tot.all || {}).min || (tot.all || {}).runs || (tot.all || {}).skips;
     if (!anyData) return `<div class="muted pad">${t("No statistics yet - they start with the first real run.")}</div>`;
     const rows = (s && s.rows) || [];
@@ -578,7 +643,26 @@ class EspSprinklerPlannerCard extends HTMLElement {
         ${sel("metric", [["min", t("Watering time")], ...(hasL ? [["l", t("Water")]] : []), ...(hasK ? [["kwh", t("Pump energy")]] : [])])}</div>
       ${s && s.error ? `<div class="err">${esc(s.error)}</div>` : chart}
       ${metric === "kwh" ? "" : this._legend()}
+      <div class="lbl">${t("Last 12 months")}</div>${this._heatmap(metric)}
       <div class="lbl">${t("Per zone")}</div>${ztable}${saved}`;
+  }
+
+  _heatmap(metric) {
+    const h = this._heat;
+    if (!h) { if (!this._heatLoading) { this._heatLoading = true; this._ws({ type: `${DOMAIN}/stats`, period: "day", count: 371 }).then((x) => { this._heat = x; this._heatLoading = false; this._render(); }).catch(() => { this._heatLoading = false; }); } return `<div class="muted small">${t("Loading\u2026")}</div>`; }
+    const rows = h.rows || [];
+    const v = (r) => (metric === "kwh" ? r.kwh : metric === "l" ? r.l : r.min) || 0;
+    const max = Math.max(1e-9, ...rows.map(v));
+    const first = rows.length ? rows[0].key : dayOf(this.data.now);
+    const pad = wd(first);
+    const cells = Array(pad).fill(`<i class="hx"></i>`).concat(rows.map((r) => {
+      const x = v(r); const lv = x ? Math.min(4, 1 + Math.floor(x / max * 3.999)) : 0;
+      return `<i class="h${lv}" title="${fmtDay(r.key)} ${r.key.slice(0, 4)}: ${metric === "min" ? fmtMin(x) : metric === "l" ? fmtL(x) : fmtKwh(x)}${r.skips ? ` \u00b7 ${r.skips} ${t("skips")}` : ""}"></i>`;
+    }));
+    const months = []; let last = -1;
+    rows.forEach((r, i) => { const mo = +r.key.slice(5, 7); if (mo !== last && +r.key.slice(8, 10) <= 7) { months.push(`<span style="grid-column:${Math.floor((i + pad) / 7) + 1}">${(LANG === "sk" ? MON_SK : MON_EN)[mo - 1]}</span>`); last = mo; } });
+    return `<div class="heat"><div class="hm">${months.join("")}</div><div class="hg">${cells.join("")}</div>
+      <div class="hl muted small">${t("less")} <i class="h0"></i><i class="h1"></i><i class="h2"></i><i class="h3"></i><i class="h4"></i> ${t("more")}</div></div>`;
   }
 
   _tab_slots() {
@@ -641,6 +725,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
       const follow = zc.weather !== false;
       const sum = `${this._mark(z, true)}<b>${esc(z.name)}</b><span class="muted">${t("ESP position {0}", z.order)}${z.enabled ? "" : " \u00b7 " + t("(disabled)")}${follow ? "" : " \u00b7 " + t("ignores weather")}${zc.max_per_run ? ` \u00b7 ${t("max per run")} ${zc.max_per_run}\u2032` : ""}</span>`;
       return this._det(`z_${z.id}`, false, sum, `
+        <div class="row swatches">${[...new Set([...this._zones().map((x) => x.color), ...PALETTE, ...SWATCHES])].map((c) => `<button class="swc ${c.toLowerCase() === z.color.toLowerCase() ? "on" : ""}" data-act="setcolor" data-zone="${esc(z.id)}" data-color="${c}" style="background:${c}" title="${c}"></button>`).join("")}</div>
         <div class="row"><input type="color" data-k="${k("color")}" value="${esc(z.color)}" data-r="1">
           <input class="name" data-k="${k("name")}" value="${esc(zc.name || "")}" placeholder="${esc(z.name)}">
           <label><input type="checkbox" class="tog" data-k="${k("enabled")}" data-t="bool" data-r="1" ${z.enabled ? "checked" : ""}> ${t("use")}</label>
@@ -708,11 +793,16 @@ class EspSprinklerPlannerCard extends HTMLElement {
         <div class="row"><span class="fl">${t("Forecast")}</span>${this._picker(wk("entity"), w.entity, (e) => e.startsWith("weather."), "wxlist", "weather.home")}</div>
         <div class="row"><span class="fl">${t("Rain sensor (fallen)")}</span>${this._picker(wk("rain_sensor"), w.rain_sensor, unitRe(/mm|in/), "rainlist")}</div>
         <div class="row"><span class="fl">${t("Temperature sensor")}</span>${this._picker(wk("temp_sensor"), w.temp_sensor, unitRe(/\u00b0|C$|F$/), "templist")}</div>
+        <div class="row"><span class="fl">${t("Humidity sensor")}</span>${this._picker(wk("humidity_sensor"), w.humidity_sensor, unitRe(/^%$/), "humlist")}</div>
+        <div class="row"><span class="fl">${t("Wind sensor")}</span>${this._picker(wk("wind_sensor"), w.wind_sensor, unitRe(/km\/h|m\/s|mph|kn/), "windlist")}</div>
+        <div class="row"><span class="fl">${t("Gust sensor")}</span>${this._picker(wk("gust_sensor"), w.gust_sensor, unitRe(/km\/h|m\/s|mph|kn/), "gustlist")}</div>
+        <div class="row"><span class="fl">${t("Raining now (binary or mm/h)")}</span>${this._picker(wk("rain_now"), w.rain_now, (e) => /^(binary_sensor|input_boolean)\./.test(e) || (e.startsWith("sensor.") && /mm\/h|in\/h/.test(this._unitOf(e))), "rnlist")}</div>
         <div class="grid">
           <span class="fl">${t("Skip when rain reaches")}</span>${sl("skip_rain", 4, 0, 20, 0.5, " mm")}
           <span class="fl">${t("count forecast")}</span>${sl("window", 12, 0, 48, 1, " h")}
           <span class="fl">${t("only hours with probability \u2265")}</span>${sl("min_probability", 50, 0, 100, 5, " %")}
           <span class="fl">${t("skip at wind \u2265")}</span>${sl("skip_wind", 40, 0, 80, 5, " km/h")}
+          <span class="fl">${t("skip at gusts \u2265")}</span>${sl("skip_gust", 60, 0, 120, 5, " km/h")}
           <span class="fl">${t("skip below")} ${t("\u00b0C (frost)")}</span>${sl("skip_cold", 4, -5, 15, 1, " \u00b0C")}
           <span class="fl">${t("100 % at a daily max of")}</span>${sl("base_temp", 22, 10, 35, 1, " \u00b0C")}
           <span class="fl">${t("change per degree")}</span>${sl("per_degree", 4, 0, 10, 0.5, " %")}
@@ -734,6 +824,9 @@ class EspSprinklerPlannerCard extends HTMLElement {
         <div class="row"><span class="fl">${t("Pump power")}</span>${this._picker("meters.pump_power", m.pump_power, unitRe(/^k?W$/), "pwlist", "W")}</div>
         <div class="row"><span class="fl">${t("Pump energy (total)")}</span>${this._picker("meters.pump_energy", m.pump_energy, unitRe(/^k?Wh$/), "enlist", "kWh")}</div>
         <div class="grid"><span class="fl">${t("warn when a zone's flow differs by")}</span>${this._slider("meters.flow_warn", m.flow_warn ?? 30, 0, 100, 5, " %")}</div>
+        <div class="row"><b>${t("Prices")}</b>
+          <label>${t("water per m\u00b3")} <input type="number" class="n" min="0" step="0.01" data-k="meters.water_price" data-t="num" value="${esc(m.water_price ?? "")}"> ${esc(this._cur())}</label>
+          <label>${t("energy per kWh")} <input type="number" class="n" min="0" step="0.01" data-k="meters.energy_price" data-t="num" value="${esc(m.energy_price ?? "")}"> ${esc(this._cur())}</label></div>
         <div class="muted small">${t("Totals are preferred; without them the rate is integrated while a zone is open.")}</div>`, false)}
       ${sec("s_notify", "mdi:bell-outline", t("Notifications"), (n.targets || []).map((x) => esc(x.slice(7))).join(", ") || t("nobody"), `
         <div class="row"><b>${t("Send to")}</b> <span class="muted">${t("(default for every event, pick any number)")}</span></div>
@@ -852,7 +945,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
   async _onClick(e) {
     const tg = e.target.closest("[data-tab],[data-act]");
     if (!tg) return;
-    if (tg.dataset.tab) { this._tab = tg.dataset.tab; if (this._tab === "stats") this._stats = null; this._render(); return; }
+    if (tg.dataset.tab) { this._tab = tg.dataset.tab; if (this._tab === "stats") { this._stats = null; this._heat = null; } this._render(); return; }
     if (e.target.closest("label.sw, label.master")) return;     // switches inside clickable headers
     const act = tg.dataset.act;
     const svc = (s, data) => this._hass.callService(DOMAIN, s, { ...(this._cfg.entry_id ? { config_entry_id: this._cfg.entry_id } : {}), ...data });
@@ -867,6 +960,8 @@ class EspSprinklerPlannerCard extends HTMLElement {
         const i = +tg.dataset.i; if (!confirm(t("Delete slot \"{0}\"?", this.draft.slots[i].name || this.draft.slots[i].id))) return;
         this.draft.slots.splice(i, 1); this._open.clear(); this._markDirty(true);
       } else if (act === "clearpick") { this._setPath(tg.dataset.path, null); this._markDirty(true);
+      } else if (act === "setcolor") { this._setPath(`zones.${tg.dataset.zone}.color`, tg.dataset.color); this._markDirty(true);
+      } else if (act === "zview") { this._zv = tg.dataset.v; localStorage.setItem("esp_sprinkler_zview", this._zv); this._render();
       } else if (act === "seticon") { this._setPath(`zones.${tg.dataset.zone}.icon`, tg.dataset.icon || null); this._markDirty(true);
       } else if (act === "revert") { this.dirty = false; this.draft = this._makeDraft(this.data); this.preview = null; this._render(); }
       else if (act === "save") {
@@ -908,6 +1003,11 @@ class EspSprinklerPlannerCard extends HTMLElement {
     if (!this.data) return;
     const now = this._nowIso();
     for (const el of this.shadowRoot.querySelectorAll(".mark.now")) el.style.left = `${(now.min / 14.4).toFixed(3)}%`;
+    for (const el of this.shadowRoot.querySelectorAll(".prog")) {
+      const s = +el.dataset.s, e = +el.dataset.e, n = Date.now();
+      el.querySelector(".pfill").style.left = `${(Math.max(0, Math.min(1, (n - s) / Math.max(1, e - s))) * 100).toFixed(2)}%`;
+      const pl = el.parentElement.querySelector(".pleft"); if (pl) pl.textContent = fmtMin(Math.max(0, Math.round((e - n) / 60000)));
+    }
   }
 }
 
@@ -1036,11 +1136,86 @@ input.picker { width:300px; } input.bad { border-color:#e5484d; }
 .fcd .rain { font-size:11px; min-height:14px; } .fx { font-size:11px; font-weight:700; color:var(--secondary-text-color,#888); } .fx.adj { color:#c47a00; } .fx.skip { color:#e5484d; }
 .stiles { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; }
 .stt { background:var(--secondary-background-color,#f4f4f4); border-radius:10px; padding:6px 10px; } .stt .lbl { margin:2px 0; } .sv { font-size:19px; font-weight:600; }
+.abar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:10px 0; }
+.ab { display:inline-flex; align-items:center; gap:6px; padding:7px 12px; border-radius:18px; font-weight:500; }
+.ab ha-icon { --mdc-icon-size:18px; } .ab.on { border-color:var(--primary-color,#03a9f4); color:var(--primary-color,#03a9f4); }
+.ab .muted { font-weight:400; font-size:12px; }
+.ag { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--divider-color,#ccc); border-radius:18px; padding:2px 2px 2px 10px; margin-left:auto; }
+.ag > ha-icon { --mdc-icon-size:18px; color:var(--secondary-text-color,#888); } .agl { font-size:12px; color:var(--secondary-text-color,#888); }
+.ag select { border:0; background:transparent; font-weight:600; } .ag .ab { padding:5px 9px; }
+.nz { display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; font-size:12px; } .nz span { display:inline-flex; align-items:center; }
+.big .rm { font-size:11px; }
+.prog { position:relative; height:10px; margin-top:8px; border-radius:5px; overflow:hidden; }
+.psegs { display:flex; height:100%; opacity:.45; } .psegs i { display:block; }
+.pfill { position:absolute; top:0; bottom:0; right:0; background:var(--secondary-background-color,#f4f4f4); opacity:.75; border-left:2px solid var(--primary-text-color,#fff); }
+.live { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0 2px; }
+.lc { display:inline-flex; align-items:center; gap:4px; padding:3px 10px 3px 7px; border-radius:14px; background:var(--secondary-background-color,#f4f4f4); font-size:13px; font-variant-numeric:tabular-nums; }
+.lc ha-icon { --mdc-icon-size:17px; color:var(--primary-color,#03a9f4); }
+.lrow { display:flex; align-items:center; gap:4px; } .vt { padding:1px 4px; line-height:0; border-radius:6px; } .vt ha-icon { --mdc-icon-size:16px; }
+.vt.on { border-color:var(--primary-color,#03a9f4); color:var(--primary-color,#03a9f4); }
+.zlist { display:flex; flex-direction:column; }
+.zr { display:grid; grid-template-columns:minmax(120px,190px) 1fr 58px minmax(90px,130px); gap:10px; align-items:center; padding:5px 2px; border-bottom:1px solid var(--divider-color,#eee); font-size:13px; }
+.zr.on .zn { color:#2fbf71; } .zn { display:flex; align-items:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:500; }
+.pbar.thin { height:6px; } .zm { text-align:right; font-variant-numeric:tabular-nums; } .zx { font-size:12px; text-align:right; white-space:nowrap; }
+.swatches { gap:4px; } .swc { width:20px; height:20px; padding:0; border-radius:50%; border:2px solid transparent; }
+.swc.on { border-color:var(--primary-text-color,#fff); box-shadow:0 0 0 1px #0006; }
+.cost { font-weight:600; color:#c47a00; margin-top:2px; }
+.heat { overflow-x:auto; } .hm { display:grid; grid-auto-flow:column; grid-auto-columns:12px; gap:0; white-space:nowrap; font-size:10px; color:var(--secondary-text-color,#888); height:13px; }
+.hg { display:grid; grid-template-rows:repeat(7,10px); grid-auto-flow:column; grid-auto-columns:10px; gap:2px; }
+.hg i, .hl i { display:inline-block; width:10px; height:10px; border-radius:2px; }
+.h0 { background:var(--secondary-background-color,#eee); } .h1 { background:#4e9cf555; } .h2 { background:#4e9cf599; } .h3 { background:#4e9cf5cc; } .h4 { background:#4e9cf5; } .hx { visibility:hidden; }
+.hl { display:flex; align-items:center; gap:3px; margin-top:4px; }
+.compact .cbody { display:flex; align-items:center; gap:12px; padding:4px 0 10px; }
+.ring { --p:0; width:56px; height:56px; border-radius:50%; flex:none; display:grid; place-items:center; background:conic-gradient(var(--primary-color,#03a9f4) calc(var(--p)*1%), var(--secondary-background-color,#eee) 0); }
+.ring > span { width:44px; height:44px; border-radius:50%; background:var(--card-background-color,#fff); display:grid; place-items:center; font-size:12px; font-weight:700; }
+.ring ha-icon { --mdc-icon-size:24px; color:var(--primary-color,#03a9f4); }
+.cinfo { flex:1; min-width:0; } .cinfo .big { font-size:16px; }
 .bar { position:sticky; bottom:0; display:none; gap:8px; align-items:center; padding:8px 14px; margin:0 -14px; background:var(--card-background-color,#fff); border-top:1px solid var(--divider-color,#ddd); }
 .bar.show { display:flex; }
-@media (max-width:520px) { .grid2 { grid-template-columns:1fr; } .fl { width:auto; } .wwx { width:130px; grid-template-columns:18px 26px 0 1fr; } .wxr { display:none; } .grid { grid-template-columns:1fr; } .sl input[type=range] { width:150px; } }
+@media (max-width:520px) { .zr { grid-template-columns:1fr 50px 50px; } .zr .zx { display:none; } .ag { margin-left:0; }  .grid2 { grid-template-columns:1fr; } .fl { width:auto; } .wwx { width:130px; grid-template-columns:18px 26px 0 1fr; } .wxr { display:none; } .grid { grid-template-columns:1fr; } .sl input[type=range] { width:150px; } }
 `;
 
+class EspSprinklerPlannerCompact extends EspSprinklerPlannerCard {
+  getCardSize() { return 2; }
+  _render() {
+    const root = this.shadowRoot.querySelector(".wrap");
+    if (!root) return;
+    if (!this.data) { root.innerHTML = `<div class="pad err">${esc(this._loadErr || t("Loading\u2026"))}</div>`; return; }
+    LANG = this._lang();
+    root.classList.add("compact");
+    const d = this.data; const plan = d.plan; const act = d.active; const next = this._nextRun(plan); const az = d.active_zone;
+    const flags = d.flags || {};
+    let ring = `<div class="ring"><span><ha-icon icon="mdi:sprinkler-variant"></ha-icon></span></div>`;
+    let main = next ? `<div class="big">${fmtDay(next.day)} ${hm(next.start)} ${this._runMark(next, plan)}</div><div class="muted small">${next.slots.map((x) => esc(this._slotName(x))).join(" + ")} \u00b7 ${t("until {0}", hm(next.end))}</div>`
+      : `<div class="big muted">\u2013</div>`;
+    if (act) {
+      const s = Date.parse(act.run.start), e = Date.parse(act.run.end);
+      const f = Math.max(0, Math.min(1, (Date.now() - s) / Math.max(1, e - s)));
+      ring = `<div class="ring" data-s="${s}" data-e="${e}" style="--p:${(f * 100).toFixed(1)}"><span>${Math.round(f * 100)}%</span></div>`;
+      main = `<div class="big">${az ? `${this._mark(this._zone(az.zone), true)}${esc(az.name)}` : t("Running")}</div><div class="muted small">${t("run ends {0}", hm(act.run.end))}${act.dry_run ? " \u00b7 " + t("Dry run") : ""}</div>`;
+    }
+    root.innerHTML = `<div class="head"><ha-icon class="hicon ${flags.enabled ? "" : "off"}" icon="mdi:sprinkler-variant"></ha-icon>
+        <div class="title">${esc(this._title())}</div>
+        ${flags.dry_run ? `<span class="chip warn">${t("DRY RUN")}</span>` : ""}
+        <label class="master"><input type="checkbox" class="tog" data-flag="enabled" ${flags.enabled ? "checked" : ""}></label></div>
+      <div class="cbody">${ring}<div class="cinfo">${main}</div></div>
+      ${this._liveRow()}
+      <div class="abar">${act ? `<button class="ab danger" data-act="stop"><ha-icon icon="mdi:stop-circle"></ha-icon>${t("Stop")}</button>` : ""}
+        <button class="ab ${this._qr ? "on" : ""}" data-act="qr"><ha-icon icon="mdi:play-speed"></ha-icon>${t("Quick run")}</button>
+        ${next ? `<button class="ab" data-act="skip"><ha-icon icon="mdi:skip-next-circle-outline"></ha-icon>${t("Skip")}</button>` : ""}</div>
+      ${this._qr ? this._quickRun() : ""}`;
+  }
+  _moveNow() {
+    super._moveNow();
+    for (const el of this.shadowRoot.querySelectorAll(".ring[data-s]")) {
+      const s = +el.dataset.s, e = +el.dataset.e; const f = Math.max(0, Math.min(1, (Date.now() - s) / Math.max(1, e - s)));
+      el.style.setProperty("--p", (f * 100).toFixed(1)); el.querySelector("span").textContent = `${Math.round(f * 100)}%`;
+    }
+  }
+}
+
 customElements.define("esp-sprinkler-planner-card", EspSprinklerPlannerCard);
+customElements.define("esp-sprinkler-planner-compact", EspSprinklerPlannerCompact);
 window.customCards = window.customCards || [];
 window.customCards.push({ type: "esp-sprinkler-planner-card", name: "ESP Sprinkler Planner", description: "Plan, run and edit ESP sprinkler schedules." });
+window.customCards.push({ type: "esp-sprinkler-planner-compact", name: "ESP Sprinkler Planner (compact)", description: "Next run, progress, quick run." });

@@ -35,13 +35,17 @@ from typing import Any, Dict, Iterable, List, Optional
 MODES = ("off", "suggest", "auto")
 DEFAULTS: Dict[str, Any] = {
     "mode": "off", "entity": None, "rain_sensor": None, "temp_sensor": None,
+    "humidity_sensor": None, "wind_sensor": None, "gust_sensor": None, "rain_now": None, "skip_gust": 60.0,
     "skip_rain": 4.0, "scale_rain": True, "window": 12, "min_probability": 50,
     "skip_wind": 40.0, "skip_cold": 4.0, "base_temp": 22.0, "per_degree": 4.0,
     "min_factor": 50.0, "max_factor": 160.0, "horizon": 24,
 }
-NUMBERS = {"skip_rain": (0, 200), "window": (0, 72), "min_probability": (0, 100), "skip_wind": (0, 200),
+NUMBERS = {"skip_gust": (0, 250), "skip_rain": (0, 200), "window": (0, 72), "min_probability": (0, 100), "skip_wind": (0, 200),
            "skip_cold": (-30, 30), "base_temp": (-10, 45), "per_degree": (0, 25), "min_factor": (0, 100),
            "max_factor": (100, 300), "horizon": (1, 168)}
+
+
+SENSORS = ("entity", "rain_sensor", "temp_sensor", "humidity_sensor", "wind_sensor", "gust_sensor", "rain_now")
 
 
 class WeatherConfigError(ValueError):
@@ -57,13 +61,13 @@ def merged(cfg: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     out = {**DEFAULTS, **{k: v for k, v in cfg.items() if v is not None and v != ""}}
     if out["mode"] not in MODES:
         raise WeatherConfigError(f"weather.mode: one of {', '.join(MODES)}")
-    for k in ("entity", "rain_sensor", "temp_sensor"):
+    for k in SENSORS:
         v = out[k]
         if v is not None and (not isinstance(v, str) or "." not in v):
             raise WeatherConfigError(f"weather.{k}: an entity id, got {v!r}")
     if out["entity"] and not out["entity"].startswith("weather."):
         raise WeatherConfigError("weather.entity: a weather.* entity")
-    if out["mode"] != "off" and not (out["entity"] or out["rain_sensor"] or out["temp_sensor"]):
+    if out["mode"] != "off" and not any(out[k] for k in SENSORS):
         raise WeatherConfigError("weather: pick a weather entity or a sensor, or set the mode to off")
     for k, (lo, hi) in NUMBERS.items():
         try:
@@ -187,15 +191,17 @@ def _clamp(cfg, f: float) -> float:
 TEXT = {
     "en": {"fell": "{0} mm rain fell", "expected": "{0} mm rain expected", "skip_rain": "at least {0} mm -> skip",
            "wind": "wind {0} km/h -> skip", "frost": "{0} \u00b0C at the start -> skip (frost)", "max": "max {0} \u00b0C",
-           "pct": "{0} % of the minutes"},
+           "pct": "{0} % of the minutes", "gust": "gusts {0} km/h -> skip", "raining": "raining now -> skip"},
     "sk": {"fell": "spadlo {0} mm", "expected": "o\u010dak\u00e1va sa {0} mm", "skip_rain": "aspo\u0148 {0} mm -> presko\u010di\u0165",
            "wind": "vietor {0} km/h -> presko\u010di\u0165", "frost": "{0} \u00b0C na za\u010diatku -> presko\u010di\u0165 (mr\u00e1z)",
-           "max": "max {0} \u00b0C", "pct": "{0} % min\u00fat"},
+           "max": "max {0} \u00b0C", "pct": "{0} % min\u00fat", "gust": "n\u00e1razy {0} km/h -> presko\u010di\u0165",
+           "raining": "pr\u00e1ve pr\u0161\u00ed -> presko\u010di\u0165"},
 }
 
 
 def decide(cfg: Dict[str, Any], start: datetime, now: datetime, hourly=None, daily=None,
-           fallen: Optional[float] = None, current_temp: Optional[float] = None, lang: str = "en") -> Decision:
+           fallen: Optional[float] = None, current_temp: Optional[float] = None, lang: str = "en",
+           current: Optional[Dict[str, Any]] = None) -> Decision:
     """Decision for a run starting at start. cfg = merged(). Times timezone-aware."""
     tx = TEXT.get(lang, TEXT["en"])
     d = Decision()
@@ -213,7 +219,17 @@ def decide(cfg: Dict[str, Any], start: datetime, now: datetime, hourly=None, dai
         else at(hourly, start, "temp")
     if t_start is None and start.hour < 10:   # beyond the hourly forecast: a morning run is near the daily low
         t_start = next((x["low"] for x in daily or [] if x["t"].date() == start.date() and x.get("low") is not None), None)
-    d.wind = at(hourly, start, "wind")
+    now_ish = (start - now) <= timedelta(hours=1)
+    cur = current or {}
+    if now_ish and cur.get("raining"):
+        d.action, d.factor = "skip", 0.0
+        d.reasons.append(tx["raining"])
+        return d
+    if now_ish and cfg["skip_gust"] and cur.get("gust") is not None and cur["gust"] >= cfg["skip_gust"]:
+        d.action, d.factor, d.wind = "skip", 0.0, cur.get("wind")
+        d.reasons.append(tx["gust"].format(f"{cur['gust']:.0f}"))
+        return d
+    d.wind = cur.get("wind") if now_ish and cur.get("wind") is not None else at(hourly, start, "wind")
     if d.wind is None:
         d.wind = next((x["wind"] for x in daily or [] if x["t"].date() == start.date() and x.get("wind") is not None), None)
     if cfg["skip_rain"] and d.rain >= cfg["skip_rain"]:

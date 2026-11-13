@@ -90,6 +90,22 @@ class WeatherTest(unittest.TestCase):
         z = S.aggregate(st, date(2026, 7, 10), "day", 1)["rows"][0]["zones"]["z"]
         self.assertEqual((z["min"], z["lmin"], z["emin"], z["l"]), (3, 1, 1, 12))
 
+    def test_current_sensors(self):
+        soon = NOW + timedelta(minutes=30)
+        self.assertEqual(W.decide(cfg(), soon, NOW, hourly(temp=22), current={"raining": True}).action, "skip")
+        d = W.decide(cfg(), soon, NOW, hourly(temp=22), current={"gust": 70, "wind": 20})
+        self.assertEqual(d.action, "skip")
+        self.assertIn("gusts 70 km/h -> skip", d.reasons)
+        self.assertEqual(W.decide(cfg(), soon, NOW, hourly(temp=22), current={"wind": 45}).action, "skip")
+        # far runs ignore current values
+        self.assertEqual(W.decide(cfg(), START + timedelta(days=1), NOW, hourly(temp=22, hours=60),
+                                  current={"raining": True}).action, "run")
+
+    def test_prices(self):
+        self.assertEqual(S.meters_from_dict({"water_price": "2.5"})["water_price"], 2.5)
+        with self.assertRaises(S.MetersConfigError):
+            S.meters_from_dict({"energy_price": -1})
+
     def test_no_minus_zero(self):
         d = W.decide(cfg(), START, NOW, hourly(temp=-0.2))
         self.assertIn("0 \u00b0C at the start -> skip (frost)", d.reasons)

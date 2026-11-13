@@ -409,7 +409,30 @@ class Runtime:
             v, u = self._read(cfg["temp_sensor"])
             if v is not None:
                 wx["temp"] = wx_mod.to_c(v, u)
+        wx["current"] = self.current_conditions(cfg)
         self.wx = wx
+
+    def current_conditions(self, cfg=None) -> Dict[str, Any]:
+        """Live sensor values (deg C, %, km/h, mm, raining) for the card and the start check."""
+        cfg = cfg or self.weather_cfg
+        out: Dict[str, Any] = {}
+        for key, conv in (("temp_sensor", wx_mod.to_c), ("wind_sensor", wx_mod.to_kmh), ("gust_sensor", wx_mod.to_kmh),
+                          ("rain_sensor", wx_mod.to_mm), ("humidity_sensor", None)):
+            v, u = self._read(cfg.get(key))
+            if v is not None:
+                out[key.split("_")[0] if key != "rain_sensor" else "rain"] = round(conv(v, u) if conv else v, 1)
+        rn = cfg.get("rain_now")
+        st = self.hass.states.get(rn) if rn else None
+        if st is not None:
+            if st.domain in ("binary_sensor", "input_boolean"):
+                out["raining"] = st.state == "on"
+            else:
+                try:
+                    out["rain_rate"] = float(st.state)
+                    out["raining"] = out["rain_rate"] > 0
+                except (TypeError, ValueError):
+                    pass
+        return out
 
     def _evaluate(self, base: planner.Plan, cfg_all: Dict[str, Any]):
         """Weather decisions for the runs of an un-multiplied plan -> (decisions, day factors, skip keys)."""
@@ -437,7 +460,8 @@ class Runtime:
                 continue   # beyond the forecast: no decision
             key = run_key(r)
             d = wx_mod.decide(cfg, dt_util.as_utc(r.start), now, self.wx.get("hourly"), self.wx.get("daily"),
-                              self.wx.get("fallen"), self.wx.get("temp"), self.lang).as_dict()
+                              self.wx.get("fallen"), self.wx.get("temp"), self.lang,
+                              self.wx.get("current")).as_dict()
             if cfg["mode"] == "suggest":
                 sug = self.suggestions.get(key)
                 d["status"] = sug["status"] if sug else ("pending" if d["action"] != "run" else "none")
@@ -508,7 +532,7 @@ class Runtime:
         if rates:
             self._dyn_unsubs.append(async_track_state_change_event(self.hass, rates, self._on_meter))
         cfg = self.weather_cfg
-        watch = [cfg[k] for k in ("entity", "rain_sensor") if cfg["mode"] != "off" and cfg.get(k)]
+        watch = [cfg[k] for k in ("entity", "rain_sensor", "rain_now") if cfg["mode"] != "off" and cfg.get(k)]
         if watch:
             self._dyn_unsubs.append(async_track_state_change_event(self.hass, watch, self._on_weather_change))
 

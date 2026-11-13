@@ -93,6 +93,7 @@ def _wx_summary(rt) -> Dict[str, Any]:
             b["rain"] = round(b["rain"] + (h.get("rain") or 0), 1)
         days = list(by.values())
     return {"updated": w.get("updated"), "error": w.get("error"), "temp": w.get("temp"), "fallen": w.get("fallen"),
+            "current": rt.current_conditions(), "currency": rt.hass.config.currency,
             "days": days[:8], "hourly": len(w.get("hourly") or [])}
 
 

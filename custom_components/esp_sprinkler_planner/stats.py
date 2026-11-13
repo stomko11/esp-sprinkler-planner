@@ -30,7 +30,7 @@ class MetersConfigError(ValueError):
 
 def meters_from_dict(d: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     d = dict(d or {})
-    bad = set(d) - set(METER_KEYS) - {"flow_warn"}
+    bad = set(d) - set(METER_KEYS) - {"flow_warn", "water_price", "energy_price"}
     if bad:
         raise MetersConfigError(f"meters: unknown field(s) {', '.join(sorted(bad))}")
     out: Dict[str, Any] = {}
@@ -47,6 +47,16 @@ def meters_from_dict(d: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         raise MetersConfigError("meters.flow_warn: a percentage") from err
     if not 0 <= out["flow_warn"] <= 100:
         raise MetersConfigError("meters.flow_warn: 0 .. 100 %")
+    for k in ("water_price", "energy_price"):   # per m3 / per kWh, in the HA currency
+        v = d.get(k)
+        if v in (None, ""):
+            continue
+        try:
+            out[k] = float(v)
+        except (TypeError, ValueError) as err:
+            raise MetersConfigError(f"meters.{k}: a price") from err
+        if not 0 <= out[k] <= 1000:
+            raise MetersConfigError(f"meters.{k}: 0 .. 1000")
     return out
 
 
