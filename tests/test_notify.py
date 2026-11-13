@@ -86,3 +86,16 @@ class Variables(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EmojiDefaultsTest(unittest.TestCase):
+    def test_old_default_text_counts_as_default(self):
+        full = N.merged({"events": {"started": {"title": "Irrigation started"}}})
+        self.assertTrue(full["events"]["started"]["title"].endswith("Irrigation started"))
+        self.assertNotEqual(full["events"]["started"]["title"], "Irrigation started")
+        own = N.merged({"events": {"started": {"title": "My own"}}})
+        self.assertEqual(own["events"]["started"]["title"], "My own")
+
+    def test_android_icon_per_event(self):
+        p = N.payload("android", "t", "m", [], "E", event="error")
+        self.assertEqual((p["data"]["notification_icon"], p["data"]["color"]), ("mdi:alert-circle", "#e5484d"))

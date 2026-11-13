@@ -102,12 +102,25 @@ _SK = {
 }
 
 
-def defaults(lang: str = "en") -> Dict[str, Dict[str, Any]]:
+def defaults(lang: str = "en", emoji: bool = True) -> Dict[str, Dict[str, Any]]:
     out = copy.deepcopy(DEFAULTS)
     if lang == "sk":
         for ev, (t, m) in _SK.items():
             out[ev]["title"], out[ev]["message"] = t, m
+    if emoji:
+        for ev in out:
+            out[ev]["title"] = f"{EMOJI[ev]} {out[ev]['title']}"
     return out
+
+# leading emoji per event (shown on every platform) and the Android status-bar icon / colour
+EMOJI = {"planned": "\U0001f4c5", "started": "\U0001f4a7", "zone_changed": "\U0001f6bf", "finished": "\u2705",
+         "skipped": "\u23ed\ufe0f", "stopped": "\u26d4", "error": "\u26a0\ufe0f", "pump_off": "\U0001f6b0",
+         "dry_run": "\U0001f9ea", "suggestion": "\U0001f326\ufe0f", "weather": "\U0001f326\ufe0f", "flow_warning": "\U0001f6a8"}
+ICON = {"planned": "mdi:calendar-clock", "started": "mdi:sprinkler-variant", "zone_changed": "mdi:sprinkler",
+        "finished": "mdi:check-circle", "skipped": "mdi:skip-next-circle", "stopped": "mdi:stop-circle",
+        "error": "mdi:alert-circle", "pump_off": "mdi:pump-off", "dry_run": "mdi:flask-outline",
+        "suggestion": "mdi:weather-partly-rainy", "weather": "mdi:weather-partly-rainy", "flow_warning": "mdi:water-alert"}
+COLOR = {"error": "#e5484d", "flow_warning": "#e5484d", "pump_off": "#f5a524", "stopped": "#f5a524", "finished": "#2fbf71"}
 
 ANDROID_MAX_ACTIONS = 3
 FIELDS = ("enabled", "targets", "title", "message", "actions", "lead")
@@ -122,9 +135,10 @@ def merged(cfg: Optional[Dict[str, Any]], lang: str = "en") -> Dict[str, Any]:
     A stored text equal to a default of any language counts as 'not changed' and follows lang."""
     cfg = cfg or {}
     base = defaults(lang)
-    all_defaults = {(ev, k): {defaults(x)[ev][k] for x in LANGUAGES} for ev in EVENTS for k in ("title", "message")}
+    all_defaults = {(ev, k): {defaults(x, e)[ev][k] for x in LANGUAGES for e in (True, False)}
+                    for ev in EVENTS for k in ("title", "message")}
     targets = cfg.get("targets") or []
-    if not isinstance(targets, list) or not all(isinstance(t, str) and t.startswith("notify.") for t in targets):
+    if not isinstance(targets, list) or not all(isinstance(t, str) and t.startswith("notify.") and len(t) > 7 for t in targets):
         raise NotifyConfigError("notifications.targets: a list of notify.* services")
     events = {}
     given = cfg.get("events") or {}
@@ -189,11 +203,13 @@ def parse_action(action: str):
 
 
 def payload(platform: str, title: str, message: str, actions: List[str], entry_id: str,
-            tag: Optional[str] = None, lang: str = "en") -> Dict[str, Any]:
+            tag: Optional[str] = None, lang: str = "en", event: Optional[str] = None) -> Dict[str, Any]:
     """Service data for notify.<target>. platform: android | ios | other."""
     names = ACTIONS_SK if lang == "sk" else ACTIONS
     if platform == "android":
-        data: Dict[str, Any] = {"notification_icon": "mdi:sprinkler", "channel": "Irrigation"}
+        data: Dict[str, Any] = {"notification_icon": ICON.get(event or "", "mdi:sprinkler"), "channel": "Irrigation"}
+        if event in COLOR:
+            data["color"] = COLOR[event]
         if tag:
             data["tag"] = tag
         acts = actions[:ANDROID_MAX_ACTIONS]

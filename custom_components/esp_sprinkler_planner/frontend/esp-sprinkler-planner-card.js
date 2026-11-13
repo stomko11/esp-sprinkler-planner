@@ -27,7 +27,11 @@ const SK = {
   "Raining now (binary or mm/h)": "Pr\u00e1ve pr\u0161\u00ed (bin\u00e1rny alebo mm/h)", "skip at gusts \u2265": "presko\u010di\u0165 pri n\u00e1razoch \u2265",
   "Live sensors": "Aktu\u00e1lne senzory", "Prices": "Ceny", "water per m\u00b3": "voda za m\u00b3", "energy per kWh": "energia za kWh",
   "Cost": "N\u00e1klady", "Last 12 months": "Posledn\u00fdch 12 mesiacov", "less": "menej", "more": "viac",
-  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "left": "zost\u00e1va", "list": "zoznam", "tiles": "dla\u017edice", "Week": "T\u00fd\u017ede\u0148", "Stats": "\u0160tatistiky", "Slots": "Sloty", "Zones": "Z\u00f3ny", "Settings": "Nastavenia",
+  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Planner off": "Pl\u00e1nova\u010d vypnut\u00fd", "missing": "ch\u00fdba", "Remove": "Odstr\u00e1ni\u0165",
+  "Suggestion (not applied): {0}": "N\u00e1vrh (nepou\u017eit\u00fd): {0}", "Time": "\u010cas", "Energy": "Energia", "average / usual": "priemer / be\u017en\u00fd",
+  "+ add notify service": "+ prida\u0165 notify slu\u017ebu", "Send test to {0}": "Posla\u0165 test na {0}", "Sent to {0}": "Odoslan\u00e9: {0}",
+  "Pick at least one recipient.": "Vyber aspo\u0148 jedn\u00e9ho pr\u00edjemcu.", "A notify service looks like notify.mobile_app_phone": "Notify slu\u017eba vyzer\u00e1 ako notify.mobile_app_telefon",
+  "Any notify service or notify entity, e.g. notify.mobile_app_stefan and notify.mobile_app_wife. Each chip sends a test to just that one.": "\u013dubovo\u013en\u00e1 notify slu\u017eba alebo entita, napr. notify.mobile_app_stefan a notify.mobile_app_manzelka. Ka\u017ed\u00fd \u010dip po\u0161le test len jemu.", "left": "zost\u00e1va", "list": "zoznam", "tiles": "dla\u017edice", "Week": "T\u00fd\u017ede\u0148", "Stats": "\u0160tatistiky", "Slots": "Sloty", "Zones": "Z\u00f3ny", "Settings": "Nastavenia",
   "Idle": "Ne\u010dinn\u00e9", "Scheduled": "Napl\u00e1novan\u00e9", "Running": "Be\u017e\u00ed", "Dry run": "Sk\u00fa\u0161ka", "Disabled": "Vypnut\u00e9", "Error": "Chyba",
   "DRY RUN": "SK\u00da\u0160KA", "Nothing is sent to the ESP": "Do ESP sa ni\u010d neposiela", "planner off": "pl\u00e1nova\u010d vypnut\u00fd",
   "Loading\u2026": "Na\u010d\u00edtavam\u2026", "Now": "Teraz", "Starting\u2026": "Sp\u00fa\u0161\u0165am\u2026", "until {0}": "do {0}", "run ends {0}": "koniec behu {0}",
@@ -114,7 +118,7 @@ const addDays = (d, n) => { const x = new Date(d + "T12:00:00"); x.setDate(x.get
 const runKey = (r) => `${r.day}|${r.slots.join("+")}`;
 const num = (v) => (v === "" || v === null || v === undefined ? null : Number(v));
 const r1 = (v) => (v === null || v === undefined ? "\u2013" : Math.round(v * 10) / 10);
-const fmtMin = (m) => { m = Math.round(m || 0); return m >= 120 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`; };
+const fmtMin = (m) => { m = Math.round(m || 0); return m >= 60 ? `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")} h` : `${m} min`; };
 const fmtL = (l) => (l === null || l === undefined ? "\u2013" : l >= 1000 ? `${(l / 1000).toFixed(2)} m\u00b3` : `${Math.round(l)} L`);
 const fmtKwh = (k) => (k === null || k === undefined ? "\u2013" : k < 1 ? `${Math.round(k * 1000)} Wh` : `${k.toFixed(2)} kWh`);
 
@@ -254,10 +258,16 @@ class EspSprinklerPlannerCard extends HTMLElement {
   _slotName(id) { const s = (this.draft.slots || []).find((x) => x.id === id); return (s && s.name) || (id === "quick" ? t("Quick run") : id); }
   _fname(e) { return ((this._hass.states[e] || {}).attributes || {}).friendly_name || e; }
   _picker(path, value, filter, listId, placeholder) {
+    if (value && this._editing !== path) {
+      const st = this._hass.states[value];
+      const val = st ? `${st.state}${(st.attributes || {}).unit_of_measurement ? " " + st.attributes.unit_of_measurement : ""}` : t("missing");
+      return `<span class="echip ${st ? "" : "bad"}"><button class="en" data-act="editpick" data-path="${path}" title="${esc(value)}">
+          <ha-icon icon="${esc((st && st.attributes.icon) || "mdi:link-variant")}"></ha-icon><span class="enm">${esc(this._fname(value))}</span><span class="eid">${esc(value)}</span></button>
+          <span class="ev">${esc(val)}</span><button class="xr" data-act="clearpick" data-path="${path}" title="${esc(t("Remove"))}"><ha-icon icon="mdi:close"></ha-icon></button></span>`;
+    }
     const cands = Object.keys(this._hass.states).filter(filter).sort();
     return `<input class="picker" list="${listId}" data-pick="${path}" value="${esc(value || "")}" placeholder="${esc(placeholder || t("type to search\u2026"))}">
-      <datalist id="${listId}">${cands.map((e) => `<option value="${esc(e)}">${esc(this._fname(e))}</option>`).join("")}</datalist>
-      ${value ? `<span class="muted">${esc(this._fname(value))}</span><button class="x" data-act="clearpick" data-path="${path}">\u2715</button>` : ""}`;
+      <datalist id="${listId}">${cands.map((e) => `<option value="${esc(e)}">${esc(this._fname(e))}</option>`).join("")}</datalist>`;
   }
   _unitOf(e) { return (((this._hass.states[e] || {}).attributes || {}).unit_of_measurement || ""); }
   _decision(r, plan) { return ((plan.weather || {})[runKey(r)]) || null; }
@@ -361,10 +371,11 @@ class EspSprinklerPlannerCard extends HTMLElement {
       const wxOn = ((this.data.weather_full || {}).mode || "off") !== "off";
       return `<span class="rm ok" title="${esc(tip)}">${wxOn && !dec ? "\u00b7" : "\u2713"}</span>`;
     }
-    const pend = dec.status === "pending" ? "?" : "";
-    if (dec.action === "skip") return `<span class="rm skip ${pend ? "pend" : ""}" title="${esc(tip)}">\u2715${pend}</span>`;
     const pct = Math.round((dec.factor - 1) * 100);
-    return `<span class="rm adj ${pend ? "pend" : ""}" title="${esc(tip)}">${pct > 0 ? "+" : "\u2212"}${Math.abs(pct)}%${pend}</span>`;
+    const what = dec.action === "skip" ? "\u2715" : `${pct > 0 ? "+" : "\u2212"}${Math.abs(pct)}%`;
+    if (dec.status === "pending")      // only a suggestion: nothing changes until you accept it
+      return `<span class="rm sug ${dec.action}" title="${esc(t("Suggestion (not applied): {0}", tip))}"><ha-icon icon="mdi:lightbulb-on-outline"></ha-icon>${what}</span>`;
+    return `<span class="rm ${dec.action === "skip" ? "skip" : "adj"}" title="${esc(tip)}">${what}</span>`;
   }
 
   _wxBadge(day, plan) {
@@ -425,9 +436,9 @@ class EspSprinklerPlannerCard extends HTMLElement {
                    ${this._progress(act)}`
                 : `<div class="big muted">${t("Nothing running")}</div>`}
         </div>
-        <div class="box">
-          <div class="lbl">${t("Next run")}</div>
-          ${next ? `<div class="big">${fmtDay(next.day)} ${hm(next.start)} ${this._runMark(next, plan)}</div><div class="muted">${next.slots.map((x) => esc(this._slotName(x))).join(" + ")} \u00b7 ${t("until {0}", hm(next.end))}</div>
+        <div class="box ${(d.flags || {}).enabled ? "" : "boxoff"}">
+          <div class="lbl">${t("Next run")}${(d.flags || {}).enabled ? "" : ` <span class="chip offc">${t("Planner off")}</span>`}</div>
+          ${next ? `<div class="big ${(d.flags || {}).enabled ? "" : "struck"}">${fmtDay(next.day)} ${hm(next.start)} ${this._runMark(next, plan)}</div><div class="muted">${next.slots.map((x) => esc(this._slotName(x))).join(" + ")} \u00b7 ${t("until {0}", hm(next.end))}</div>
                     <div class="nz">${next.zones.map((z) => `<span title="${esc(z.name)} ${z.minutes}\u2032">${this._mark(this._zone(z.zone))}${z.minutes}\u2032</span>`).join("")}</div>`
                  : `<div class="big muted">\u2013</div>`}
         </div>
@@ -478,7 +489,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
       ${act ? `<button class="ab danger" data-act="stop"><ha-icon icon="mdi:stop-circle"></ha-icon>${t("Stop")}</button>` : ""}
       <button class="ab ${this._qr ? "on" : ""}" data-act="qr"><ha-icon icon="mdi:play-speed"></ha-icon>${t("Quick run")}</button>
       ${next ? `<button class="ab" data-act="skip" title="${esc(t("Skip next"))}: ${fmtDay(next.day)} ${hm(next.start)}"><ha-icon icon="mdi:skip-next-circle-outline"></ha-icon>${t("Skip")} <span class="muted">${DAYS()[wd(next.day)]} ${hm(next.start)}</span></button>` : ""}
-      ${slots.length ? `<span class="ag" title="${esc(t("Run slot now"))}"><ha-icon icon="mdi:calendar-play"></ha-icon><span class="agl">${t("Run slot")}</span>
+      ${slots.length ? `<span class="ag" title="${esc(t("Run slot now"))}"><ha-icon icon="mdi:calendar-clock"></ha-icon><span class="agl">${t("Run slot")}</span>
         <select id="runslot">${slots.map((s) => `<option value="${esc(s.id)}">${esc(s.name || s.id)}</option>`).join("")}</select>
         <button class="ab primary" data-act="runslot" title="${esc(t("Run slot now"))}"><ha-icon icon="mdi:play"></ha-icon></button></span>` : ""}
     </div>`;
@@ -630,17 +641,21 @@ class EspSprinklerPlannerCard extends HTMLElement {
       const p = per[z] = per[z] || { min: 0, l: 0, kwh: 0, runs: 0, lmin: 0, emin: 0 };
       p.min += v.min || 0; p.l += v.l || 0; p.kwh += v.kwh || 0; p.runs += v.runs || 0; p.lmin += v.lmin || 0; p.emin += v.emin || 0; allMin += v.lmin || 0; allL += v.l || 0; }); });
     const usual = d.usual_flow || {};
-    const ztable = `<table class="zt st"><tr><th>${t("Zone")}</th><th>${t("Watering time")}</th><th>${t("valve openings")}</th>${hasL ? `<th>${t("Water")}</th><th>${t("avg flow")}</th><th>${t("usual")}</th>` : ""}${hasK ? `<th>${t("Pump energy")}</th><th>${t("avg power")}</th>` : ""}</tr>
+    const maxMin = Math.max(1, ...Object.values(per).map((x) => x.min));
+    const flowCell = (p, z) => { const avg = p.l && p.lmin ? r1(p.l / p.lmin) : null; const u = usual[z.id] ? r1(usual[z.id]) : null;
+      return avg || u ? `${avg ?? "\u2013"}<span class="muted"> / ${u ?? "\u2013"}</span>` : "\u2013"; };
+    const ztable = `<table class="zt st"><tr><th>${t("Zone")}</th><th>${t("Time")}</th><th class="r">${t("runs")}</th>
+        ${hasL ? `<th class="r">${t("Water")}</th><th class="r" title="${esc(t("average / usual"))}">L/min</th>` : ""}${hasK ? `<th class="r">${t("Energy")}</th><th class="r">W</th>` : ""}</tr>
       ${zones.map((z) => { const p = per[z.id] || { min: 0, l: 0, kwh: 0, runs: 0 };
-        return `<tr><td>${this._mark(z)}${esc(z.name)}</td><td>${fmtMin(p.min)}<div class="mbar"><i style="width:${(p.min / Math.max(1, ...Object.values(per).map((x) => x.min)) * 100).toFixed(0)}%;background:${z.color}"></i></div></td><td>${p.runs}</td>
-          ${hasL ? `<td>${p.l ? fmtL(p.l) : "\u2013"}</td><td>${p.l && p.lmin ? r1(p.l / p.lmin) + " L/min" : "\u2013"}</td><td>${usual[z.id] ? r1(usual[z.id]) + " L/min" : "\u2013"}</td>` : ""}
-          ${hasK ? `<td>${p.kwh ? fmtKwh(p.kwh) : "\u2013"}</td><td>${p.kwh && p.emin ? Math.round(p.kwh * 1000 / (p.emin / 60)) + " W" : "\u2013"}</td>` : ""}</tr>`; }).join("")}</table>`;
+        return `<tr class="${p.min ? "" : "zero"}"><td class="zc">${this._mark(z)}${esc(z.name)}</td>
+          <td><div class="tb"><span class="mbar"><i style="width:${(p.min / maxMin * 100).toFixed(0)}%;background:${z.color}"></i></span><span>${fmtMin(p.min)}</span></div></td><td class="r">${p.runs}</td>
+          ${hasL ? `<td class="r">${p.l ? fmtL(p.l) : "\u2013"}</td><td class="r">${flowCell(p, z)}</td>` : ""}
+          ${hasK ? `<td class="r">${p.kwh ? fmtKwh(p.kwh) : "\u2013"}</td><td class="r">${p.kwh && p.emin ? Math.round(p.kwh * 1000 / (p.emin / 60)) : "\u2013"}</td>` : ""}</tr>`; }).join("")}</table>`;
     const saved = skMin ? `<div class="muted small">${t("saved by skips")}: ${fmtMin(skMin)}${allL && allMin ? ` \u2248 ${fmtL(skMin * allL / allMin)}` : ""}</div>` : "";
-    const sel = (k, opts) => `<select data-sp="${k}">${opts.map(([v, l]) => `<option value="${v}" ${String(this._sp[k]) === String(v) ? "selected" : ""}>${l}</option>`).join("")}</select>`;
+    const sel = (k, opts) => `<span class="seg">${opts.map(([v, l, i]) => `<button class="ab ${String(this._sp[k]) === String(v) ? "on" : ""}" data-act="sp" data-k="${k}" data-v="${v}">${i ? `<ha-icon icon="${i}"></ha-icon>` : ""}${l}</button>`).join("")}</span>`;
     return `<div class="stiles">${tile("This week", tot.week)}${tile("This month", tot.month)}${tile("This year", tot.year)}${tile("All time", tot.all)}</div>
-      <div class="row">${sel("period", [["day", t("day")], ["week", t("week")], ["month", t("month")], ["year", t("year")]])}
-        ${sel("count", [[7, 7], [12, 12], [14, 14], [26, 26], [31, 31], [52, 52]])}
-        ${sel("metric", [["min", t("Watering time")], ...(hasL ? [["l", t("Water")]] : []), ...(hasK ? [["kwh", t("Pump energy")]] : [])])}</div>
+      <div class="abar">${sel("period", [["day", t("day")], ["week", t("week")], ["month", t("month")], ["year", t("year")]])}
+        <span class="grow"></span>${sel("metric", [["min", t("Time"), "mdi:timer-outline"], ...(hasL ? [["l", t("Water"), "mdi:water"]] : []), ...(hasK ? [["kwh", t("Energy"), "mdi:flash"]] : [])])}</div>
       ${s && s.error ? `<div class="err">${esc(s.error)}</div>` : chart}
       ${metric === "kwh" ? "" : this._legend()}
       <div class="lbl">${t("Last 12 months")}</div>${this._heatmap(metric)}
@@ -750,17 +765,20 @@ class EspSprinklerPlannerCard extends HTMLElement {
     const wn = d.weather_now || {};
     const m = this.draft.meters || {};
     const unitRe = (re) => (e) => e.startsWith("sensor.") && re.test(this._unitOf(e));
+    const svcName = (x) => (this._hass.states[x] ? this._fname(x) : x.slice(7).replace(/^mobile_app_/, "\u1f4f1 "));
+    const allSvc = [...new Set([...services, ...(n.targets || []), ...Object.values(n.events || {}).flatMap((e) => e.targets || [])])].sort();
     const evRows = meta.events.map((ev) => {
       const e = { ...(meta.defaults[ev] || {}), ...((full.events || {})[ev] || {}), ...(((n.events || {})[ev]) || {}) };
       return `<details class="ev" data-d="ev_${ev}" ${this._open_("ev_" + ev, false)}><summary><label><input type="checkbox" data-ne="${ev}|enabled" ${e.enabled ? "checked" : ""}> ${esc(t(ev + "_ev"))}</label>
-          <span class="muted">${esc(e.targets ? (e.targets.length ? e.targets.map((x) => x.slice(7)).join(", ") : t("nobody")) : t("default recipients"))}</span></summary>
+          <span class="muted">${esc(e.targets ? (e.targets.length ? e.targets.map(svcName).join(", ") : t("nobody")) : t("default recipients"))}</span>
+          <span class="grow"></span><button class="tb1" data-act="testnotif" data-ev="${ev}" title="${esc(t("Send test"))}"><ha-icon icon="mdi:send"></ha-icon></button></summary>
         <div class="row"><label class="wide">${t("Title")} <input data-ne="${ev}|title" value="${esc(e.title || "")}"></label></div>
         <div class="row"><label class="wide">${t("Message")} <input data-ne="${ev}|message" value="${esc(e.message || "")}"></label></div>
         <div class="row"><label><input type="checkbox" data-nown="${ev}" ${e.targets ? "checked" : ""}> ${t("own recipients for this event")}</label></div>
-        ${e.targets ? `<div class="svcs">${services.map((x) => `<label class="svc ${e.targets.includes(x) ? "on" : ""}"><input type="checkbox" data-nev="${ev}|${esc(x)}" ${e.targets.includes(x) ? "checked" : ""}>${esc(x.slice(7))}</label>`).join("")}</div>` : ""}
+        ${e.targets ? `<div class="svcs">${allSvc.map((x) => `<label class="svc ${e.targets.includes(x) ? "on" : ""}"><input type="checkbox" data-nev="${ev}|${esc(x)}" ${e.targets.includes(x) ? "checked" : ""}>${esc(svcName(x))}</label>`).join("")}</div>` : ""}
         ${ev === "planned" ? `<div class="row"><label>${t("minutes before")} <input type="number" class="n" data-ne="planned|lead" value="${esc(e.lead ?? 30)}"></label></div>` : ""}
         <div class="row">${t("Buttons")}: ${Object.entries(meta.actions).map(([a, l]) => `<label><input type="checkbox" data-na="${ev}|${a}" ${(e.actions || []).includes(a) ? "checked" : ""}> ${esc(t(l + "_a"))}</label>`).join("")}
-          <span class="grow"></span><button data-act="testnotif" data-ev="${ev}">${t("Send test")}</button></div>
+          <span class="grow"></span><button class="ab" data-act="testnotif" data-ev="${ev}"><ha-icon icon="mdi:send"></ha-icon>${t("Send test")}</button></div>
         <div class="muted small">${t("Variables")}: ${(meta.variables[ev] || []).map((v) => `<code>{{ ${esc(v)} }}</code>`).join(" ")}. ${t("Android: icon, HTML, max 3 buttons. iOS: plain text.")}</div>
       </details>`;
     }).join("");
@@ -830,7 +848,11 @@ class EspSprinklerPlannerCard extends HTMLElement {
         <div class="muted small">${t("Totals are preferred; without them the rate is integrated while a zone is open.")}</div>`, false)}
       ${sec("s_notify", "mdi:bell-outline", t("Notifications"), (n.targets || []).map((x) => esc(x.slice(7))).join(", ") || t("nobody"), `
         <div class="row"><b>${t("Send to")}</b> <span class="muted">${t("(default for every event, pick any number)")}</span></div>
-        <div class="svcs">${services.map((x) => `<label class="svc ${targets.has(x) ? "on" : ""}"><input type="checkbox" data-nt="${esc(x)}" ${targets.has(x) ? "checked" : ""}>${esc(x.slice(7))}</label>`).join("") || `<span class="muted">${t("no notify services")}</span>`}</div>
+        <div class="svcs">${allSvc.map((x) => { const known = services.includes(x);
+          return `<span class="svc ${targets.has(x) ? "on" : ""} ${known ? "" : "bad"}" title="${esc(x)}${known ? "" : " \u2013 " + t("missing")}"><label><input type="checkbox" data-nt="${esc(x)}" ${targets.has(x) ? "checked" : ""}>${esc(svcName(x))}</label>
+            <button class="tb1" data-act="testsvc" data-svc="${esc(x)}" title="${esc(t("Send test to {0}", x))}"><ha-icon icon="mdi:send"></ha-icon></button></span>`; }).join("")}
+          <span class="addsvc"><input list="svclist" id="addsvc" placeholder="${esc(t("+ add notify service"))}"><datalist id="svclist">${services.map((x) => `<option value="${esc(x)}"></option>`).join("")}</datalist><button class="ab" data-act="addsvc"><ha-icon icon="mdi:plus"></ha-icon></button></span></div>
+        <div class="muted small">${t("Any notify service or notify entity, e.g. notify.mobile_app_stefan and notify.mobile_app_wife. Each chip sends a test to just that one.")}</div>
         ${evRows}`, false)}`;
   }
 
@@ -878,7 +900,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
       const v = t0.value.trim();
       const ok = !v || this._hass.states[v];
       t0.classList.toggle("bad", !ok);
-      if (ok) { this._setPath(t0.dataset.pick, v || null); this._markDirty(true); }
+      if (ok) { this._editing = null; this._setPath(t0.dataset.pick, v || null); this._markDirty(true); }
       return;
     }
     if (!isChange) {
@@ -959,8 +981,11 @@ class EspSprinklerPlannerCard extends HTMLElement {
       } else if (act === "delslot") {
         const i = +tg.dataset.i; if (!confirm(t("Delete slot \"{0}\"?", this.draft.slots[i].name || this.draft.slots[i].id))) return;
         this.draft.slots.splice(i, 1); this._open.clear(); this._markDirty(true);
+      } else if (act === "editpick") { this._editing = tg.dataset.path; this._render(); const i = this.shadowRoot.querySelector(`[data-pick="${tg.dataset.path}"]`); if (i) i.focus();
       } else if (act === "clearpick") { this._setPath(tg.dataset.path, null); this._markDirty(true);
       } else if (act === "setcolor") { this._setPath(`zones.${tg.dataset.zone}.color`, tg.dataset.color); this._markDirty(true);
+      } else if (act === "sp") { this._sp[tg.dataset.k] = tg.dataset.v;
+        if (tg.dataset.k === "period") { this._sp.count = { day: 14, week: 12, month: 12, year: 5 }[tg.dataset.v]; this._loadStats(); } else this._render();
       } else if (act === "zview") { this._zv = tg.dataset.v; localStorage.setItem("esp_sprinkler_zview", this._zv); this._render();
       } else if (act === "seticon") { this._setPath(`zones.${tg.dataset.zone}.icon`, tg.dataset.icon || null); this._markDirty(true);
       } else if (act === "revert") { this.dirty = false; this.draft = this._makeDraft(this.data); this.preview = null; this._render(); }
@@ -993,10 +1018,29 @@ class EspSprinklerPlannerCard extends HTMLElement {
         if (real() && !confirm(t("Dry run is OFF - this will really water for {0} min. Start now?", m))) return;
         await svc("run_zone", { zone: tg.dataset.zone, minutes: m }); setTimeout(() => this._load(), 2500);
       } else if (act === "testnotif") {
-        if (this.dirty) { alert(t("Save the changes first.")); return; }
-        await svc("test_notification", { event: tg.dataset.ev });
+        e.preventDefault(); e.stopPropagation();
+        const ev = tg.dataset.ev; const n = this.draft.notifications || {}; const o = (n.events || {})[ev] || {};
+        const targets = o.targets || n.targets || [];
+        if (!targets.length) { alert(t("Pick at least one recipient.")); return; }
+        const data = { event: ev, targets };
+        for (const f of ["title", "message", "actions"]) { const v = this._eventValue(ev, f); if (v !== undefined && v !== null) data[f] = v; }
+        const r = await this._hass.callService(DOMAIN, "test_notification", { ...(this._cfg.entry_id ? { config_entry_id: this._cfg.entry_id } : {}), ...data }, undefined, true, true);
+        this._toast(t("Sent to {0}", (((r || {}).response || {}).sent_to || targets).join(", ")), tg);
+      } else if (act === "testsvc") {
+        e.preventDefault(); e.stopPropagation();
+        await svc("test_notification", { event: "started", targets: [tg.dataset.svc] });
+        this._toast(t("Sent to {0}", tg.dataset.svc), tg);
+      } else if (act === "addsvc") {
+        const v = (this.shadowRoot.getElementById("addsvc").value || "").trim();
+        if (!/^notify\.[a-z0-9_]+$/.test(v)) { alert(t("A notify service looks like notify.mobile_app_phone")); return; }
+        const n = this.draft.notifications; n.targets = [...new Set([...(n.targets || []), v])]; this._markDirty(true);
       }
     } catch (err) { alert(err.message || String(err)); }
+  }
+
+  _toast(msg, near) {
+    const el = document.createElement("div"); el.className = "toast"; el.textContent = msg;
+    this.shadowRoot.querySelector("ha-card").appendChild(el); setTimeout(() => el.remove(), 2500); void near;
   }
 
   _moveNow() {
@@ -1085,7 +1129,8 @@ ha-icon.zi { --mdc-icon-size:16px; margin-right:4px; flex:none; } ha-icon.zi.big
 .wwx ha-icon { --mdc-icon-size:16px; } .wxt { text-align:right; padding-right:4px; } .wxm { display:flex; gap:3px; }
 .rm { display:inline-block; min-width:34px; text-align:center; font-size:11px; font-weight:700; border-radius:6px; padding:1px 3px; background:var(--secondary-background-color,#eee); }
 .rm.ok { color:#2fbf71; } .rm.skip { color:#fff; background:#e5484d; } .rm.adj { color:#fff; background:#c47a00; } .rm.user { color:var(--secondary-text-color,#888); }
-.rm.pend { background:transparent; box-shadow:inset 0 0 0 1px currentColor; } .rm.skip.pend { color:#e5484d; } .rm.adj.pend { color:#c47a00; }
+.rm.sug { background:transparent; border:1px dashed currentColor; display:inline-flex; align-items:center; gap:1px; font-weight:600; }
+.rm.sug ha-icon { --mdc-icon-size:12px; } .rm.sug.skip { color:#e5484d; } .rm.sug.adjust { color:#c47a00; }
 .wx ha-icon { --mdc-icon-size:16px; vertical-align:-3px; margin-right:2px; } .rain { color:#4e9cf5; }
 .legend { display:flex; gap:10px; flex-wrap:wrap; margin:8px 0; font-size:12px; align-items:center; } .legend > span { display:inline-flex; align-items:center; } .legend i { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:4px; }
 .list { list-style:none; padding:0; margin:4px 0; } .list li.past { opacity:.45; } .list li { padding:6px 0; border-bottom:1px solid var(--divider-color,#eee); } .note { font-size:12px; color:#c47a00; } .note.wxn { color:#4e9cf5; }
@@ -1136,11 +1181,13 @@ input.picker { width:300px; } input.bad { border-color:#e5484d; }
 .fcd .rain { font-size:11px; min-height:14px; } .fx { font-size:11px; font-weight:700; color:var(--secondary-text-color,#888); } .fx.adj { color:#c47a00; } .fx.skip { color:#e5484d; }
 .stiles { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; }
 .stt { background:var(--secondary-background-color,#f4f4f4); border-radius:10px; padding:6px 10px; } .stt .lbl { margin:2px 0; } .sv { font-size:19px; font-weight:600; }
-.abar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:10px 0; }
+.abar { display:flex; flex-wrap:nowrap; gap:8px; align-items:center; margin:10px 0; overflow-x:auto; scrollbar-width:none; }
+.abar > * { flex:none; }
 .ab { display:inline-flex; align-items:center; gap:6px; padding:7px 12px; border-radius:18px; font-weight:500; }
 .ab ha-icon { --mdc-icon-size:18px; } .ab.on { border-color:var(--primary-color,#03a9f4); color:var(--primary-color,#03a9f4); }
 .ab .muted { font-weight:400; font-size:12px; }
 .ag { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--divider-color,#ccc); border-radius:18px; padding:2px 2px 2px 10px; margin-left:auto; }
+.seg { display:inline-flex; gap:4px; } .seg .ab { padding:5px 11px; }
 .ag > ha-icon { --mdc-icon-size:18px; color:var(--secondary-text-color,#888); } .agl { font-size:12px; color:var(--secondary-text-color,#888); }
 .ag select { border:0; background:transparent; font-weight:600; } .ag .ab { padding:5px 9px; }
 .nz { display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; font-size:12px; } .nz span { display:inline-flex; align-items:center; }
@@ -1160,6 +1207,23 @@ input.picker { width:300px; } input.bad { border-color:#e5484d; }
 .swatches { gap:4px; } .swc { width:20px; height:20px; padding:0; border-radius:50%; border:2px solid transparent; }
 .swc.on { border-color:var(--primary-text-color,#fff); box-shadow:0 0 0 1px #0006; }
 .cost { font-weight:600; color:#c47a00; margin-top:2px; }
+.boxoff { opacity:.7; } .struck { text-decoration:line-through; text-decoration-thickness:2px; color:var(--secondary-text-color,#888); }
+.chip.offc { background:#e5484d; color:#fff; text-transform:none; letter-spacing:0; }
+.zt.st { font-size:13px; } .zt.st td, .zt.st th { padding:6px 6px; vertical-align:middle; } .zt.st .r { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.zt.st tr.zero td { color:var(--secondary-text-color,#888); } .zt.st .zc { display:flex; align-items:center; }
+.tb { display:flex; align-items:center; gap:8px; white-space:nowrap; } .tb .mbar { margin:0; flex:1; min-width:50px; max-width:160px; }
+.echip { display:inline-flex; align-items:center; gap:8px; border:1px solid var(--divider-color,#ccc); border-radius:18px; padding:2px 3px 2px 4px; max-width:100%; }
+.echip.bad { border-color:#e5484d; } .echip .en { border:0; background:none; display:inline-flex; align-items:center; gap:6px; padding:2px 4px; min-width:0; }
+.echip .en ha-icon { --mdc-icon-size:18px; color:var(--primary-color,#03a9f4); } .enm { font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.eid { font-size:11px; color:var(--secondary-text-color,#888); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.echip .ev { font-size:12px; font-variant-numeric:tabular-nums; color:var(--secondary-text-color,#888); white-space:nowrap; }
+.xr, .tb1 { width:26px; height:26px; border-radius:50%; padding:0; display:inline-grid; place-items:center; border:0; background:var(--secondary-background-color,#eee); flex:none; }
+.xr ha-icon, .tb1 ha-icon { --mdc-icon-size:15px; } .xr:hover { background:#e5484d; color:#fff; } .tb1:hover { background:var(--primary-color,#03a9f4); color:#fff; }
+.svc label { display:inline-flex; align-items:center; gap:4px; cursor:pointer; } .svc .tb1 { width:22px; height:22px; margin-left:2px; } .svc.bad { border-color:#e5484d; }
+.addsvc { display:inline-flex; align-items:center; gap:4px; } .addsvc input { width:220px; border-radius:14px; } .addsvc .ab { padding:3px 7px; }
+details.ev > summary { display:flex; align-items:center; gap:10px; } details.ev > summary .tb1 { width:24px; height:24px; }
+.toast { position:absolute; left:50%; bottom:14px; transform:translateX(-50%); background:var(--primary-text-color,#222); color:var(--card-background-color,#fff); padding:6px 14px; border-radius:16px; font-size:13px; z-index:5; box-shadow:0 2px 8px #0005; }
+ha-card { position:relative; }
 .heat { overflow-x:auto; } .hm { display:grid; grid-auto-flow:column; grid-auto-columns:12px; gap:0; white-space:nowrap; font-size:10px; color:var(--secondary-text-color,#888); height:13px; }
 .hg { display:grid; grid-template-rows:repeat(7,10px); grid-auto-flow:column; grid-auto-columns:10px; gap:2px; }
 .hg i, .hl i { display:inline-block; width:10px; height:10px; border-radius:2px; }

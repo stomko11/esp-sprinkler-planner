@@ -170,38 +170,46 @@ class Runtime:
                 return "ios" if ("ios" in os_name or "ipados" in os_name) else "android"
         return "android"
 
-    async def _send(self, event: str, run: Optional[Dict[str, Any]], extra: Dict[str, Any], force=None) -> List[str]:
+    async def _send(self, event: str, run: Optional[Dict[str, Any]], extra: Dict[str, Any], force=None,
+                    override: Optional[Dict[str, Any]] = None) -> List[str]:
         try:
             full = notify_logic.merged(self.config.get("notifications"), self.lang)
         except notify_logic.NotifyConfigError as err:
             _LOGGER.warning("%s: notifications not sent: %s", self.entry.title, err)
             return []
         targets = force if force is not None else notify_logic.targets_for(full, event)
-        e = full["events"][event]
+        e = {**full["events"][event], **{k: v for k, v in (override or {}).items() if v is not None}}
         slot_names = {x["id"]: x.get("name") or x["id"] for x in self.config.get("slots") or []}
         v = notify_logic.variables(event, run, slot_names, self.entry.title, extra)
         title, msg = self._render(e["title"], v), self._render(e["message"], v)
         sent = []
         for t in targets:
             data = notify_logic.payload(self._platform(t), title, msg, e.get("actions") or [], self.entry.entry_id,
-                                        tag=f"esp_sprinkler_{self.entry.entry_id}", lang=self.lang)
+                                        tag=f"esp_sprinkler_{self.entry.entry_id}", lang=self.lang, event=event)
             dom, svc = t.split(".", 1)
             try:
-                await self.hass.services.async_call(dom, svc, data, blocking=False)
+                if not self.hass.services.has_service(dom, svc) and self.hass.states.get(t) is not None:
+                    # a notify entity (new style): title + message only
+                    await self.hass.services.async_call("notify", "send_message",
+                                                        {"entity_id": t, "title": notify_logic.plain(data["title"]),
+                                                         "message": notify_logic.plain(data["message"])}, blocking=False)
+                else:
+                    await self.hass.services.async_call(dom, svc, data, blocking=False)
                 sent.append(t)
                 _LOGGER.info("%s: notified %s (%s): %s - %s", self.entry.title, t, event, data["title"], data["message"])
             except Exception as err:  # noqa: BLE001
                 _LOGGER.warning("%s: notification to %s failed: %s", self.entry.title, t, err)
         return sent
 
-    async def test_notification(self, event: str, targets: Optional[List[str]] = None) -> List[str]:
+    async def test_notification(self, event: str, targets: Optional[List[str]] = None,
+                                override: Optional[Dict[str, Any]] = None) -> List[str]:
         run = self.next_run or (self.plan.runs[0] if self.plan and self.plan.runs else None)
         rd = model.run_to_dict(run, self.zone_names()) if run else None
         extra = {"reason": "test", "source": "test", "zone": (rd or {}).get("zones", [{}])[0].get("name") if rd else None,
                  "zone_minutes": 5, "actual_minutes": 0, "pump": (self.config.get("pump") or {}).get("entity"),
                  "lead": 30, "calls": 0, "action": "skip", "factor": "70 %", "flow": 12.5, "usual": 9.8,
                  "direction": "high"}
-        return await self._send(event, rd, extra, force=targets)
+        return await self._send(event, rd, extra, force=targets, override=override)
 
     @callback
     def _on_action(self, event: Event) -> None:
@@ -741,7 +749,7 @@ class Runtime:
         if self.active:
             self._event("skipped", reason="another run is active", run=rd, source=source)
             return
-        if not self.flags["enabled"]:
+        if not self.flags["enabled"] and source == "schedule":   # the master switch stops the schedule, not manual runs
             self._event("skipped", reason="planner disabled", run=rd, source=source)
             await self.async_replan()
             return

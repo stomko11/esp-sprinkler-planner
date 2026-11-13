@@ -25,7 +25,8 @@ SCHEMAS = {
                              vol.Optional("pump"): dict, vol.Optional("weather"): dict,
                              vol.Optional("meters"): dict, vol.Optional("ui"): dict}),
     "test_notification": vol.Schema({ENTRY: cv.string, vol.Required("event"): vol.In(EVENTS),
-                                     vol.Optional("targets"): [cv.string]}),
+                                     vol.Optional("targets"): [cv.string], vol.Optional("title"): cv.string,
+                                     vol.Optional("message"): cv.string, vol.Optional("actions"): [cv.string]}),
     "get_plan": vol.Schema({ENTRY: cv.string, vol.Optional("days", default=7): vol.All(int, vol.Range(1, 31))}),
     "run_slot": vol.Schema({ENTRY: cv.string, vol.Required("slot"): cv.string}),
     "run_zone": vol.Schema({ENTRY: cv.string, vol.Required("zone"): cv.string,
@@ -85,7 +86,8 @@ async def async_setup(hass: HomeAssistant, config) -> bool:
                                           d.get("meters"), d.get("ui"))
                 return {"runs": len(plan.runs), "conflicts": [c.message for c in plan.conflicts]}
             if call.service == "test_notification":
-                return {"sent_to": await rt.test_notification(d["event"], d.get("targets"))}
+                over = {k: d[k] for k in ("title", "message", "actions") if k in d}
+                return {"sent_to": await rt.test_notification(d["event"], d.get("targets"), over)}
             if call.service == "get_plan":
                 return rt.plan_dict(d["days"])
             if call.service == "run_slot":

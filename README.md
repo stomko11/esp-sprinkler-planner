@@ -223,6 +223,14 @@ X % raises the `flow_warning` notification (leak or blocked valve). Service `get
   from when it opened.
 - **Language** auto / English / Slovensky: card, default notification texts and buttons,
   weather reasons. Changed notification texts stay as you wrote them.
+- Recipients: any number of notify services or notify entities (chips; add any
+  `notify.*` by name, e.g. two phones). The send icon on a chip tests just that recipient; the
+  send icon on an event tests it with the current (even unsaved) texts.
+- Default titles start with an emoji per event; on Android each event also has its own
+  status-bar icon and colour. Changed texts stay as written.
+- Week / preview marks: filled ✕ or -50 % = applied; dashed with a bulb = only a suggestion.
+- The master switch stops the schedule; manual and quick runs still work. When off, the next
+  run is struck through.
 - Every notification event has editable title and message (templates), own recipients
   (any number of `notify.*` services) and buttons. New events: `suggestion`, `weather`,
   `flow_warning`.

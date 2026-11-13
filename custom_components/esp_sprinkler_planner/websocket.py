@@ -48,7 +48,8 @@ def snapshot(hass, rt, days: int) -> Dict[str, Any]:
         notif = merged(rt.config.get("notifications"), rt.lang)
     except Exception:  # noqa: BLE001 - show what is stored, the card reports the error
         notif = None
-    notify_services = sorted(f"notify.{s}" for s in hass.services.async_services().get("notify", {}))
+    notify_services = sorted({f"notify.{s}" for s in hass.services.async_services().get("notify", {})}
+                             | {e for e in hass.states.async_entity_ids("notify")})
     return {
         "entry_id": rt.entry.entry_id, "title": rt.entry.title,
         "valves": [{k: v.get(k) for k in ("id", "name", "order", "enabled", "max_minutes", "valve_switch")}
