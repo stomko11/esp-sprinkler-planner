@@ -6,3 +6,4 @@ card/dist/
 .DS_Store
 # reference configs of real installations never go into the repo
 reference/
+.venv/

@@ -1,0 +1,85 @@
+import os
+import sys
+import unittest
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "custom_components", "esp_sprinkler_planner"))
+
+import discovery as D  # noqa: E402
+
+DEV = "Garden8"
+
+
+def E(eid, name, mx=None, order=0):
+    return D.Entity(eid, f"{DEV} {name}", max=mx, order=order)
+
+
+# entity names in the shape ESPHome's sprinkler component produces (YAML order)
+NAMED = [
+    E("switch.g_cycle_start", "Irrigation Cycle Start", order=1),
+    E("switch.g_auto_advance", "Irrigation Auto Advance", order=2),
+    E("switch.g_reverse", "Irrigation Reverse Order", order=3),
+    E("switch.g_standby", "Irrigation Standby Switch", order=4),
+    E("number.g_multiplier", "Irrigation Multiplier", 10, order=5),
+    E("number.g_repeat", "Irrigation Sprinkler Repeat", 10, order=6),
+    E("switch.g_house", "Irrigation Drippers House", order=10),
+    E("switch.g_en_house", "Enable Irrigation Drippers House", order=11),
+    E("number.g_house_dur", "Irrigation Drippers House Duration", 90, order=12),
+    E("switch.g_field", "Irrigation Field", order=13),
+    E("switch.g_en_field", "Enable Irrigation Field", order=14),
+    E("number.g_field_dur", "Irrigation Field Duration", 45, order=15),
+    E("switch.g_west", "Irrigation Lawn West", order=16),
+    E("switch.g_en_west", "Enable Irrigation Lawn West", order=17),
+    E("number.g_west_dur", "Irrigation Lawn West Duration", 60, order=18),
+    E("sensor.g_remaining", "Irrigation Zone Remaining Time", order=19),
+    E("button.g_next", "Next Valve", order=20),
+]
+
+
+class Named(unittest.TestCase):
+    def test_valves_paired_in_esp_order(self):
+        p = D.propose(NAMED, DEV)
+        self.assertEqual([(v.name, v.valve_switch, v.enable_switch, v.duration, v.max_minutes, v.order) for v in p.valves], [
+            ("Drippers House", "switch.g_house", "switch.g_en_house", "number.g_house_dur", 90, 0),
+            ("Field", "switch.g_field", "switch.g_en_field", "number.g_field_dur", 45, 1),
+            ("Lawn West", "switch.g_west", "switch.g_en_west", "number.g_west_dur", 60, 2),
+        ])
+
+    def test_controller_roles(self):
+        c = D.propose(NAMED, DEV).controller
+        self.assertEqual(c["main_switch"], "switch.g_cycle_start")
+        self.assertEqual(c["auto_advance"], "switch.g_auto_advance")
+        self.assertEqual(c["reverse"], "switch.g_reverse")
+        self.assertEqual(c["standby"], "switch.g_standby")
+        self.assertEqual(c["multiplier"], "number.g_multiplier")
+        self.assertEqual(c["repeat"], "number.g_repeat")
+        self.assertIsNone(c["queue_enable"])
+
+    def test_nothing_left_over(self):
+        self.assertEqual(D.propose(NAMED, DEV).unassigned, [])
+
+
+class ShortNames(unittest.TestCase):
+    def test_r1_r2_style(self):
+        ents = [
+            E("switch.m", "Sprinklers", order=1),
+            E("switch.r1", "R1", order=2), E("switch.r1_en", "R1 Enable", order=3), E("number.r1_d", "R1 Duration", 30, order=4),
+            E("switch.r2", "R2", order=5), E("switch.r2_en", "R2 Enable", order=6), E("number.r2_d", "R2 Duration", 30, order=7),
+        ]
+        p = D.propose(ents, DEV)
+        self.assertEqual([(v.name, v.valve_switch, v.enable_switch, v.duration) for v in p.valves],
+                         [("R1", "switch.r1", "switch.r1_en", "number.r1_d"), ("R2", "switch.r2", "switch.r2_en", "number.r2_d")])
+        # a main switch named only "Sprinklers" cannot be recognised -> left for the user
+        self.assertIsNone(p.controller["main_switch"])
+        self.assertIn("switch.m", p.unassigned)
+
+    def test_names_that_do_not_pair_are_left_for_manual_mapping(self):
+        ents = [E("number.a_d", "Valve A Duration", order=1), E("switch.x", "Front lawn", order=2)]
+        p = D.propose(ents, DEV)
+        self.assertEqual(len(p.valves), 1)
+        self.assertIsNone(p.valves[0].valve_switch)
+        self.assertIsNone(p.valves[0].enable_switch)
+        self.assertEqual(p.unassigned, ["switch.x"])
+
+
+if __name__ == "__main__":
+    unittest.main()
