@@ -212,3 +212,33 @@ class DriftTest(unittest.TestCase):
         self.assertEqual(S.meters_from_dict({})["drift_warn"], 15)
         with self.assertRaises(S.MetersConfigError):
             S.meters_from_dict({"drift_warn": 95})
+
+
+class RainTrackingTest(unittest.TestCase):
+    def t(self, h):
+        return datetime(2026, 7, 10, 0, 0, tzinfo=TZ) + timedelta(hours=h)
+
+    def test_daily_counter_reset_at_midnight(self):
+        # 40 mm until 22:00, reset at midnight, the morning run at 06:00 still sees it
+        r = [(self.t(-6), 0), (self.t(-4), 25), (self.t(-2), 40), (self.t(0), 0), (self.t(4), 0)]
+        ev = W.increments(r)
+        self.assertEqual(W.fallen_since(ev, self.t(6), 24), 40)
+        self.assertEqual(W.fallen_since(ev, self.t(6), 6), 0)
+
+    def test_total_and_monthly_counters(self):
+        r = [(self.t(0), 812.4), (self.t(2), 815.0), (self.t(5), 816.2)]
+        self.assertEqual(W.fallen_since(W.increments(r), self.t(6), 24), 3.8)
+
+    def test_rain_after_reset_counts(self):
+        r = [(self.t(0), 12.0), (self.t(1), 0.0), (self.t(2), 3.0)]
+        self.assertEqual(W.fallen_since(W.increments(r), self.t(3), 24), 3.0)
+
+    def test_rolling_24h_sensor_does_not_double_count(self):
+        # a "last 24 h" sensor shrinks as old rain leaves its window: no new rain
+        r = [(self.t(0), 10.0), (self.t(5), 9.0), (self.t(8), 6.0), (self.t(9), 7.5)]
+        self.assertEqual(W.fallen_since(W.increments(r), self.t(10), 24), 1.5)
+
+    def test_window_validation(self):
+        self.assertEqual(W.merged({})["rain_window"], 24)
+        with self.assertRaises(W.WeatherConfigError):
+            W.merged({"rain_window": 0})

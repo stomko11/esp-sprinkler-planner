@@ -27,8 +27,9 @@ const SK = {
   "Raining now (binary or mm/h)": "Pr\u00e1ve pr\u0161\u00ed (bin\u00e1rny alebo mm/h)", "skip at gusts \u2265": "presko\u010di\u0165 pri n\u00e1razoch \u2265",
   "Live sensors": "Aktu\u00e1lne senzory", "Prices": "Ceny", "water per m\u00b3": "voda za m\u00b3", "energy per kWh": "energia za kWh",
   "Cost": "N\u00e1klady", "Last 12 months": "Posledn\u00fdch 12 mesiacov", "less": "menej", "more": "viac",
-  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Click to accept": "Kliknut\u00edm prijme\u0161",
-  "help_rain_fallen": "D\u00e1\u017e\u010f, ktor\u00fd u\u017e spadol, v mm. Jeho aktu\u00e1lna hodnota sa pripo\u010d\u00edta k predpovedi pre behy v najbli\u017e\u0161\u00edch 24 h a porovn\u00e1 so \"Presko\u010di\u0165, ke\u010f zr\u00e1\u017eky dosiahnu\". Najlep\u0161ie: event rain (aktu\u00e1lna alebo posledn\u00e1 zr\u00e1\u017ekov\u00e1 udalos\u0165, vynuluje sa po suchom obdob\u00ed) alebo zr\u00e1\u017eky za posledn\u00fdch 24 h. Denn\u00fd senzor funguje tie\u017e, ale nuluje sa o polnoci. Nie t\u00fd\u017edenn\u00e9, mesa\u010dn\u00e9, ro\u010dn\u00e9 ani celkov\u00e9 po\u010d\u00edtadl\u00e1 - len rast\u00fa a presko\u010dili by ka\u017ed\u00fd beh.",
+  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Click to accept": "Kliknut\u00edm prijme\u0161", "count rain of the last": "po\u010d\u00edta\u0165 zr\u00e1\u017eky za posledn\u00fdch", "{0} mm in the last {1} h": "{0} mm za posledn\u00fdch {1} h",
+  "help_rain_fallen": "Funguje ak\u00e9ko\u013evek po\u010d\u00edtadlo zr\u00e1\u017eok v mm: event rain, denn\u00e9, t\u00fd\u017edenn\u00e9, mesa\u010dn\u00e9, ro\u010dn\u00e9 alebo celkov\u00e9. Pl\u00e1nova\u010d si s\u00e1m zapisuje ka\u017ed\u00fd n\u00e1rast (aj vynulovanie) a po\u010d\u00edta zr\u00e1\u017eky za posledn\u00e9 hodiny nastaven\u00e9 ni\u017e\u0161ie, aj cez polnoc - denn\u00fd senzor, ktor\u00fd sa vynuloval, sa pre rann\u00fd beh st\u00e1le zapo\u010d\u00edta. Pri v\u00fdbere senzora na\u010d\u00edta aj jeho hist\u00f3riu. Tieto zr\u00e1\u017eky sa pripo\u010d\u00edtaj\u00fa k predpovedi pre behy v najbli\u017e\u0161\u00edch 24 h.",
+
   "help_wind": "Vietor a n\u00e1razy sa kontroluj\u00fa pre behy, ktor\u00e9 za\u010d\u00ednaj\u00fa do hodiny (namiesto predpovede). Vlhkos\u0165 sa len zobrazuje.",
   "help_rain_now": "Pr\u0161\u00ed pr\u00e1ve teraz? Bin\u00e1rny senzor da\u017e\u010fa (zapnut\u00fd = pr\u0161\u00ed) alebo intenzita zr\u00e1\u017eok v mm/h (nad 0 = pr\u0161\u00ed). Kontroluje sa pre behy, ktor\u00e9 za\u010d\u00ednaj\u00fa do hodiny.",
   "rain_warn_rate": "Toto vyzer\u00e1 ako intenzita zr\u00e1\u017eok (za hodinu / min\u00fatu). Pou\u017ei ju v \"Pr\u00e1ve pr\u0161\u00ed\"; tu pl\u00e1nova\u010d potrebuje mno\u017estvo, ktor\u00e9 spadlo (mm).",
@@ -128,7 +129,8 @@ const SK = {
 const EN = {
   "plat_android": "Android", "plat_ios": "iOS", "plat_other": "Text only",
   "help_flow": "Sudden change: a run differs from the last runs (leak, broken or blocked valve). Slow drop: the last 5 runs are below the zone's normal flow, learned from its first 5 runs (clogging filter). After cleaning, reset the zone's flow in Stats.",
-  "help_rain_fallen": "Rain that already fell, in mm. Its current value is added to the forecast for runs in the next 24 h and compared with \"Skip when rain reaches\". Best: event rain (current or last rain event, resets after a dry spell) or rain in the last 24 h. A daily sensor works too, but resets at midnight. Not weekly, monthly, yearly or total counters - they only grow and would skip every run.",
+  "help_rain_fallen": "Any rain counter in mm works: event rain, daily, weekly, monthly, yearly or total. The planner logs every rise of the counter itself (resets are handled) and counts the rain of the last hours set below, also across midnight - a daily sensor that reset still counts last evening's rain for the morning run. It also reads the sensor's history when you pick it. That rain is added to the forecast for runs in the next 24 h.",
+
   "help_wind": "Wind and gusts are checked for runs that start within the hour (instead of the forecast). Humidity is shown only.",
   "help_rain_now": "Is it raining right now? A binary rain sensor (on = raining) or a rain rate in mm/h (above 0 = raining). Checked for runs that start within the hour.",
   "rain_warn_rate": "This looks like a rain rate (per hour / minute). Use it under \"Raining now\"; here the planner needs the amount that fell (mm).",
@@ -343,7 +345,6 @@ class EspSprinklerPlannerCard extends HTMLElement {
     const name = `${eid} ${a.friendly_name || ""}`.toLowerCase();
     let why = "";
     if (/\/(h|hr|min)$/.test(u)) why = t("rain_warn_rate");
-    else if (/(month|year|annual|total|week|mesa?c|rok|celk|tyzd|t\u00fd\u017ed)/.test(name) || a.state_class === "total_increasing") why = t("rain_warn_total");
     return why ? `<div class="hintbox warnbox"><ha-icon icon="mdi:alert-outline"></ha-icon><div>${why}</div></div>` : "";
   }
   _cur() { return ((this.data && this.data.weather_now) || {}).currency || "EUR"; }
@@ -683,7 +684,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
     if (!full.mode || full.mode === "off") return "";
     const today = dayOf(this.data.now);
     const days = (w.days || []).filter((x) => x.day >= today).slice(0, 7);
-    return `<div class="lbl">${t("Weather")} <span class="muted">${w.temp !== null && w.temp !== undefined ? t("now {0} \u00b0C", r1(w.temp)) : ""}${w.fallen ? " \u00b7 " + t("fallen {0} mm", r1(w.fallen)) : ""}</span>${w.error ? ` <span class="err">${esc(w.error)}</span>` : ""}</div>
+    return `<div class="lbl">${t("Weather")} <span class="muted">${w.temp !== null && w.temp !== undefined ? t("now {0} \u00b0C", r1(w.temp)) : ""}${w.fallen ? " \u00b7 " + t("{0} mm in the last {1} h", r1(w.fallen), (this.data.weather_full || {}).rain_window || 24) : ""}</span>${w.error ? ` <span class="err">${esc(w.error)}</span>` : ""}</div>
       <div class="muted small">${t("Click a day for its runs.")}</div>
       <div class="fc" style="grid-template-columns:repeat(${Math.max(1, days.length)},1fr)">${days.map((x) => {
         return `<div class="fcd ${x.day === today ? "today" : ""} ${this._fday === x.day ? "sel" : ""}" data-act="fday" data-day="${x.day}" title="${esc(fmtDay(x.day))}"><span>${DAYS()[wd(x.day)]}</span>
@@ -982,6 +983,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
         <div class="row"><span class="fl">${t("Forecast")}</span>${this._picker(wk("entity"), w.entity, (e) => e.startsWith("weather."), "wxlist", "weather.home")}</div>
         <div class="row"><span class="fl">${t("Rain sensor (fallen)")}</span>${this._picker(wk("rain_sensor"), w.rain_sensor, unitRe(/mm|in/), "rainlist")}</div>
         <div class="help">${t("help_rain_fallen")}</div>${this._rainWarn(w.rain_sensor)}
+        ${w.rain_sensor ? `<div class="grid"><span class="fl">${t("count rain of the last")}</span>${sl("rain_window", 24, 1, 72, 1, " h")}</div>` : ""}
         <div class="row"><span class="fl">${t("Temperature sensor")}</span>${this._picker(wk("temp_sensor"), w.temp_sensor, unitRe(/\u00b0|C$|F$/), "templist")}</div>
         <div class="row"><span class="fl">${t("Humidity sensor")}</span>${this._picker(wk("humidity_sensor"), w.humidity_sensor, unitRe(/^%$/), "humlist")}</div>
         <div class="row"><span class="fl">${t("Wind sensor")}</span>${this._picker(wk("wind_sensor"), w.wind_sensor, unitRe(/km\/h|m\/s|mph|kn/), "windlist")}</div>

@@ -63,6 +63,9 @@ class Runtime:
         self.skip_done: List[str] = []                    # user skips whose start has passed (shown dimmed)
         self.stats: Dict[str, Any] = {}
         self.flow_samples: Dict[str, List[float]] = {}
+        self.rain_log: List[List[Any]] = []               # [iso time, mm] increments of the rain counter (72 h)
+        self._rain_last: Optional[float] = None           # last reading of the rain counter, mm
+        self._rain_entity: Optional[str] = None
         self.flow_base: Dict[str, Dict[str, Any]] = {}    # zone -> {"flow": L/min, "since": iso, "warned": bool}
         self._base_samples: Dict[str, List[float]] = {}   # first runs after setup / reset (for the baseline)
         self._meter: Dict[str, Dict[str, Any]] = {}       # zone id -> readings while open
@@ -140,6 +143,8 @@ class Runtime:
                                      "active": self.active, "history": self.history, "last_run": self.last_run,
                                      "stats": self.stats, "flow_samples": self.flow_samples,
                                      "flow_base": self.flow_base, "base_samples": self._base_samples,
+                                     "rain_log": self.rain_log, "rain_last": self._rain_last,
+                                     "rain_entity": self._rain_entity,
                                      "suggestions": self.suggestions, "skip_done": self.skip_done})
 
     def _event(self, kind: str, **data) -> None:
@@ -497,14 +502,90 @@ class Runtime:
             if st is not None and st.attributes.get("temperature") is not None:
                 wx["temp"] = wx_mod.to_c(st.attributes.get("temperature"), units["temperature"])
         if cfg["rain_sensor"]:
-            v, u = self._read(cfg["rain_sensor"])
-            wx["fallen"] = wx_mod.to_mm(v, u) if v is not None else None
+            # tracked from every change of the counter, so a daily sensor that reset at midnight
+            # still counts last evening's rain for the morning run
+            wx["fallen"] = self.fallen(cfg["rain_window"])
         if cfg["temp_sensor"]:
             v, u = self._read(cfg["temp_sensor"])
             if v is not None:
                 wx["temp"] = wx_mod.to_c(v, u)
         wx["current"] = self.current_conditions(cfg)
         self.wx = wx
+
+    # ------------------------------------------------------------------ rain log
+    def _rain_mm(self, state) -> Optional[float]:
+        try:
+            return wx_mod.to_mm(float(state.state), state.attributes.get("unit_of_measurement"))
+        except (TypeError, ValueError, AttributeError):
+            return None
+
+    def fallen(self, hours: float) -> float:
+        now = dt_util.utcnow()
+        ev = [(dt_util.parse_datetime(t), mm) for t, mm in self.rain_log]
+        return wx_mod.fallen_since([(t, mm) for t, mm in ev if t], now, hours)
+
+    def _prune_rain(self) -> None:
+        cut = (dt_util.utcnow() - timedelta(hours=72)).isoformat()
+        self.rain_log = [e for e in self.rain_log if e[0] >= cut]
+
+    @callback
+    def _on_rain(self, event: Event) -> None:
+        new = event.data.get("new_state")
+        v = self._rain_mm(new) if new is not None else None
+        if v is None:
+            return                         # unavailable: keep the last reading, no rain counted
+        inc = wx_mod.rain_increment(self._rain_last, v)
+        self._rain_last = v
+        if inc > 0:
+            self.rain_log.append([new.last_changed.isoformat(), round(inc, 2)])
+            self._prune_rain()
+            _LOGGER.debug("%s: rain +%.1f mm (counter %.1f)", self.entry.title, inc, v)
+        self.hass.async_create_task(self._save())
+
+    async def _seed_rain(self, entity: str) -> None:
+        """Fill the rain log from the recorder (last 72 h) for a new rain sensor, or after a gap."""
+        try:
+            from homeassistant.components.recorder import get_instance
+            from homeassistant.components.recorder.history import state_changes_during_period
+        except ImportError:
+            return
+        start = dt_util.utcnow() - timedelta(hours=72)
+        try:
+            hist = await get_instance(self.hass).async_add_executor_job(
+                state_changes_during_period, self.hass, start, None, entity, True, False, None, True)
+        except Exception as err:  # noqa: BLE001 - recorder off / not ready: start tracking from now
+            _LOGGER.debug("%s: no rain history for %s: %s", self.entry.title, entity, err)
+            return
+        unit = (self.hass.states.get(entity).attributes.get("unit_of_measurement")
+                if self.hass.states.get(entity) else None)
+        readings = []
+        for st in hist.get(entity, []):
+            try:
+                readings.append((st.last_changed, wx_mod.to_mm(float(st.state), unit)))
+            except (TypeError, ValueError):
+                continue
+        if not readings:
+            return
+        known = {e[0] for e in self.rain_log}
+        for t, mm in wx_mod.increments(readings):
+            if t.isoformat() not in known:
+                self.rain_log.append([t.isoformat(), mm])
+        self.rain_log.sort()
+        self._rain_last = readings[-1][1]
+        self._prune_rain()
+        _LOGGER.info("%s: rain history of %s: %.1f mm in the last %d h", self.entry.title, entity,
+                     self.fallen(self.weather_cfg["rain_window"]), self.weather_cfg["rain_window"])
+
+    async def _setup_rain(self) -> None:
+        ent = self.weather_cfg.get("rain_sensor") if self.weather_cfg["mode"] != "off" else None
+        if ent != self._rain_entity:            # another sensor: its own history, not the old one's
+            self.rain_log, self._rain_last, self._rain_entity = [], None, ent
+        if ent:
+            await self._seed_rain(ent)
+            if self._rain_last is None:          # no history yet: count from the current reading on
+                st = self.hass.states.get(ent)
+                self._rain_last = self._rain_mm(st) if st is not None else None
+        await self._save()
 
     def current_conditions(self, cfg=None) -> Dict[str, Any]:
         """Live sensor values (deg C, %, km/h, mm, raining) for the card and the start check."""
@@ -651,6 +732,8 @@ class Runtime:
         watch = [cfg[k] for k in ("entity", "rain_sensor", "rain_now") if cfg["mode"] != "off" and cfg.get(k)]
         if watch:
             self._dyn_unsubs.append(async_track_state_change_event(self.hass, watch, self._on_weather_change))
+        if cfg["mode"] != "off" and cfg.get("rain_sensor"):
+            self._dyn_unsubs.append(async_track_state_change_event(self.hass, [cfg["rain_sensor"]], self._on_rain))
 
     @callback
     def _on_weather_change(self, _event: Event) -> None:
@@ -730,6 +813,9 @@ class Runtime:
             stats_mod.seed_from_history(self.stats, self.history)
         self.flow_samples = data.get("flow_samples") or {}
         self.flow_base = data.get("flow_base") or {}
+        self.rain_log = data.get("rain_log") or []
+        self._rain_last = data.get("rain_last")
+        self._rain_entity = data.get("rain_entity")
         self._base_samples = data.get("base_samples") or {}
         self.suggestions = data.get("suggestions") or {}
         if (self.config.get("weather") or {}).get("mode", "off") != "suggest":
@@ -768,6 +854,7 @@ class Runtime:
         self._check_health(startup=True)
         self._unsubs.append(async_track_time_interval(self.hass, self._periodic, timedelta(minutes=15)))
         self._subscribe_dynamic()
+        await self._setup_rain()
         await self._resume()
         await self.refresh_weather()
         await self.async_replan()
@@ -1116,6 +1203,7 @@ class Runtime:
         await self._save()
         if resub:
             self._subscribe_dynamic()
+            await self._setup_rain()
             await self.refresh_weather()
         await self.async_replan()
         return result

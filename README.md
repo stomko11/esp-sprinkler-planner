@@ -200,10 +200,12 @@ Settings tab, **Weather**. Mode `off`, `suggest` or `auto`:
 
 | setting | what it is used for | use | do not use |
 |---|---|---|---|
-| Rain sensor (fallen) | mm that already fell; added to the forecast for runs in the next 24 h | event rain (resets after a dry spell), rain last 24 h, daily rain (resets at midnight) | weekly / monthly / yearly / total counters - they only grow and skip every run |
+| Rain sensor (fallen) | rain of the last N hours (default 24), added to the forecast for runs in the next 24 h | any rain counter in mm: event, daily, weekly, monthly, yearly, total, rolling 24 h | rates (mm/h) |
 | Raining now | skip a run that starts within the hour while it rains | binary rain sensor, rain rate in mm/h (> 0 = raining) | amounts in mm |
 
-The card warns when the picked sensor looks like a total or a rate.
+The planner logs every rise of the counter itself and handles resets, so a daily sensor that
+reset at midnight still counts last evening's 40 mm for the morning run. When you pick a sensor it
+also reads the last 72 h from the recorder. The card warns when the picked sensor is a rate.
 
 ### Quick run, skips
 

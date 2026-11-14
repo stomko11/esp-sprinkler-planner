@@ -5,7 +5,8 @@ Stored config (part of the planner config):
     "weather": {
       "mode": "off" | "suggest" | "auto",
       "entity": "weather.home",          # forecast source (hourly preferred, daily as fallback)
-      "rain_sensor": "sensor.rain_24h",  # optional: rain that already fell (mm, last 24 h or today)
+      "rain_sensor": "sensor.rain_daily", # optional: any rain counter in mm (event, daily, monthly, total ...)
+      "rain_window": 24,     # h: rain that fell in this many hours before now counts (tracked by the planner)
       "temp_sensor": "sensor.outdoor",   # optional: current temperature instead of the forecast
       "skip_rain": 4,        # mm: fallen + expected rain at or above this -> skip the run
       "scale_rain": true,    # less rain than skip_rain reduces the minutes in proportion
@@ -30,19 +31,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 MODES = ("off", "suggest", "auto")
 DEFAULTS: Dict[str, Any] = {
     "mode": "off", "entity": None, "rain_sensor": None, "temp_sensor": None,
     "humidity_sensor": None, "wind_sensor": None, "gust_sensor": None, "rain_now": None, "skip_gust": 60.0,
+    "rain_window": 24,
     "skip_rain": 4.0, "scale_rain": True, "window": 12, "min_probability": 50,
     "skip_wind": 40.0, "skip_cold": 4.0, "base_temp": 22.0, "per_degree": 4.0,
     "min_factor": 50.0, "max_factor": 160.0, "horizon": 24,
     "answers": "keep",   # keep: an accepted / dismissed suggestion is final; follow: it follows forecast changes
 }
 ANSWERS = ("keep", "follow")
-NUMBERS = {"skip_gust": (0, 250), "skip_rain": (0, 200), "window": (0, 72), "min_probability": (0, 100), "skip_wind": (0, 200),
+NUMBERS = {"rain_window": (1, 72), "skip_gust": (0, 250), "skip_rain": (0, 200), "window": (0, 72), "min_probability": (0, 100), "skip_wind": (0, 200),
            "skip_cold": (-30, 30), "base_temp": (-10, 45), "per_degree": (0, 25), "min_factor": (0, 100),
            "max_factor": (100, 300), "horizon": (1, 168)}
 
@@ -123,6 +125,40 @@ def normalise(items: Iterable[Dict[str, Any]], units: Dict[str, Optional[str]], 
                     "wind": to_kmh(it.get("wind_speed"), units.get("wind_speed")), "cond": it.get("condition")})
     out.sort(key=lambda x: x["t"])
     return out
+
+
+# ------------------------------------------------------------------ rain that fell
+def rain_increment(prev: Optional[float], new: Optional[float]) -> float:
+    """mm that fell between two readings of a rain counter.
+
+    Works with any counter: event / daily / monthly / yearly / total (grows, then resets to 0)
+    and rolling "last 24 h" sensors (shrink slowly as old rain drops out of their window).
+    A drop to (nearly) zero is a reset: the new value is rain since the reset. A partial drop
+    is a rolling window letting old rain go: nothing new fell.
+    """
+    if new is None or prev is None:
+        return 0.0
+    if new >= prev:
+        return new - prev
+    if new <= 0.5 or new <= prev * 0.1:
+        return new
+    return 0.0
+
+
+def increments(readings: Iterable[Tuple[datetime, float]]) -> List[Tuple[datetime, float]]:
+    """(time, value) readings, oldest first -> (time, mm fell) for every rise."""
+    out, prev = [], None
+    for t, v in readings:
+        inc = rain_increment(prev, v)
+        if inc > 0:
+            out.append((t, round(inc, 2)))
+        prev = v
+    return out
+
+
+def fallen_since(events: Iterable[Tuple[datetime, float]], now: datetime, hours: float) -> float:
+    start = now - timedelta(hours=hours)
+    return round(sum(mm for t, mm in events if start < t <= now), 1)
 
 
 # ------------------------------------------------------------------ decision

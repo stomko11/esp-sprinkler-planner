@@ -3,6 +3,7 @@
   "name": "ESP Sprinkler Planner",
   "after_dependencies": [
     "esphome",
+    "recorder",
     "sun"
   ],
   "categories": [
@@ -23,5 +24,5 @@
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/stomko11/esp-sprinkler-planner/issues",
   "requirements": [],
-  "version": "0.5.4"
+  "version": "0.6.0"
 }

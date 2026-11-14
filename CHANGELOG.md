@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0
+
+- **Rain that fell is tracked by the planner:** any rain counter works (event, daily, weekly,
+  monthly, yearly, total, rolling 24 h). Every rise of the counter is logged, resets are handled,
+  and the rain of the last N hours (new setting, default 24 h) counts. A daily sensor that reset at
+  midnight no longer hides last evening's rain from the morning run. The last 72 h are read from
+  the recorder when the sensor is picked or Home Assistant starts.
+
 ## 0.5.4
 
 - Weather settings explain each sensor: what "rain fallen" is used for (mm in the next 24 h, event
