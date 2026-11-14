@@ -160,3 +160,16 @@ class HealthTest(unittest.TestCase):
         self.assertEqual(X.health(valves, ctrl, down)["unavailable"], ["switch.main"])
         gone = {"switch.main": {"state": "off"}}
         self.assertEqual(X.health(valves, ctrl, gone)["missing"], ["switch.en1", "number.d1"])
+
+
+
+class SwitchedOffZoneTest(unittest.TestCase):
+    def test_off_entry_kept_but_not_planned(self):
+        import model as M
+        valves = [{"id": "zone_1", "name": "A", "order": 0}, {"id": "zone_2", "name": "B", "order": 1}]
+        cfg = {"slots": [{"id": "m", "anchor": {"mode": "start", "ref": "time", "at": "05:00"},
+                          "zones": [{"zone": "zone_1", "minutes": 10},
+                                    {"zone": "zone_2", "minutes": 7, "days": [1], "enabled": False},
+                                    {"zone": "zone_9", "enabled": False}]}]}   # off entries are not validated
+        _z, slots, _s = M.parse(cfg, valves)
+        self.assertEqual([e.zone_id for e in slots[0].zones], ["zone_1"])

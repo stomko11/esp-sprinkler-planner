@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.1
+
+- Unticking a zone in a slot keeps its minutes and days (stored as switched off); ticking it again
+  brings them back instead of a default. Minutes and days can be set for a zone before it is
+  switched on. Switched-off zones are dimmed and not counted in the slot header.
+
 ## 0.7.0
 
 - **Days per zone in a slot:** each zone in a slot follows the slot's weekdays ("slot days") or

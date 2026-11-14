@@ -9,7 +9,7 @@ the card later):
                     "anchor": {"mode": "finish", "ref": "sunrise", "at": null, "offset": -15},
                     "days": [0, 2, 4], "every_n_days": null, "every_n_from": null,
                     "use_multiplier": true,
-                    "zones": [{"zone": "zone_1", "minutes": 15, "days": null}]}],
+                    "zones": [{"zone": "zone_1", "minutes": 15, "days": null, "enabled": true}]}],
       "settings": {"merge_mode": "window", "merge_window": 60, "same_zone": "longer"}
     }
 
@@ -140,6 +140,8 @@ def slot_from_dict(d: Dict[str, Any], zone_ids: Iterable[str]) -> Slot:
     entries = []
     for i, e in enumerate(d.get("zones") or []):
         zid = e.get("zone")
+        if e.get("enabled") is False:
+            continue        # switched off in this slot: minutes / days are kept in the config, not planned
         if zid not in known:
             raise ConfigError(f"{where}: zone {zid!r} does not exist")
         minutes = _num(e.get("minutes"), f"{where} zone {zid} minutes")

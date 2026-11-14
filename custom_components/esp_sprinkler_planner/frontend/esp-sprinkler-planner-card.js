@@ -850,9 +850,16 @@ class EspSprinklerPlannerCard extends HTMLElement {
       <div class="hl muted small">${t("less")} <i class="h0"></i><i class="h1"></i><i class="h2"></i><i class="h3"></i><i class="h4"></i> ${t("more")}</div></div>`;
   }
 
+  _on(e) { return !!e && e.enabled !== false; }
+  _minutesCell(i, zid, e, idx, extra) {
+    // editable also when the zone is off in this slot: the value is kept for when it is switched on
+    const v = e ? e.minutes : "";
+    return `<input type="number" class="n ${this._on(e) ? "" : "offv"}" min="0.1" step="0.5" ${e ? `data-k="slots.${i}.zones.${idx}.minutes"` : `data-zmin="${i}|${esc(zid)}"`} data-t="num" value="${esc(v ?? "")}" placeholder="10">${extra || ""}`;
+  }
+
   _daysCell(sl, i, e, idx) {
     const slotDays = sl.every_n_days ? [0, 1, 2, 3, 4, 5, 6] : (sl.days || [0, 1, 2, 3, 4, 5, 6]);
-    if (!e) return "";
+    if (!e) return `<button class="sdays" data-act="zdaysnew" data-i="${i}" data-zone="__ZID__" title="${esc(t("Give this zone its own days"))}">${t("slot days")}</button>`;
     if (e.days) return `<span class="days own">${DAYS().map((dn, di) => `<label class="day sm ${e.days.includes(di) ? "on" : ""} ${slotDays.includes(di) ? "" : "extra"}" title="${esc(slotDays.includes(di) ? "" : t("The slot has this day off; this zone runs anyway."))}"><input type="checkbox" data-zday="${i}|${idx}|${di}" ${e.days.includes(di) ? "checked" : ""}>${dn}</label>`).join("")}</span>
       <button class="tb1" data-act="zdaysclr" data-i="${i}" data-idx="${idx}" title="${esc(t("Back to the slot's days"))}"><ha-icon icon="mdi:calendar-refresh"></ha-icon></button>`;
     return `<button class="sdays" data-act="zdays" data-i="${i}" data-idx="${idx}" title="${esc(t("Give this zone its own days"))}">${t("slot days")}${sl.every_n_days ? "" : ` <span class="muted">${slotDays.length === 7 ? t("every day") : slotDays.map((x) => DAYS()[x]).join(" ")}</span>`}</button>`;
@@ -870,12 +877,12 @@ class EspSprinklerPlannerCard extends HTMLElement {
     return this._zones().map((z) => {
       const rows = slots.map((sl, i) => {
         const idx = (sl.zones || []).findIndex((x) => x.zone === z.id); const e = idx >= 0 ? sl.zones[idx] : null;
-        return `<tr class="${sl.enabled === false ? "dis" : ""}"><td><input type="checkbox" data-zin="${i}|${esc(z.id)}" ${e ? "checked" : ""}></td>
+        return `<tr class="${sl.enabled === false ? "dis" : ""} ${this._on(e) ? "" : "zoff"}"><td><input type="checkbox" data-zin="${i}|${esc(z.id)}" ${this._on(e) ? "checked" : ""}></td>
           <td><b>${esc(sl.name || sl.id)}</b><div class="muted small">${esc(this._slotWhen(sl))}${sl.enabled === false ? " \u00b7 " + t("off") : ""}</div></td>
-          <td>${e ? `<input type="number" class="n" min="0.1" step="0.5" data-k="slots.${i}.zones.${idx}.minutes" data-t="num" value="${esc(e.minutes)}">` : ""}</td>
-          <td>${this._daysCell(sl, i, e, idx)}</td></tr>`;
+          <td>${this._minutesCell(i, z.id, e, idx)}</td>
+          <td>${this._daysCell(sl, i, e, idx).replace("__ZID__", esc(z.id))}</td></tr>`;
       }).join("");
-      const used = slots.filter((sl) => (sl.zones || []).some((x) => x.zone === z.id));
+      const used = slots.filter((sl) => (sl.zones || []).some((x) => x.zone === z.id && this._on(x)));
       const sum = used.length ? used.map((sl) => { const e = sl.zones.find((x) => x.zone === z.id) || {}; return `${esc(sl.name || sl.id)} ${e.minutes}\u2032${e.days ? " (" + (e.days.length ? e.days.map((x) => DAYS()[x]).join(" ") : "\u2013") + ")" : ""}`; }).join(" \u00b7 ") : t("in no slot");
       return this._det(`bz_${z.id}`, false, `${this._mark(z, true)}<b>${esc(z.name)}</b><span class="muted">${sum}</span>`,
         `<table class="zt"><tr><th></th><th>${t("Slot")}</th><th>${t("Minutes")}</th><th>${t("Days")}</th></tr>${rows}</table>`, "sec");
@@ -897,7 +904,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
           <label class="sw" title="${t("enabled")}"><input type="checkbox" class="tog" data-k="${k("enabled")}" data-t="bool" ${s.enabled !== false ? "checked" : ""}></label>
           <span class="caret">${open ? "\u25be" : "\u25b8"}</span><b class="sn">${esc(s.name || s.id)}</b>
           <span class="muted ssum">${esc(when)} \u00b7 ${esc(days)}${s.reverse ? " \u00b7 " + t("reverse") : ""}</span>
-          <span class="zicons">${(s.zones || []).map((z) => this._mark(this._zone(z.zone))).join("")}<em>${(s.zones || []).length}</em></span>
+          <span class="zicons">${(s.zones || []).filter((z) => this._on(z)).map((z) => this._mark(this._zone(z.zone))).join("")}<em>${(s.zones || []).filter((z) => this._on(z)).length}</em></span>
         </div>
         ${open ? `<div class="sbody">
           <div class="row"><label>${t("Name")} <input data-k="${k("name")}" value="${esc(s.name || "")}"></label>
@@ -921,10 +928,10 @@ class EspSprinklerPlannerCard extends HTMLElement {
           <div class="help">${t("help_reverse")} ${t("help_weather")}</div>
           <table class="zt"><tr><th></th><th>${t("Zone")}</th><th>${t("Minutes")}</th><th>${t("Days")}</th></tr>
             ${zones.map((z) => { const e = zin.get(z.id); const idx = (s.zones || []).findIndex((x) => x.zone === z.id);
-              return `<tr class="${z.enabled ? "" : "dis"}"><td><input type="checkbox" data-zin="${i}|${esc(z.id)}" ${e ? "checked" : ""}></td>
+              return `<tr class="${z.enabled ? "" : "dis"} ${this._on(e) ? "" : "zoff"}"><td><input type="checkbox" data-zin="${i}|${esc(z.id)}" ${this._on(e) ? "checked" : ""}></td>
                 <td>${this._mark(z)}${esc(z.name)}${z.enabled ? "" : ` <span class='muted'>${t("(disabled)")}</span>`}</td>
-                <td>${e ? `<input type="number" class="n" min="0.1" step="0.5" data-k="slots.${i}.zones.${idx}.minutes" data-t="num" value="${esc(e.minutes)}">${z.max_minutes ? ` <span class="muted">${t("max {0}", z.max_minutes)}</span>` : ""}` : ""}</td>
-                <td>${this._daysCell(s, i, e, idx)}</td></tr>`; }).join("")}
+                <td>${this._minutesCell(i, z.id, e, idx, z.max_minutes ? ` <span class="muted">${t("max {0}", z.max_minutes)}</span>` : "")}</td>
+                <td>${this._daysCell(s, i, e, idx).replace("__ZID__", esc(z.id))}</td></tr>`; }).join("")}
           </table>
           <div class="help">${t(s.every_n_days ? "help_zone_days_n" : "help_zone_days")}</div>
           <div class="row"><button data-act="runslot1" data-slot="${esc(s.id)}">${t("Run now")}</button><button data-act="dupslot" data-i="${i}" title="${esc(t("The copy starts switched off, so nothing waters twice."))}"><ha-icon icon="mdi:content-copy"></ha-icon> ${t("Duplicate")}</button><span class="grow"></span><button class="danger" data-act="delslot" data-i="${i}">${t("Delete slot")}</button></div>
@@ -1149,6 +1156,13 @@ class EspSprinklerPlannerCard extends HTMLElement {
       n.events[ev].targets = t0.checked ? [...new Set([...cur, svc])] : cur.filter((x) => x !== svc);
       this._markDirty(true); return;
     }
+    if (t0.dataset.zmin) {
+      if (!isChange) return;                 // once, when the value is committed (not per keystroke)
+      const [i, zid] = t0.dataset.zmin.split("|"); const s = this.draft.slots[+i]; s.zones = s.zones || [];
+      const v = num(t0.value); if (v === null || s.zones.some((z) => z.zone === zid)) return;
+      s.zones.push({ zone: zid, minutes: v, enabled: false });
+      this._markDirty(true); return;
+    }
     if (t0.dataset.zday) {
       const [i, idx, di] = t0.dataset.zday.split("|").map(Number); const e = this.draft.slots[i].zones[idx];
       let d = (e.days || []).slice();
@@ -1170,7 +1184,9 @@ class EspSprinklerPlannerCard extends HTMLElement {
     } else if (t0.dataset.zin) {
       const [i, zid] = t0.dataset.zin.split("|"); const s = this.draft.slots[+i];
       s.zones = s.zones || [];
-      if (t0.checked) s.zones.push({ zone: zid, minutes: 10 }); else s.zones = s.zones.filter((z) => z.zone !== zid);
+      const e = s.zones.find((z) => z.zone === zid);
+      if (e) { if (t0.checked) { delete e.enabled; if (!(+e.minutes > 0)) e.minutes = 10; } else e.enabled = false; }   // keep minutes and days
+      else if (t0.checked) s.zones.push({ zone: zid, minutes: 10 });
       this._markDirty(true);
     } else if (t0.dataset.nt) {
       const n = this.draft.notifications; n.targets = n.targets || [];
@@ -1224,6 +1240,10 @@ class EspSprinklerPlannerCard extends HTMLElement {
         if (!confirm(t("Delete ALL statistics (watering time, water, energy, skips, flow)? This cannot be undone."))) return;
         await svc("clear_stats", { confirm: true }); setTimeout(() => { this._stats = null; this._heat = null; this._load(); }, 600);
       } else if (act === "sview") { this._sv = tg.dataset.v; localStorage.setItem("esp_sprinkler_sview", this._sv); this._render();
+      } else if (act === "zdaysnew") {
+        const s0 = this.draft.slots[+tg.dataset.i]; s0.zones = s0.zones || [];
+        s0.zones.push({ zone: tg.dataset.zone, minutes: 10, enabled: false, days: s0.every_n_days ? [0, 1, 2, 3, 4, 5, 6] : (s0.days || [0, 1, 2, 3, 4, 5, 6]).slice() });
+        this._markDirty(true);
       } else if (act === "zdays") {
         const s0 = this.draft.slots[+tg.dataset.i]; const e = s0.zones[+tg.dataset.idx];
         e.days = s0.every_n_days ? [0, 1, 2, 3, 4, 5, 6] : (s0.days || [0, 1, 2, 3, 4, 5, 6]).slice();
@@ -1434,6 +1454,7 @@ ha-icon.zi { --mdc-icon-size:16px; margin-right:4px; flex:none; } ha-icon.zi.big
 .days { display:inline-flex; flex-wrap:nowrap; gap:4px; }
 label.day { display:inline-grid; place-items:center; min-width:34px; height:26px; padding:0 4px; border-radius:13px; border:1px solid var(--divider-color,#ccc); font-size:12px; cursor:pointer; user-select:none; }
 label.day input { display:none; } label.day.on { background:var(--primary-color,#03a9f4); border-color:transparent; color:#fff; font-weight:600; }
+tr.zoff td:not(:first-child) { opacity:.55; } input.offv { font-style:italic; }
 label.day.sm { min-width:26px; height:22px; font-size:11px; } label.day.extra { border-style:dashed; }
 .days.own { gap:2px; } button > ha-icon { --mdc-icon-size:16px; vertical-align:-3px; }
 button.sdays { padding:3px 10px; border-radius:12px; font-size:12px; }
