@@ -64,7 +64,7 @@ class SlotZone:
 
     zone_id: str
     minutes: float
-    days: Optional[frozenset] = None   # weekdays 0=Mon..6=Sun; None = the slot's days
+    days: Optional[frozenset] = None   # own weekdays 0=Mon..6=Sun, override the slot's days; None = the slot's days
 
 
 @dataclass(frozen=True)
@@ -161,6 +161,21 @@ def slot_active_on(slot: Slot, day: date) -> bool:
     return slot.days is None or day.weekday() in slot.days
 
 
+def zone_on(slot: Slot, entry: "SlotZone", day: date, slot_on: bool) -> bool:
+    """Does this zone of the slot water on this day?
+
+    Own weekdays replace the slot's weekdays (the zone can run on a day the slot has off).
+    For an every-N-days slot they narrow it (only the N-th days that are also on those weekdays).
+    """
+    if not slot.enabled:
+        return False
+    if entry.days is None:
+        return slot_on
+    if slot.every_n_days:
+        return slot_on and day.weekday() in entry.days
+    return day.weekday() in entry.days
+
+
 def run_length(steps: Sequence[Step], settings: Settings) -> timedelta:
     """Pump delay + all valves + the gap/overlap between consecutive valves."""
     if not steps:
@@ -217,6 +232,9 @@ def _initial_runs(zones, slots, settings, first_day, days, tz, sun, multiplier, 
     for i in range(days):
         day = first_day + timedelta(days=i)
         for slot in slots:
+            slot_on = slot_active_on(slot, day)
+            if not slot_on and not (slot.enabled and not slot.every_n_days and any(e.days for e in slot.zones)):
+                continue
             if callable(multiplier):
                 try:
                     mult = multiplier(day, slot.id)
@@ -224,8 +242,6 @@ def _initial_runs(zones, slots, settings, first_day, days, tz, sun, multiplier, 
                     mult = multiplier(day)
             else:
                 mult = multiplier
-            if not slot_active_on(slot, day):
-                continue
             entries = []
             for e in slot.zones:
                 zone = zones.get(e.zone_id)
@@ -235,7 +251,7 @@ def _initial_runs(zones, slots, settings, first_day, days, tz, sun, multiplier, 
                     continue
                 if not zone.enabled or e.minutes <= 0:
                     continue
-                if e.days is not None and day.weekday() not in e.days:
+                if not zone_on(slot, e, day, slot_on):
                     continue
                 entries.append(e)
             if not entries:

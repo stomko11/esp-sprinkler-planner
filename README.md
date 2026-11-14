@@ -268,6 +268,8 @@ X % raises the `flow_warning` notification (leak or blocked valve). Service `get
 - Weather → "When the forecast changes after I answered": **keep** (default, the answer and
   its minutes stay as they were) or **follow** (an accepted run follows the new forecast; if the
   suggested action changes, e.g. -50 % becomes skip, you are asked again).
+- Slots: every zone of a slot uses the slot's days or its own days (they replace the slot's
+  days for that zone). The Slots tab can show the schedule **by slot** or **by zone**.
 - Slot editor explains start / finish, offset (minutes before / after the time, sunrise or
   sunset) and "adjust by weather" (off = always the exact minutes).
 - The master switch stops the schedule; manual and quick runs still work. When off, the next

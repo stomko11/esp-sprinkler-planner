@@ -99,6 +99,25 @@ class Days(unittest.TestCase):
         self.assertEqual([r.zone_ids() for r in p.runs], [["z1", "z2"], ["z1"]])
 
 
+    def test_zone_days_override_slot_days(self):
+        # slot Mon + Wed; z2 has own days Tue + Wed -> Mon: z1, Tue: z2 only, Wed: both
+        s = P.Slot("m", "m", P.Anchor(at=time(5, 0)),
+                   (P.SlotZone("z1", 5), P.SlotZone("z2", 5, days=frozenset({1, 2}))), days=frozenset({0, 2}))
+        p = P.plan(ZONES, [s], PLAIN, MON, 7, TZ)
+        self.assertEqual([(r.day.weekday(), r.zone_ids()) for r in p.runs], [(0, ["z1"]), (1, ["z2"]), (2, ["z1", "z2"])])
+
+    def test_zone_days_every_n_narrows(self):
+        s = P.Slot("m", "m", P.Anchor(at=time(5, 0)),
+                   (P.SlotZone("z1", 5), P.SlotZone("z2", 5, days=frozenset({0}))), every_n_days=2, every_n_from=MON)
+        p = P.plan(ZONES, [s], PLAIN, MON, 7, TZ)
+        self.assertEqual([(r.day.weekday(), r.zone_ids()) for r in p.runs],
+                         [(0, ["z1", "z2"]), (2, ["z1"]), (4, ["z1"]), (6, ["z1"])])
+
+    def test_disabled_slot_with_zone_days(self):
+        s = P.Slot("m", "m", P.Anchor(at=time(5, 0)), (P.SlotZone("z1", 5, days=frozenset({1})),), enabled=False)
+        self.assertEqual(P.plan(ZONES, [s], PLAIN, MON, 7, TZ).runs, [])
+
+
 class Skips(unittest.TestCase):
     def test_disabled_zone_and_slot(self):
         zones = [z("z1", 0, enabled=False), z("z2", 1)]

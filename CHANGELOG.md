@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.0
+
+- **Days per zone in a slot:** each zone in a slot follows the slot's weekdays ("slot days") or
+  has its own days, which replace the slot's days for that zone - it can also run on a day the
+  slot has off. ↺ goes back to the slot's days. In an every-N-days slot own days narrow it.
+  So Monday morning can water 3 zones and Tuesday morning 5 with one Morning slot.
+- **Slots tab "By slot / By zone":** the same schedule seen the other way around - per zone, in
+  which slots, how many minutes and on which days.
+
 ## 0.6.1
 
 - Weather decisions only count zones that follow the weather (zone "follow weather" on and slot

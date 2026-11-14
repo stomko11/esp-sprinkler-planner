@@ -27,7 +27,11 @@ const SK = {
   "Raining now (binary or mm/h)": "Pr\u00e1ve pr\u0161\u00ed (bin\u00e1rny alebo mm/h)", "skip at gusts \u2265": "presko\u010di\u0165 pri n\u00e1razoch \u2265",
   "Live sensors": "Aktu\u00e1lne senzory", "Prices": "Ceny", "water per m\u00b3": "voda za m\u00b3", "energy per kWh": "energia za kWh",
   "Cost": "N\u00e1klady", "Last 12 months": "Posledn\u00fdch 12 mesiacov", "less": "menej", "more": "viac",
-  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Click to accept": "Kliknut\u00edm prijme\u0161", "Only {0} of {1} zones follow the weather; still runs: {2}": "Po\u010das\u00edm sa riadi len {0} z {1} z\u00f3n; aj tak be\u017e\u00ed: {2}", "count rain of the last": "po\u010d\u00edta\u0165 zr\u00e1\u017eky za posledn\u00fdch", "{0} mm in the last {1} h": "{0} mm za posledn\u00fdch {1} h",
+  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Click to accept": "Kliknut\u00edm prijme\u0161", "By slot": "Pod\u013ea slotu", "By zone": "Pod\u013ea z\u00f3ny", "Slot": "Slot", "in no slot": "v \u017eiadnom slote",
+  "Each zone: in which slots, how long, on which days.": "Ka\u017ed\u00e1 z\u00f3na: v ktor\u00fdch slotoch, ako dlho, v ktor\u00e9 dni.", "Each slot: when, and which zones.": "Ka\u017ed\u00fd slot: kedy a ktor\u00e9 z\u00f3ny.", "Days": "Dni", "slot days": "dni slotu", "Back to the slot's days": "Sp\u00e4\u0165 na dni slotu",
+  "Give this zone its own days": "Nastavi\u0165 tejto z\u00f3ne vlastn\u00e9 dni", "The slot has this day off; this zone runs anyway.": "Slot m\u00e1 tento de\u0148 vo\u013eno; t\u00e1to z\u00f3na aj tak be\u017e\u00ed.",
+  "help_zone_days": "Dni pod\u013ea z\u00f3ny: \"dni slotu\" sa riadia d\u0148ami vy\u0161\u0161ie. Vlastn\u00e9 dni ich pre z\u00f3nu nahradia - m\u00f4\u017ee be\u017ea\u0165 aj v de\u0148, ke\u010f m\u00e1 slot vo\u013eno (preru\u0161ovane). \u21ba vr\u00e1ti dni slotu.",
+  "help_zone_days_n": "Dni pod\u013ea z\u00f3ny: vlastn\u00e9 dni z\u00fa\u017eia tento slot (ka\u017ed\u00fdch N dn\u00ed) pre z\u00f3nu - be\u017e\u00ed len v N-t\u00e9 dni, ktor\u00e9 padn\u00fa na tieto dni v t\u00fd\u017edni. \u21ba vr\u00e1ti dni slotu.", "Only {0} of {1} zones follow the weather; still runs: {2}": "Po\u010das\u00edm sa riadi len {0} z {1} z\u00f3n; aj tak be\u017e\u00ed: {2}", "count rain of the last": "po\u010d\u00edta\u0165 zr\u00e1\u017eky za posledn\u00fdch", "{0} mm in the last {1} h": "{0} mm za posledn\u00fdch {1} h",
   "help_rain_fallen": "Funguje ak\u00e9ko\u013evek po\u010d\u00edtadlo zr\u00e1\u017eok v mm: event rain, denn\u00e9, t\u00fd\u017edenn\u00e9, mesa\u010dn\u00e9, ro\u010dn\u00e9 alebo celkov\u00e9. Pl\u00e1nova\u010d si s\u00e1m zapisuje ka\u017ed\u00fd n\u00e1rast (aj vynulovanie) a po\u010d\u00edta zr\u00e1\u017eky za posledn\u00e9 hodiny nastaven\u00e9 ni\u017e\u0161ie, aj cez polnoc - denn\u00fd senzor, ktor\u00fd sa vynuloval, sa pre rann\u00fd beh st\u00e1le zapo\u010d\u00edta. Pri v\u00fdbere senzora na\u010d\u00edta aj jeho hist\u00f3riu. Tieto zr\u00e1\u017eky sa pripo\u010d\u00edtaj\u00fa k predpovedi pre behy v najbli\u017e\u0161\u00edch 24 h.",
 
   "help_wind": "Vietor a n\u00e1razy sa kontroluj\u00fa pre behy, ktor\u00e9 za\u010d\u00ednaj\u00fa do hodiny (namiesto predpovede). Vlhkos\u0165 sa len zobrazuje.",
@@ -135,6 +139,8 @@ const EN = {
   "help_rain_now": "Is it raining right now? A binary rain sensor (on = raining) or a rain rate in mm/h (above 0 = raining). Checked for runs that start within the hour.",
   "rain_warn_rate": "This looks like a rain rate (per hour / minute). Use it under \"Raining now\"; here the planner needs the amount that fell (mm).",
   "rain_warn_total": "This looks like a growing total (weekly / monthly / yearly / all-time). Its value would always exceed the limit and skip every run - pick event rain, rain in the last 24 h or daily rain.",
+  "help_zone_days": "Days per zone: \"slot days\" follows the weekdays above. Own days replace them for that zone - it can also run on a day the slot has off (dashed). \u21ba goes back to the slot's days.",
+  "help_zone_days_n": "Days per zone: own days narrow this every-N-days slot for that zone (it runs only on the N-th days that fall on those weekdays). \u21ba goes back to the slot's days.",
   "help_start": "The run starts at this time.", "help_finish": "The run is planned backwards so that it ends at this time.",
   "help_offset_sun": "Offset moves it: -30 = 30 min before, +60 = 1 h after sunrise/sunset (which changes every day).",
   "help_offset_time": "Offset shifts the time by minutes (usually 0 for a fixed time).",
@@ -582,6 +588,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
       <span class="muted nzt">${t("{0} zones", zs.length)} \u00b7 ${fmtMin(total)}</span></div>`;
   }
 
+  _sview() { return this._sv || localStorage.getItem("esp_sprinkler_sview") || "slot"; }
   _zview() { return this._zv || localStorage.getItem("esp_sprinkler_zview") || this._cfg.zones || "list"; }
 
   _zonesToday(zones, plan, todayHist, today, blocked, az) {
@@ -843,6 +850,38 @@ class EspSprinklerPlannerCard extends HTMLElement {
       <div class="hl muted small">${t("less")} <i class="h0"></i><i class="h1"></i><i class="h2"></i><i class="h3"></i><i class="h4"></i> ${t("more")}</div></div>`;
   }
 
+  _daysCell(sl, i, e, idx) {
+    const slotDays = sl.every_n_days ? [0, 1, 2, 3, 4, 5, 6] : (sl.days || [0, 1, 2, 3, 4, 5, 6]);
+    if (!e) return "";
+    if (e.days) return `<span class="days own">${DAYS().map((dn, di) => `<label class="day sm ${e.days.includes(di) ? "on" : ""} ${slotDays.includes(di) ? "" : "extra"}" title="${esc(slotDays.includes(di) ? "" : t("The slot has this day off; this zone runs anyway."))}"><input type="checkbox" data-zday="${i}|${idx}|${di}" ${e.days.includes(di) ? "checked" : ""}>${dn}</label>`).join("")}</span>
+      <button class="tb1" data-act="zdaysclr" data-i="${i}" data-idx="${idx}" title="${esc(t("Back to the slot's days"))}"><ha-icon icon="mdi:calendar-refresh"></ha-icon></button>`;
+    return `<button class="sdays" data-act="zdays" data-i="${i}" data-idx="${idx}" title="${esc(t("Give this zone its own days"))}">${t("slot days")}${sl.every_n_days ? "" : ` <span class="muted">${slotDays.length === 7 ? t("every day") : slotDays.map((x) => DAYS()[x]).join(" ")}</span>`}</button>`;
+  }
+
+  _slotWhen(sl) {
+    const a = sl.anchor || {};
+    const when = `${a.mode === "finish" ? t("Finish by") : t("Start")} ${a.ref === "sunrise" ? t("sunrise") : a.ref === "sunset" ? t("sunset") : a.at || "?"}${a.offset ? ` ${a.offset > 0 ? "+" : ""}${a.offset}\u2032` : ""}`;
+    const days = sl.every_n_days ? t("every {0} days", sl.every_n_days) : sl.days && sl.days.length < 7 ? sl.days.map((x) => DAYS()[x]).join(" ") : t("every day");
+    return `${when} \u00b7 ${days}`;
+  }
+
+  _slotsByZone() {
+    const slots = this.draft.slots || [];
+    return this._zones().map((z) => {
+      const rows = slots.map((sl, i) => {
+        const idx = (sl.zones || []).findIndex((x) => x.zone === z.id); const e = idx >= 0 ? sl.zones[idx] : null;
+        return `<tr class="${sl.enabled === false ? "dis" : ""}"><td><input type="checkbox" data-zin="${i}|${esc(z.id)}" ${e ? "checked" : ""}></td>
+          <td><b>${esc(sl.name || sl.id)}</b><div class="muted small">${esc(this._slotWhen(sl))}${sl.enabled === false ? " \u00b7 " + t("off") : ""}</div></td>
+          <td>${e ? `<input type="number" class="n" min="0.1" step="0.5" data-k="slots.${i}.zones.${idx}.minutes" data-t="num" value="${esc(e.minutes)}">` : ""}</td>
+          <td>${this._daysCell(sl, i, e, idx)}</td></tr>`;
+      }).join("");
+      const used = slots.filter((sl) => (sl.zones || []).some((x) => x.zone === z.id));
+      const sum = used.length ? used.map((sl) => { const e = sl.zones.find((x) => x.zone === z.id) || {}; return `${esc(sl.name || sl.id)} ${e.minutes}\u2032${e.days ? " (" + (e.days.length ? e.days.map((x) => DAYS()[x]).join(" ") : "\u2013") + ")" : ""}`; }).join(" \u00b7 ") : t("in no slot");
+      return this._det(`bz_${z.id}`, false, `${this._mark(z, true)}<b>${esc(z.name)}</b><span class="muted">${sum}</span>`,
+        `<table class="zt"><tr><th></th><th>${t("Slot")}</th><th>${t("Minutes")}</th><th>${t("Days")}</th></tr>${rows}</table>`, "sec");
+    }).join("") + `<div class="help">${t("help_zone_days")}</div>`;
+  }
+
   _tab_slots() {
     const zones = this._zones();
     const slots = this.draft.slots || [];
@@ -880,17 +919,22 @@ class EspSprinklerPlannerCard extends HTMLElement {
             <label><input type="checkbox" data-k="${k("use_multiplier")}" data-t="bool" ${s.use_multiplier !== false ? "checked" : ""}> ${t("adjust by weather")}</label>
           </div>
           <div class="help">${t("help_reverse")} ${t("help_weather")}</div>
-          <table class="zt"><tr><th></th><th>${t("Zone")}</th><th>${t("Minutes")}</th></tr>
+          <table class="zt"><tr><th></th><th>${t("Zone")}</th><th>${t("Minutes")}</th><th>${t("Days")}</th></tr>
             ${zones.map((z) => { const e = zin.get(z.id); const idx = (s.zones || []).findIndex((x) => x.zone === z.id);
               return `<tr class="${z.enabled ? "" : "dis"}"><td><input type="checkbox" data-zin="${i}|${esc(z.id)}" ${e ? "checked" : ""}></td>
                 <td>${this._mark(z)}${esc(z.name)}${z.enabled ? "" : ` <span class='muted'>${t("(disabled)")}</span>`}</td>
-                <td>${e ? `<input type="number" class="n" min="0.1" step="0.5" data-k="slots.${i}.zones.${idx}.minutes" data-t="num" value="${esc(e.minutes)}">${z.max_minutes ? ` <span class="muted">${t("max {0}", z.max_minutes)}</span>` : ""}${e.days ? ` <span class="muted">${t("own days")}: ${e.days.map((x) => DAYS()[x]).join(" ")}</span>` : ""}` : ""}</td></tr>`; }).join("")}
+                <td>${e ? `<input type="number" class="n" min="0.1" step="0.5" data-k="slots.${i}.zones.${idx}.minutes" data-t="num" value="${esc(e.minutes)}">${z.max_minutes ? ` <span class="muted">${t("max {0}", z.max_minutes)}</span>` : ""}` : ""}</td>
+                <td>${this._daysCell(s, i, e, idx)}</td></tr>`; }).join("")}
           </table>
+          <div class="help">${t(s.every_n_days ? "help_zone_days_n" : "help_zone_days")}</div>
           <div class="row"><button data-act="runslot1" data-slot="${esc(s.id)}">${t("Run now")}</button><button data-act="dupslot" data-i="${i}" title="${esc(t("The copy starts switched off, so nothing waters twice."))}"><ha-icon icon="mdi:content-copy"></ha-icon> ${t("Duplicate")}</button><span class="grow"></span><button class="danger" data-act="delslot" data-i="${i}">${t("Delete slot")}</button></div>
         </div>` : ""}
       </div>`;
     }).join("");
-    return `${out || `<div class="muted pad">${t("No slots yet.")}</div>`}
+    const byZone = this._sview() === "zone";
+    return `<div class="row lrow"><span class="seg">${[["slot", "By slot", "mdi:clock-outline"], ["zone", "By zone", "mdi:sprinkler"]].map(([v, l, ic]) => `<button class="ab ${this._sview() === v ? "on" : ""}" data-act="sview" data-v="${v}"><ha-icon icon="${ic}"></ha-icon>${t(l)}</button>`).join("")}</span>
+        <span class="muted small">${t(byZone ? "Each zone: in which slots, how long, on which days." : "Each slot: when, and which zones.")}</span></div>
+      ${byZone ? this._slotsByZone() : (out || `<div class="muted pad">${t("No slots yet.")}</div>`)}
       <div class="row"><button data-act="addslot">${t("+ Add slot")}</button></div>
       <div class="lbl">${t("Preview \u2013 next 7 days")} ${this.dirty ? t("(unsaved)") : ""}</div>
       <div data-preview="week"></div>
@@ -1105,6 +1149,13 @@ class EspSprinklerPlannerCard extends HTMLElement {
       n.events[ev].targets = t0.checked ? [...new Set([...cur, svc])] : cur.filter((x) => x !== svc);
       this._markDirty(true); return;
     }
+    if (t0.dataset.zday) {
+      const [i, idx, di] = t0.dataset.zday.split("|").map(Number); const e = this.draft.slots[i].zones[idx];
+      let d = (e.days || []).slice();
+      d = t0.checked ? [...new Set([...d, di])].sort() : d.filter((x) => x !== di);
+      e.days = d;                       // [] = this zone never runs in this slot (kept visible on purpose)
+      this._markDirty(true); return;
+    }
     if (t0.dataset.day) {
       const [i, di] = t0.dataset.day.split("|").map(Number); const s = this.draft.slots[i];
       let days = s.days ? s.days.slice() : [0, 1, 2, 3, 4, 5, 6];
@@ -1172,6 +1223,13 @@ class EspSprinklerPlannerCard extends HTMLElement {
       } else if (act === "clearstats") {
         if (!confirm(t("Delete ALL statistics (watering time, water, energy, skips, flow)? This cannot be undone."))) return;
         await svc("clear_stats", { confirm: true }); setTimeout(() => { this._stats = null; this._heat = null; this._load(); }, 600);
+      } else if (act === "sview") { this._sv = tg.dataset.v; localStorage.setItem("esp_sprinkler_sview", this._sv); this._render();
+      } else if (act === "zdays") {
+        const s0 = this.draft.slots[+tg.dataset.i]; const e = s0.zones[+tg.dataset.idx];
+        e.days = s0.every_n_days ? [0, 1, 2, 3, 4, 5, 6] : (s0.days || [0, 1, 2, 3, 4, 5, 6]).slice();
+        this._markDirty(true);
+      } else if (act === "zdaysclr") {
+        delete this.draft.slots[+tg.dataset.i].zones[+tg.dataset.idx].days; this._markDirty(true);
       } else if (act === "dupslot") {
         const i = +tg.dataset.i; const src = this.draft.slots[i];
         const ids = new Set(this.draft.slots.map((x) => x.id));
@@ -1376,6 +1434,9 @@ ha-icon.zi { --mdc-icon-size:16px; margin-right:4px; flex:none; } ha-icon.zi.big
 .days { display:inline-flex; flex-wrap:nowrap; gap:4px; }
 label.day { display:inline-grid; place-items:center; min-width:34px; height:26px; padding:0 4px; border-radius:13px; border:1px solid var(--divider-color,#ccc); font-size:12px; cursor:pointer; user-select:none; }
 label.day input { display:none; } label.day.on { background:var(--primary-color,#03a9f4); border-color:transparent; color:#fff; font-weight:600; }
+label.day.sm { min-width:26px; height:22px; font-size:11px; } label.day.extra { border-style:dashed; }
+.days.own { gap:2px; } button > ha-icon { --mdc-icon-size:16px; vertical-align:-3px; }
+button.sdays { padding:3px 10px; border-radius:12px; font-size:12px; }
 .help { font-size:12px; color:var(--secondary-text-color,#888); margin:-2px 0 8px; line-height:1.4; }
 .box { position:relative; } .stopnow { position:absolute; top:8px; right:8px; padding:4px 10px; }
 .rm.ans { cursor:pointer; } .rm.ans:hover { outline:2px solid var(--primary-text-color,#fff); outline-offset:-1px; }
