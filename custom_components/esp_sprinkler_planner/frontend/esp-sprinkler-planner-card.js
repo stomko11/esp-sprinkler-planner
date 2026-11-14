@@ -27,7 +27,12 @@ const SK = {
   "Raining now (binary or mm/h)": "Pr\u00e1ve pr\u0161\u00ed (bin\u00e1rny alebo mm/h)", "skip at gusts \u2265": "presko\u010di\u0165 pri n\u00e1razoch \u2265",
   "Live sensors": "Aktu\u00e1lne senzory", "Prices": "Ceny", "water per m\u00b3": "voda za m\u00b3", "energy per kWh": "energia za kWh",
   "Cost": "N\u00e1klady", "Last 12 months": "Posledn\u00fdch 12 mesiacov", "less": "menej", "more": "viac",
-  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Click to accept": "Kliknut\u00edm prijme\u0161", "learning": "u\u010d\u00ed sa", "The normal flow is learned from the first 5 runs.": "Be\u017en\u00fd prietok sa nau\u010d\u00ed z prv\u00fdch 5 behov.",
+  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Click to accept": "Kliknut\u00edm prijme\u0161",
+  "help_rain_fallen": "D\u00e1\u017e\u010f, ktor\u00fd u\u017e spadol, v mm. Jeho aktu\u00e1lna hodnota sa pripo\u010d\u00edta k predpovedi pre behy v najbli\u017e\u0161\u00edch 24 h a porovn\u00e1 so \"Presko\u010di\u0165, ke\u010f zr\u00e1\u017eky dosiahnu\". Najlep\u0161ie: event rain (aktu\u00e1lna alebo posledn\u00e1 zr\u00e1\u017ekov\u00e1 udalos\u0165, vynuluje sa po suchom obdob\u00ed) alebo zr\u00e1\u017eky za posledn\u00fdch 24 h. Denn\u00fd senzor funguje tie\u017e, ale nuluje sa o polnoci. Nie t\u00fd\u017edenn\u00e9, mesa\u010dn\u00e9, ro\u010dn\u00e9 ani celkov\u00e9 po\u010d\u00edtadl\u00e1 - len rast\u00fa a presko\u010dili by ka\u017ed\u00fd beh.",
+  "help_wind": "Vietor a n\u00e1razy sa kontroluj\u00fa pre behy, ktor\u00e9 za\u010d\u00ednaj\u00fa do hodiny (namiesto predpovede). Vlhkos\u0165 sa len zobrazuje.",
+  "help_rain_now": "Pr\u0161\u00ed pr\u00e1ve teraz? Bin\u00e1rny senzor da\u017e\u010fa (zapnut\u00fd = pr\u0161\u00ed) alebo intenzita zr\u00e1\u017eok v mm/h (nad 0 = pr\u0161\u00ed). Kontroluje sa pre behy, ktor\u00e9 za\u010d\u00ednaj\u00fa do hodiny.",
+  "rain_warn_rate": "Toto vyzer\u00e1 ako intenzita zr\u00e1\u017eok (za hodinu / min\u00fatu). Pou\u017ei ju v \"Pr\u00e1ve pr\u0161\u00ed\"; tu pl\u00e1nova\u010d potrebuje mno\u017estvo, ktor\u00e9 spadlo (mm).",
+  "rain_warn_total": "Toto vyzer\u00e1 ako rast\u00faci s\u00fa\u010det (t\u00fd\u017ede\u0148 / mesiac / rok / celkovo). Hodnota by v\u017edy prekro\u010dila limit a presko\u010dila ka\u017ed\u00fd beh - vyber event rain, zr\u00e1\u017eky za 24 h alebo denn\u00e9 zr\u00e1\u017eky.", "learning": "u\u010d\u00ed sa", "The normal flow is learned from the first 5 runs.": "Be\u017en\u00fd prietok sa nau\u010d\u00ed z prv\u00fdch 5 behov.",
   "Last runs {0} L/min, normal {1} L/min since {2}": "Posledn\u00e9 behy {0} L/min, be\u017en\u00fd {1} L/min od {2}", "last runs / normal": "posledn\u00e9 behy / be\u017en\u00fd",
   "Reset the normal flow (e.g. after cleaning the filter)": "Resetova\u0165 be\u017en\u00fd prietok (napr. po vy\u010disten\u00ed filtra)", "Reset flow of all zones": "Resetova\u0165 prietok v\u0161etk\u00fdch z\u00f3n",
   "Clear statistics": "Vymaza\u0165 \u0161tatistiky", "all zones": "v\u0161etk\u00fdch z\u00f3n", "Reset the normal flow of {0}? The next 5 runs learn it again.": "Resetova\u0165 be\u017en\u00fd prietok {0}? \u010eal\u0161\u00edch 5 behov ho nau\u010d\u00ed znova.",
@@ -123,6 +128,11 @@ const SK = {
 const EN = {
   "plat_android": "Android", "plat_ios": "iOS", "plat_other": "Text only",
   "help_flow": "Sudden change: a run differs from the last runs (leak, broken or blocked valve). Slow drop: the last 5 runs are below the zone's normal flow, learned from its first 5 runs (clogging filter). After cleaning, reset the zone's flow in Stats.",
+  "help_rain_fallen": "Rain that already fell, in mm. Its current value is added to the forecast for runs in the next 24 h and compared with \"Skip when rain reaches\". Best: event rain (current or last rain event, resets after a dry spell) or rain in the last 24 h. A daily sensor works too, but resets at midnight. Not weekly, monthly, yearly or total counters - they only grow and would skip every run.",
+  "help_wind": "Wind and gusts are checked for runs that start within the hour (instead of the forecast). Humidity is shown only.",
+  "help_rain_now": "Is it raining right now? A binary rain sensor (on = raining) or a rain rate in mm/h (above 0 = raining). Checked for runs that start within the hour.",
+  "rain_warn_rate": "This looks like a rain rate (per hour / minute). Use it under \"Raining now\"; here the planner needs the amount that fell (mm).",
+  "rain_warn_total": "This looks like a growing total (weekly / monthly / yearly / all-time). Its value would always exceed the limit and skip every run - pick event rain, rain in the last 24 h or daily rain.",
   "help_start": "The run starts at this time.", "help_finish": "The run is planned backwards so that it ends at this time.",
   "help_offset_sun": "Offset moves it: -30 = 30 min before, +60 = 1 h after sunrise/sunset (which changes every day).",
   "help_offset_time": "Offset shifts the time by minutes (usually 0 for a fixed time).",
@@ -325,6 +335,16 @@ class EspSprinklerPlannerCard extends HTMLElement {
       <b>${gone ? t("Controller entities not found") : t("Controller offline")}</b>${since ? ` <span class="muted">${t("since {0}", since)}</span>` : ""}<br>
       ${gone ? t("The ESPHome device was removed or its entities renamed. Fix it in Settings \u2192 Devices & services \u2192 ESP Sprinkler Planner \u2192 Reconfigure.") : t("The ESP is not reachable. Scheduled runs are skipped until it is back.")}
       <details class="small muted ents"><summary>${t("{0} entities", (gone ? h.missing : h.unavailable).length)}</summary>${list}</details></div></div>`;
+  }
+  _rainWarn(eid) {
+    const st = eid && this._hass.states[eid];
+    if (!st) return "";
+    const a = st.attributes || {}; const u = a.unit_of_measurement || "";
+    const name = `${eid} ${a.friendly_name || ""}`.toLowerCase();
+    let why = "";
+    if (/\/(h|hr|min)$/.test(u)) why = t("rain_warn_rate");
+    else if (/(month|year|annual|total|week|mesa?c|rok|celk|tyzd|t\u00fd\u017ed)/.test(name) || a.state_class === "total_increasing") why = t("rain_warn_total");
+    return why ? `<div class="hintbox warnbox"><ha-icon icon="mdi:alert-outline"></ha-icon><div>${why}</div></div>` : "";
   }
   _cur() { return ((this.data && this.data.weather_now) || {}).currency || "EUR"; }
   _cost(x) {
@@ -961,11 +981,14 @@ class EspSprinklerPlannerCard extends HTMLElement {
         ${mode !== "off" ? `
         <div class="row"><span class="fl">${t("Forecast")}</span>${this._picker(wk("entity"), w.entity, (e) => e.startsWith("weather."), "wxlist", "weather.home")}</div>
         <div class="row"><span class="fl">${t("Rain sensor (fallen)")}</span>${this._picker(wk("rain_sensor"), w.rain_sensor, unitRe(/mm|in/), "rainlist")}</div>
+        <div class="help">${t("help_rain_fallen")}</div>${this._rainWarn(w.rain_sensor)}
         <div class="row"><span class="fl">${t("Temperature sensor")}</span>${this._picker(wk("temp_sensor"), w.temp_sensor, unitRe(/\u00b0|C$|F$/), "templist")}</div>
         <div class="row"><span class="fl">${t("Humidity sensor")}</span>${this._picker(wk("humidity_sensor"), w.humidity_sensor, unitRe(/^%$/), "humlist")}</div>
         <div class="row"><span class="fl">${t("Wind sensor")}</span>${this._picker(wk("wind_sensor"), w.wind_sensor, unitRe(/km\/h|m\/s|mph|kn/), "windlist")}</div>
         <div class="row"><span class="fl">${t("Gust sensor")}</span>${this._picker(wk("gust_sensor"), w.gust_sensor, unitRe(/km\/h|m\/s|mph|kn/), "gustlist")}</div>
+        <div class="help">${t("help_wind")}</div>
         <div class="row"><span class="fl">${t("Raining now (binary or mm/h)")}</span>${this._picker(wk("rain_now"), w.rain_now, (e) => /^(binary_sensor|input_boolean)\./.test(e) || (e.startsWith("sensor.") && /mm\/h|in\/h/.test(this._unitOf(e))), "rnlist")}</div>
+        <div class="help">${t("help_rain_now")}</div>
         <div class="grid">
           <span class="fl">${t("Skip when rain reaches")}</span>${sl("skip_rain", 4, 0, 20, 0.5, " mm")}
           <span class="fl">${t("count forecast")}</span>${sl("window", 12, 0, 48, 1, " h")}
@@ -1357,6 +1380,7 @@ label.day input { display:none; } label.day.on { background:var(--primary-color,
 .svc select.plat { min-height:0; height:22px; padding:0 18px 0 6px; font-size:11px; border-radius:11px; background-position:right 4px center; background-size:12px; }
 .pico { --mdc-icon-size:15px; } .pico.android { color:#3ddc84; } .pico.ios { color:var(--primary-text-color,#fff); } .pico.other { color:var(--secondary-text-color,#888); }
 .warnc { color:#c47a00; } td .bad, td .bad b { color:#e5484d; }
+.hintbox.warnbox { background:#c47a0022; } .hintbox.warnbox ha-icon { color:#c47a00; }
 .hintbox { display:flex; gap:8px; align-items:flex-start; font-size:12px; background:color-mix(in srgb, var(--primary-color,#03a9f4) 12%, transparent); border-radius:8px; padding:6px 10px; margin:4px 0 8px; }
 .hintbox ha-icon { --mdc-icon-size:18px; color:var(--primary-color,#03a9f4); flex:none; }
 .zt { border-collapse:collapse; width:100%; margin:6px 0; } .zt td, .zt th { padding:3px 4px; text-align:left; border-bottom:1px solid var(--divider-color,#eee); font-weight:normal; } .zt th { font-size:11px; color:var(--secondary-text-color,#888); }

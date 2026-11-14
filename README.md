@@ -196,6 +196,15 @@ Settings tab, **Weather**. Mode `off`, `suggest` or `auto`:
   Accept / Dismiss buttons). Nothing changes until accepted.
 - `auto`: applied directly; the weather is read again at the run start. "Run anyway" undoes it.
 
+**Which rain sensor goes where**
+
+| setting | what it is used for | use | do not use |
+|---|---|---|---|
+| Rain sensor (fallen) | mm that already fell; added to the forecast for runs in the next 24 h | event rain (resets after a dry spell), rain last 24 h, daily rain (resets at midnight) | weekly / monthly / yearly / total counters - they only grow and skip every run |
+| Raining now | skip a run that starts within the hour while it rains | binary rain sensor, rain rate in mm/h (> 0 = raining) | amounts in mm |
+
+The card warns when the picked sensor looks like a total or a rate.
+
 ### Quick run, skips
 
 **Quick run** on the Today tab: tick zones, set minutes, ESP order or reverse, run once.

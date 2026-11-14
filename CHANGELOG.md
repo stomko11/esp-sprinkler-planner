@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.4
+
+- Weather settings explain each sensor: what "rain fallen" is used for (mm in the next 24 h, event
+  rain / last 24 h / daily - not weekly, monthly, yearly or total counters), wind and gusts,
+  "raining now" (binary or mm/h). A warning appears when the picked rain sensor looks like a
+  growing total or a rate.
+
 ## 0.5.3
 
 - Notification variables `{{ water_m3 }}` and `{{ expected_water_m3 }}` next to the litre ones.
