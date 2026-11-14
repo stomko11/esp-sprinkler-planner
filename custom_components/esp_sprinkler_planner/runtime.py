@@ -621,9 +621,12 @@ class Runtime:
         if cfg["mode"] == "off":
             return decisions, factors, skips
         try:
-            fixed = {z.id for z in model.zones_from(self.valves, cfg_all.get("zones") or {}) if not z.weather}
+            zone_cfg = {z.id: z for z in model.zones_from(self.valves, cfg_all.get("zones") or {})}
+            _z, slot_list, _st = model.parse(cfg_all, self.valves, self.valve_overlap)
+            slot_weather = {sl.id: sl.use_multiplier for sl in slot_list}
         except model.ConfigError:
-            fixed = set()
+            zone_cfg, slot_weather = {}, {}
+        names = self.zone_names()
         now = dt_util.utcnow()
         have = bool(self.wx.get("hourly") or self.wx.get("daily") or self.wx.get("fallen") is not None
                     or self.wx.get("temp") is not None)
@@ -634,6 +637,13 @@ class Runtime:
             if last is not None and r.start > last + timedelta(hours=24):
                 continue   # beyond the forecast: no decision
             key = run_key(r)
+            # steps the weather may change: zone follows the weather AND its slot has "adjust by weather"
+            follows = [st for st in r.steps
+                       if (zone_cfg.get(st.zone_id) is None or zone_cfg[st.zone_id].weather)
+                       and slot_weather.get(st.slot_id, True)]
+            if not follows:
+                continue                    # nothing in this run listens to the weather: no decision
+            kept = [names.get(st.zone_id, st.zone_id) for st in r.steps if st not in follows]
             d = wx_mod.decide(cfg, dt_util.as_utc(r.start), now, self.wx.get("hourly"), self.wx.get("daily"),
                               self.wx.get("fallen"), self.wx.get("temp"), self.lang,
                               self.wx.get("current")).as_dict()
@@ -650,10 +660,15 @@ class Runtime:
                 sug = self.suggestions.get(key)
                 d["status"] = "dismissed" if sug and sug["status"] == "dismissed" else "auto"
                 applied = d["status"] == "auto"
+            if kept:
+                d["partial"] = True          # the weather changes only part of the run
+                d["kept"] = kept
+                d["changed"] = len(follows)
+                d["total"] = len(r.steps)
             decisions[key] = d
             if not applied:
                 continue
-            if d["action"] == "skip" and not (fixed & set(r.zone_ids())):
+            if d["action"] == "skip" and not kept:
                 skips.append(key)           # the whole run follows the weather: keep it in the plan, dimmed
             else:
                 for sid in r.slot_ids:      # skip: drop only the weather zones; adjust: scale them

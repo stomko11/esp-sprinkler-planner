@@ -27,7 +27,7 @@ const SK = {
   "Raining now (binary or mm/h)": "Pr\u00e1ve pr\u0161\u00ed (bin\u00e1rny alebo mm/h)", "skip at gusts \u2265": "presko\u010di\u0165 pri n\u00e1razoch \u2265",
   "Live sensors": "Aktu\u00e1lne senzory", "Prices": "Ceny", "water per m\u00b3": "voda za m\u00b3", "energy per kWh": "energia za kWh",
   "Cost": "N\u00e1klady", "Last 12 months": "Posledn\u00fdch 12 mesiacov", "less": "menej", "more": "viac",
-  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Click to accept": "Kliknut\u00edm prijme\u0161", "count rain of the last": "po\u010d\u00edta\u0165 zr\u00e1\u017eky za posledn\u00fdch", "{0} mm in the last {1} h": "{0} mm za posledn\u00fdch {1} h",
+  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Click to accept": "Kliknut\u00edm prijme\u0161", "Only {0} of {1} zones follow the weather; still runs: {2}": "Po\u010das\u00edm sa riadi len {0} z {1} z\u00f3n; aj tak be\u017e\u00ed: {2}", "count rain of the last": "po\u010d\u00edta\u0165 zr\u00e1\u017eky za posledn\u00fdch", "{0} mm in the last {1} h": "{0} mm za posledn\u00fdch {1} h",
   "help_rain_fallen": "Funguje ak\u00e9ko\u013evek po\u010d\u00edtadlo zr\u00e1\u017eok v mm: event rain, denn\u00e9, t\u00fd\u017edenn\u00e9, mesa\u010dn\u00e9, ro\u010dn\u00e9 alebo celkov\u00e9. Pl\u00e1nova\u010d si s\u00e1m zapisuje ka\u017ed\u00fd n\u00e1rast (aj vynulovanie) a po\u010d\u00edta zr\u00e1\u017eky za posledn\u00e9 hodiny nastaven\u00e9 ni\u017e\u0161ie, aj cez polnoc - denn\u00fd senzor, ktor\u00fd sa vynuloval, sa pre rann\u00fd beh st\u00e1le zapo\u010d\u00edta. Pri v\u00fdbere senzora na\u010d\u00edta aj jeho hist\u00f3riu. Tieto zr\u00e1\u017eky sa pripo\u010d\u00edtaj\u00fa k predpovedi pre behy v najbli\u017e\u0161\u00edch 24 h.",
 
   "help_wind": "Vietor a n\u00e1razy sa kontroluj\u00fa pre behy, ktor\u00e9 za\u010d\u00ednaj\u00fa do hodiny (namiesto predpovede). Vlhkos\u0165 sa len zobrazuje.",
@@ -445,8 +445,10 @@ class EspSprinklerPlannerCard extends HTMLElement {
       const wxOn = ((this.data.weather_full || {}).mode || "off") !== "off";
       return `<span class="rm ok" title="${esc(tip)}">${wxOn && !dec ? "\u00b7" : "\u2713"}</span>`;
     }
-    const pct = Math.round((dec.factor - 1) * 100);
-    const what = dec.action === "skip" ? "\u2715" : `${pct > 0 ? "+" : "\u2212"}${Math.abs(pct)}%`;
+    const rs = this._runState(r, plan);
+    const what = rs.label;
+    const tip2 = rs.tip;
+    if (dec.partial) return `<span class="rm adj part ${dec.status === "accepted" ? "ans" : ""}" ${dec.status === "accepted" ? `data-act="sugreset" data-key="${esc(k)}"` : dec.status === "pending" ? `data-act="sugyes" data-key="${esc(k)}"` : ""} title="${esc(tip2)}">${what}</span>`;
     if (dec.status === "pending")      // only a suggestion: nothing changes until you accept it
       return `<span class="rm sug ${dec.action}" data-act="sugyes" data-key="${esc(k)}" title="${esc(t("Suggestion (not applied): {0}", tip))}\n${esc(t("Click to accept"))}"><ha-icon icon="mdi:lightbulb-on-outline"></ha-icon>${what}</span>`;
     if (dec.status === "accepted")
@@ -465,9 +467,11 @@ class EspSprinklerPlannerCard extends HTMLElement {
       return { kind: wxOn && !dec ? "none" : "ok", label: wxOn && !dec ? "\u00b7" : "\u2713", tip: tip(dec) };
     }
     const pct = Math.round((dec.factor - 1) * 100);
-    const label = dec.action === "skip" ? "\u2715" : `${pct > 0 ? "+" : "\u2212"}${Math.abs(pct)}%`;
-    const kind = (dec.status === "pending" ? "sug-" : "") + (dec.action === "skip" ? "skip" : "adj");
-    return { kind, label, tip: (dec.status === "pending" ? t("Suggestion (not applied): {0}", tip(dec)) : tip(dec)) };
+    let label = dec.action === "skip" ? "\u2715" : `${pct > 0 ? "+" : "\u2212"}${Math.abs(pct)}%`;
+    if (dec.partial) label += ` ${dec.changed}/${dec.total}`;
+    const kind = (dec.status === "pending" ? "sug-" : "") + (dec.action === "skip" ? (dec.partial ? "adj" : "skip") : "adj");
+    const part = dec.partial ? "\n" + t("Only {0} of {1} zones follow the weather; still runs: {2}", dec.changed, dec.total, dec.kept.join(", ")) : "";
+    return { kind, label, tip: (dec.status === "pending" ? t("Suggestion (not applied): {0}", tip(dec)) : tip(dec)) + part };
   }
 
   // one mark per day: the label when every run of the day ends the same, plus one dot per run
@@ -1354,6 +1358,7 @@ ha-icon.zi { --mdc-icon-size:16px; margin-right:4px; flex:none; } ha-icon.zi.big
 .wwx { width:212px; flex:none; font-size:12px; display:grid; grid-template-columns:20px 30px 50px 62px; align-items:center; white-space:nowrap; }
 .wwx .wxi ha-icon { --mdc-icon-size:16px; } .wxt { text-align:right; padding-right:4px; } .wxm { display:flex; gap:3px; }
 .rm { box-sizing:border-box; display:inline-flex; align-items:center; justify-content:center; gap:1px; width:46px; height:18px; font-size:11px; line-height:1; font-weight:700; border-radius:6px; padding:0 2px; border:1px solid transparent; background:var(--secondary-background-color,#eee); vertical-align:middle; white-space:nowrap; }
+.rm.part { font-size:10px; width:auto; min-width:46px; padding:0 4px; }
 .rm.ok { color:#2fbf71; } .rm.skip { color:#fff; background:#e5484d; } .rm.adj { color:#fff; background:#c47a00; } .rm.user { color:var(--secondary-text-color,#888); }
 .rm.sug ha-icon { width:11px; height:11px; display:inline-flex; --mdc-icon-size:11px; overflow:hidden; }
 .rm.sug { background:transparent; border:1px dashed currentColor; cursor:pointer; } .rm.sug:hover { background:currentColor; } .rm.sug:hover, .rm.sug:hover ha-icon { color:#fff !important; }

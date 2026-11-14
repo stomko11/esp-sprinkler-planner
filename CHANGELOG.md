@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.1
+
+- Weather decisions only count zones that follow the weather (zone "follow weather" on and slot
+  "adjust by weather" on). A run where only some zones follow the weather shows e.g. "✕ 3/5" with
+  the zones that still run, instead of a plain ✕ while the run still started. A run where no zone
+  follows the weather gets no weather mark at all.
+- Notification variables `{{ water_m3 }}` / `{{ expected_water_m3 }}` (already in 0.5.3) and the
+  tracked rain of 0.6.0.
+
 ## 0.6.0
 
 - **Rain that fell is tracked by the planner:** any rain counter works (event, daily, weekly,
