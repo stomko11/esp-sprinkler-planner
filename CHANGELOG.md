@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Duplicate a slot:** button in the slot editor. The copy goes right below the original, switched
+  off (so nothing waters twice) and opened for editing; Save to keep it.
+
 ## 0.5.1
 
 - **Controller offline / removed is clearly shown:** red banner on every tab (offline since when,

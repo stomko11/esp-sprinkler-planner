@@ -27,7 +27,8 @@ const SK = {
   "Raining now (binary or mm/h)": "Pr\u00e1ve pr\u0161\u00ed (bin\u00e1rny alebo mm/h)", "skip at gusts \u2265": "presko\u010di\u0165 pri n\u00e1razoch \u2265",
   "Live sensors": "Aktu\u00e1lne senzory", "Prices": "Ceny", "water per m\u00b3": "voda za m\u00b3", "energy per kWh": "energia za kWh",
   "Cost": "N\u00e1klady", "Last 12 months": "Posledn\u00fdch 12 mesiacov", "less": "menej", "more": "viac",
-  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Click to accept": "Kliknut\u00edm prijme\u0161", "Click for the day's runs.": "Klikni pre behy d\u0148a.",
+  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Click to accept": "Kliknut\u00edm prijme\u0161", "Duplicate": "Duplikova\u0165", "copy": "k\u00f3pia",
+  "The copy starts switched off, so nothing waters twice.": "K\u00f3pia je na za\u010diatku vypnut\u00e1, aby sa ni\u010d nepolievalo dvakr\u00e1t.", "Click for the day's runs.": "Klikni pre behy d\u0148a.",
   "Offline": "Offline", "Controller offline": "Ovl\u00e1da\u010d je offline", "Controller entities not found": "Entity ovl\u00e1da\u010da sa nena\u0161li", "since {0}": "od {0}",
   "The ESPHome device was removed or its entities renamed. Fix it in Settings \u2192 Devices & services \u2192 ESP Sprinkler Planner \u2192 Reconfigure.": "ESPHome zariadenie bolo odstr\u00e1nen\u00e9 alebo premenovan\u00e9 jeho entity. Oprav to v Nastavenia \u2192 Zariadenia a slu\u017eby \u2192 ESP Sprinkler Planner \u2192 Prekonfigurova\u0165.",
   "The ESP is not reachable. Scheduled runs are skipped until it is back.": "ESP nie je dostupn\u00e9. Napl\u00e1novan\u00e9 behy sa presko\u010dia, k\u00fdm sa nevr\u00e1ti.",
@@ -841,7 +842,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
                 <td>${this._mark(z)}${esc(z.name)}${z.enabled ? "" : ` <span class='muted'>${t("(disabled)")}</span>`}</td>
                 <td>${e ? `<input type="number" class="n" min="0.1" step="0.5" data-k="slots.${i}.zones.${idx}.minutes" data-t="num" value="${esc(e.minutes)}">${z.max_minutes ? ` <span class="muted">${t("max {0}", z.max_minutes)}</span>` : ""}${e.days ? ` <span class="muted">${t("own days")}: ${e.days.map((x) => DAYS()[x]).join(" ")}</span>` : ""}` : ""}</td></tr>`; }).join("")}
           </table>
-          <div class="row"><button data-act="runslot1" data-slot="${esc(s.id)}">${t("Run now")}</button><span class="grow"></span><button class="danger" data-act="delslot" data-i="${i}">${t("Delete slot")}</button></div>
+          <div class="row"><button data-act="runslot1" data-slot="${esc(s.id)}">${t("Run now")}</button><button data-act="dupslot" data-i="${i}" title="${esc(t("The copy starts switched off, so nothing waters twice."))}"><ha-icon icon="mdi:content-copy"></ha-icon> ${t("Duplicate")}</button><span class="grow"></span><button class="danger" data-act="delslot" data-i="${i}">${t("Delete slot")}</button></div>
         </div>` : ""}
       </div>`;
     }).join("");
@@ -1102,6 +1103,14 @@ class EspSprinklerPlannerCard extends HTMLElement {
         const ids = new Set(this.draft.slots.map((s) => s.id)); let n = this.draft.slots.length + 1; while (ids.has(`slot_${n}`)) n++;
         this.draft.slots.push({ id: `slot_${n}`, name: `Slot ${n}`, enabled: true, anchor: { mode: "start", ref: "time", at: "06:00" }, zones: [] });
         this._open.add(this.draft.slots.length - 1); this._markDirty(true);
+      } else if (act === "dupslot") {
+        const i = +tg.dataset.i; const src = this.draft.slots[i];
+        const ids = new Set(this.draft.slots.map((x) => x.id));
+        const base = String(src.id).replace(/_\d+$/, ""); let n = 2; while (ids.has(`${base}_${n}`)) n++;
+        const copy = clone(src); copy.id = `${base}_${n}`; copy.name = `${src.name || src.id} (${t("copy")})`; copy.enabled = false;
+        this.draft.slots.splice(i + 1, 0, copy);
+        this._open = new Set([...this._open].map((x) => (x > i ? x + 1 : x))); this._open.add(i + 1);
+        this._markDirty(true);
       } else if (act === "delslot") {
         const i = +tg.dataset.i; if (!confirm(t("Delete slot \"{0}\"?", this.draft.slots[i].name || this.draft.slots[i].id))) return;
         this.draft.slots.splice(i, 1); this._open.clear(); this._markDirty(true);
