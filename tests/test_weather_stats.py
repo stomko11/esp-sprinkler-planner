@@ -128,7 +128,7 @@ class WeatherTest(unittest.TestCase):
 
 class StatsTest(unittest.TestCase):
     def test_meters(self):
-        self.assertEqual(S.meters_from_dict({"flow": "sensor.f", "pump_power": ""}), {"flow": "sensor.f", "flow_warn": 30.0})
+        self.assertEqual(S.meters_from_dict({"flow": "sensor.f", "pump_power": ""}), {"flow": "sensor.f", "flow_warn": 30.0, "drift_warn": 15.0})
         with self.assertRaises(S.MetersConfigError):
             S.meters_from_dict({"flow": "switch.x"})
         with self.assertRaises(S.MetersConfigError):
@@ -192,3 +192,23 @@ class StatsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DriftTest(unittest.TestCase):
+    def test_baseline_and_slow_drift(self):
+        self.assertIsNone(S.baseline_from([10, 10, 10]))
+        self.assertEqual(S.baseline_from([10, 10.2, 9.8, 10.1, 9.9, 5]), 10.0)
+        samples = []
+        for v in (10, 10, 9.8, 9.6, 9.3, 9.0, 8.7, 8.4, 8.1, 7.8):   # 2-3 % per run: no single jump
+            self.assertIsNone(S.flow_check(samples, v, 30))
+            samples = S.push_sample(samples, v)
+        d = S.drift_check(10.0, samples, 15)
+        self.assertIsNotNone(d)
+        self.assertEqual((d[0], d[1], d[2]), (8.4, 10.0, -16))
+        self.assertIsNone(S.drift_check(10.0, samples, 20))
+        self.assertIsNone(S.drift_check(None, samples, 15))
+
+    def test_meter_settings(self):
+        self.assertEqual(S.meters_from_dict({})["drift_warn"], 15)
+        with self.assertRaises(S.MetersConfigError):
+            S.meters_from_dict({"drift_warn": 95})

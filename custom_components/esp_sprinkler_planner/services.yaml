@@ -182,3 +182,23 @@ clear_skips:
       default: true
       selector:
         boolean:
+reset_flow:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: esp_sprinkler_planner
+    zone:
+      example: zone_3
+      selector:
+        text:
+clear_stats:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: esp_sprinkler_planner
+    confirm:
+      required: true
+      selector:
+        boolean:

@@ -109,3 +109,15 @@ class ZoneCountTest(unittest.TestCase):
         self.assertEqual(v["zone_count"], 2)
         self.assertNotIn("zone_count", N.variables("flow_warning", run, {}, "Garden"))
         self.assertEqual(N.variables("finished", None, {}, "Garden")["zone_count"], 0)
+
+
+class UsageVarsTest(unittest.TestCase):
+    def test_dash_without_meter(self):
+        v = N.variables("finished", None, {}, "Garden", {"water_l": None, "energy_kwh": 0.4})
+        self.assertEqual((v["water_l"], v["energy_kwh"], v["cost"]), ("-", 0.4, "-"))
+        self.assertIn("expected_water_l", N.variables("started", None, {}, "Garden"))
+
+    def test_platform_override_validation(self):
+        N.merged({"platforms": {"notify.stefan": "android"}})
+        with self.assertRaises(N.NotifyConfigError):
+            N.merged({"platforms": {"notify.stefan": "nokia"}})

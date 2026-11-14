@@ -63,6 +63,8 @@ class Runtime:
         self.skip_done: List[str] = []                    # user skips whose start has passed (shown dimmed)
         self.stats: Dict[str, Any] = {}
         self.flow_samples: Dict[str, List[float]] = {}
+        self.flow_base: Dict[str, Dict[str, Any]] = {}    # zone -> {"flow": L/min, "since": iso, "warned": bool}
+        self._base_samples: Dict[str, List[float]] = {}   # first runs after setup / reset (for the baseline)
         self._meter: Dict[str, Dict[str, Any]] = {}       # zone id -> readings while open
         self._run_meter: Optional[Dict[str, Any]] = None  # pump energy over the whole run
         self._dyn_unsubs: List[Callable[[], None]] = []
@@ -137,6 +139,7 @@ class Runtime:
         await self.store.async_save({"config": self.config, "flags": self.flags, "skip": self.skip,
                                      "active": self.active, "history": self.history, "last_run": self.last_run,
                                      "stats": self.stats, "flow_samples": self.flow_samples,
+                                     "flow_base": self.flow_base, "base_samples": self._base_samples,
                                      "suggestions": self.suggestions, "skip_done": self.skip_done})
 
     def _event(self, kind: str, **data) -> None:
@@ -147,6 +150,8 @@ class Runtime:
         _LOGGER.info("%s: %s %s", self.entry.title, kind, data.get("reason") or "")
         if kind in notify_logic.EVENTS:
             extra = {k: v for k, v in data.items() if k not in ("run", "calls")}
+            if kind in ("planned", "started", "skipped"):
+                extra.setdefault("expected_water_l", self.expected_water(data.get("run")))
             if kind == "dry_run":
                 extra["calls"] = len(data.get("calls") or [])
             self.notify(kind, data.get("run"), **extra)
@@ -213,7 +218,9 @@ class Runtime:
         extra = {"reason": "test", "source": "test", "zone": (rd or {}).get("zones", [{}])[0].get("name") if rd else None,
                  "zone_minutes": 5, "actual_minutes": 0, "pump": (self.config.get("pump") or {}).get("entity"),
                  "lead": 30, "calls": 0, "action": "skip", "factor": "70 %", "flow": 12.5, "usual": 9.8,
-                 "direction": "high"}
+                 "direction": "high", "baseline": 14.2, "change": -18, "since": "01.05.2026",
+                 "water_l": 245.5, "energy_kwh": 0.42, "avg_flow": 12.3,
+                 "cost": f"0.89 {self.hass.config.currency or ''}".strip(), "expected_water_l": 250}
         return await self._send(event, rd, extra, force=targets, override=override)
 
     @callback
@@ -342,6 +349,15 @@ class Runtime:
             elif mt["power"]:
                 kwh = mt["power"].total(t) / 1000.0
         stats_mod.add_zone(self.stats, day, zid, minutes, litres, kwh)
+        if self.active and not self.active.get("dry_run"):
+            m = self.active.setdefault("metered", {"l": 0.0, "kwh": 0.0, "lmin": 0.0, "has_l": False, "has_kwh": False})
+            if litres is not None:
+                m["l"] += litres
+                m["lmin"] += minutes
+                m["has_l"] = True
+            if kwh is not None:
+                m["kwh"] += kwh
+                m["has_kwh"] = True
         if litres is not None and minutes >= 0.5:
             flow = litres / minutes
             warn = stats_mod.flow_check(self.flow_samples.get(zid, []), flow, self.meters.get("flow_warn", 30))
@@ -351,6 +367,7 @@ class Runtime:
                 direction = ({"high": "vysok\u00fd", "low": "n\u00edzky"} if sk else {"high": "high", "low": "low"})[warn[0]]
                 self._event("flow_warning", zone=name, flow=warn[1], usual=warn[2], direction=direction)
             self.flow_samples[zid] = stats_mod.push_sample(self.flow_samples.get(zid, []), flow)
+            self._track_baseline(zid, flow)
 
     @callback
     def _on_meter(self, event: Event) -> None:
@@ -374,10 +391,10 @@ class Runtime:
                            if m.get("pump_power") else None,
                            "flow": None}
 
-    def _run_meter_stop(self) -> None:
+    def _run_meter_stop(self) -> Optional[float]:
         rm, self._run_meter = self._run_meter, None
         if not rm:
-            return
+            return None
         kwh = None
         if rm["energy0"] is not None:
             e1 = self._total("pump_energy")
@@ -387,6 +404,70 @@ class Runtime:
             kwh = rm["power"].total(dt_util.utcnow()) / 1000.0
         if kwh:
             stats_mod.add_pump_energy(self.stats, dt_util.now().date().isoformat(), kwh)
+        return kwh
+
+    def _track_baseline(self, zid: str, flow: float) -> None:
+        base = self.flow_base.get(zid)
+        if base is None:
+            got = self._base_samples.setdefault(zid, [])
+            got.append(round(flow, 2))
+            b = stats_mod.baseline_from(got)
+            if b is not None:
+                self.flow_base[zid] = {"flow": b, "since": dt_util.utcnow().isoformat(), "warned": False}
+                self._base_samples.pop(zid, None)
+            return
+        drift = stats_mod.drift_check(base["flow"], self.flow_samples.get(zid, []), self.meters.get("drift_warn", 15))
+        if drift and not base.get("warned"):
+            base["warned"] = True
+            since = dt_util.as_local(dt_util.parse_datetime(base["since"])).strftime("%d.%m.%Y")
+            self._event("flow_drift", zone=self.zone_names().get(zid, zid), flow=drift[0], baseline=drift[1],
+                        change=drift[2], since=since)
+        elif not drift and base.get("warned"):
+            base["warned"] = False          # back to normal (e.g. filter cleaned): warn again next time
+
+    async def reset_flow(self, zone: Optional[str] = None) -> List[str]:
+        """Forget the normal flow of one zone (or all): the next runs define it again."""
+        zones = [zone] if zone else list({*self.flow_base, *self.flow_samples, *self._base_samples})
+        for z in zones:
+            self.flow_base.pop(z, None)
+            self.flow_samples.pop(z, None)
+            self._base_samples.pop(z, None)
+        await self._save()
+        self._changed()
+        return zones
+
+    async def clear_stats(self) -> None:
+        """Delete all statistics (minutes, water, energy, skips) and the flow baselines."""
+        self.stats = {}
+        self.history = {}
+        self.last_run = {}
+        await self.reset_flow()
+
+    def _usage(self, metered: Optional[Dict[str, Any]], run_kwh: Optional[float]) -> Dict[str, Any]:
+        """Water / energy / cost of a finished run for the notification variables (None = no meter)."""
+        m = metered or {}
+        water = round(m["l"], 1) if m.get("has_l") else None
+        kwh = run_kwh if run_kwh is not None else (m["kwh"] if m.get("has_kwh") else None)
+        kwh = round(kwh, 3) if kwh is not None else None
+        meters = self.meters
+        cost = None
+        if (water is not None and meters.get("water_price")) or (kwh is not None and meters.get("energy_price")):
+            c = (water or 0) / 1000 * (meters.get("water_price") or 0) + (kwh or 0) * (meters.get("energy_price") or 0)
+            cost = f"{c:.2f} {self.hass.config.currency or ''}".strip()
+        avg = round(m["l"] / m["lmin"], 1) if m.get("has_l") and m.get("lmin") else None
+        return {"water_l": water, "energy_kwh": kwh, "cost": cost, "avg_flow": avg}
+
+    def expected_water(self, run: Optional[Dict[str, Any]]) -> Optional[float]:
+        """Litres a run will use from each zone's usual flow; None until every zone has samples."""
+        if not run:
+            return None
+        total = 0.0
+        for z in run.get("zones") or []:
+            s = sorted(self.flow_samples.get(z["zone"]) or [])
+            if not s:
+                return None
+            total += s[len(s) // 2] * float(z["minutes"])
+        return round(total, 0)
 
     # ------------------------------------------------------------------ weather
     async def refresh_weather(self) -> None:
@@ -648,6 +729,8 @@ class Runtime:
         if not self.stats and self.history:
             stats_mod.seed_from_history(self.stats, self.history)
         self.flow_samples = data.get("flow_samples") or {}
+        self.flow_base = data.get("flow_base") or {}
+        self._base_samples = data.get("base_samples") or {}
         self.suggestions = data.get("suggestions") or {}
         if (self.config.get("weather") or {}).get("mode", "off") != "suggest":
             self.suggestions = {k: v for k, v in self.suggestions.items() if v.get("status") != "pending"}
@@ -788,7 +871,7 @@ class Runtime:
         async def _fire(_now):
             self._planned_timer = None
             self._noticed.add(key)
-            self.notify("planned", rd, lead=lead)
+            self.notify("planned", rd, lead=lead, expected_water_l=self.expected_water(rd))
 
         self._planned_timer = async_track_point_in_utc_time(self.hass, _fire, at)
 
@@ -943,11 +1026,11 @@ class Runtime:
         p = self.pump
         if active and not active.get("dry_run") and p and p["auto_off"] and active.get("pump_started"):
             await self._pump_switch(False)
-        if active and not active.get("dry_run"):
-            self._run_meter_stop()
+        run_kwh = self._run_meter_stop() if active and not active.get("dry_run") else None
         await self._save()
         actual = round(sum(((active or {}).get("actual") or {}).values()), 1)
-        self._event(kind, reason=reason, run=(active or {}).get("run"), actual_minutes=actual)
+        self._event(kind, reason=reason, run=(active or {}).get("run"), actual_minutes=actual,
+                    **self._usage((active or {}).get("metered"), run_kwh))
         await self.async_replan()
 
     @callback

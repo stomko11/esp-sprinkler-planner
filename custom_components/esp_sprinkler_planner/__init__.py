@@ -38,6 +38,8 @@ SCHEMAS = {
     "unskip": vol.Schema({ENTRY: cv.string, vol.Optional("run"): cv.string}),
     "skip_run": vol.Schema({ENTRY: cv.string, vol.Required("run"): cv.string}),
     "clear_skips": vol.Schema({ENTRY: cv.string, vol.Optional("answers", default=True): cv.boolean}),
+    "reset_flow": vol.Schema({ENTRY: cv.string, vol.Optional("zone"): cv.string}),
+    "clear_stats": vol.Schema({ENTRY: cv.string, vol.Required("confirm"): cv.boolean}),
     "answer_suggestion": vol.Schema({ENTRY: cv.string, vol.Required("run"): cv.string,
                                      vol.Optional("accept"): cv.boolean, vol.Optional("reset", default=False): cv.boolean}),
     "refresh_weather": vol.Schema({ENTRY: cv.string}),
@@ -98,6 +100,12 @@ async def async_setup(hass: HomeAssistant, config) -> bool:
                 await rt.run_zone(d["zone"], d["minutes"])
             elif call.service == "quick_run":
                 await rt.quick_run(d["zones"], d["reverse"])
+            elif call.service == "reset_flow":
+                return {"reset": await rt.reset_flow(d.get("zone"))}
+            elif call.service == "clear_stats":
+                if not d["confirm"]:
+                    raise ConfigError("set confirm: true to delete all statistics")
+                await rt.clear_stats()
             elif call.service == "clear_skips":
                 return await rt.clear_skips(d["answers"])
             elif call.service == "skip_run":
@@ -128,7 +136,7 @@ async def async_setup(hass: HomeAssistant, config) -> bool:
 
     for name, schema in SCHEMAS.items():
         support = {"get_plan": SupportsResponse.ONLY, "configure": SupportsResponse.OPTIONAL,
-                   "skip_next": SupportsResponse.OPTIONAL, "unskip": SupportsResponse.OPTIONAL, "skip_run": SupportsResponse.OPTIONAL, "clear_skips": SupportsResponse.OPTIONAL,
+                   "skip_next": SupportsResponse.OPTIONAL, "unskip": SupportsResponse.OPTIONAL, "skip_run": SupportsResponse.OPTIONAL, "clear_skips": SupportsResponse.OPTIONAL, "reset_flow": SupportsResponse.OPTIONAL,
                    "get_stats": SupportsResponse.ONLY,
                    "test_notification": SupportsResponse.OPTIONAL}.get(name, SupportsResponse.NONE)
         hass.services.async_register(DOMAIN, name, handle, schema=schema, supports_response=support)

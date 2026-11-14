@@ -27,7 +27,15 @@ const SK = {
   "Raining now (binary or mm/h)": "Pr\u00e1ve pr\u0161\u00ed (bin\u00e1rny alebo mm/h)", "skip at gusts \u2265": "presko\u010di\u0165 pri n\u00e1razoch \u2265",
   "Live sensors": "Aktu\u00e1lne senzory", "Prices": "Ceny", "water per m\u00b3": "voda za m\u00b3", "energy per kWh": "energia za kWh",
   "Cost": "N\u00e1klady", "Last 12 months": "Posledn\u00fdch 12 mesiacov", "less": "menej", "more": "viac",
-  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Click to accept": "Kliknut\u00edm prijme\u0161", "Duplicate": "Duplikova\u0165", "copy": "k\u00f3pia",
+  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Click to accept": "Kliknut\u00edm prijme\u0161", "learning": "u\u010d\u00ed sa", "The normal flow is learned from the first 5 runs.": "Be\u017en\u00fd prietok sa nau\u010d\u00ed z prv\u00fdch 5 behov.",
+  "Last runs {0} L/min, normal {1} L/min since {2}": "Posledn\u00e9 behy {0} L/min, be\u017en\u00fd {1} L/min od {2}", "last runs / normal": "posledn\u00e9 behy / be\u017en\u00fd",
+  "Reset the normal flow (e.g. after cleaning the filter)": "Resetova\u0165 be\u017en\u00fd prietok (napr. po vy\u010disten\u00ed filtra)", "Reset flow of all zones": "Resetova\u0165 prietok v\u0161etk\u00fdch z\u00f3n",
+  "Clear statistics": "Vymaza\u0165 \u0161tatistiky", "all zones": "v\u0161etk\u00fdch z\u00f3n", "Reset the normal flow of {0}? The next 5 runs learn it again.": "Resetova\u0165 be\u017en\u00fd prietok {0}? \u010eal\u0161\u00edch 5 behov ho nau\u010d\u00ed znova.",
+  "Delete ALL statistics (watering time, water, energy, skips, flow)? This cannot be undone.": "Vymaza\u0165 V\u0160ETKY \u0161tatistiky (\u010das, voda, energia, presko\u010denia, prietok)? Ned\u00e1 sa to vr\u00e1ti\u0165.",
+  "warn when the flow slowly drops by": "upozorni\u0165, ke\u010f prietok pomaly klesne o", "flow_drift_ev": "klesaj\u00faci prietok",
+  "help_flow": "N\u00e1hla zmena: beh sa l\u00ed\u0161i od posledn\u00fdch behov (\u00fanik, pokazen\u00fd alebo upchat\u00fd ventil). Pomal\u00fd pokles: posledn\u00fdch 5 behov je pod be\u017en\u00fdm prietokom z\u00f3ny, nau\u010den\u00fdm z jej prv\u00fdch 5 behov (zan\u00e1\u0161aj\u00faci sa filter). Po vy\u010disten\u00ed resetuj prietok z\u00f3ny v \u0160tatistik\u00e1ch.", "Auto ({0})": "Auto ({0})", "plat_android": "Android", "plat_ios": "iOS", "plat_other": "Len text",
+  "How this recipient is sent: Android and iOS get buttons, Text only gets title + message.": "Ako sa posiela tomuto pr\u00edjemcovi: Android a iOS dostan\u00fa tla\u010didl\u00e1, Len text len nadpis a spr\u00e1vu.",
+  "No buttons for {0}: sent as text only. If it is a phone (for example a notify group or your own notify service around the app), set it to Android or iOS above.": "Bez tla\u010didiel pre {0}: posiela sa len text. Ak je to telef\u00f3n (napr. notify skupina alebo vlastn\u00e1 notify slu\u017eba nad aplik\u00e1ciou), nastav ho vy\u0161\u0161ie na Android alebo iOS.", "Duplicate": "Duplikova\u0165", "copy": "k\u00f3pia",
   "The copy starts switched off, so nothing waters twice.": "K\u00f3pia je na za\u010diatku vypnut\u00e1, aby sa ni\u010d nepolievalo dvakr\u00e1t.", "Click for the day's runs.": "Klikni pre behy d\u0148a.",
   "Offline": "Offline", "Controller offline": "Ovl\u00e1da\u010d je offline", "Controller entities not found": "Entity ovl\u00e1da\u010da sa nena\u0161li", "since {0}": "od {0}",
   "The ESPHome device was removed or its entities renamed. Fix it in Settings \u2192 Devices & services \u2192 ESP Sprinkler Planner \u2192 Reconfigure.": "ESPHome zariadenie bolo odstr\u00e1nen\u00e9 alebo premenovan\u00e9 jeho entity. Oprav to v Nastavenia \u2192 Zariadenia a slu\u017eby \u2192 ESP Sprinkler Planner \u2192 Prekonfigurova\u0165.",
@@ -113,6 +121,8 @@ const SK = {
   "at most": "najviac", "Zones with follow weather off are never changed.": "Z\u00f3ny s vypnut\u00fdm riaden\u00edm po\u010das\u00edm sa nemenia.",
 };
 const EN = {
+  "plat_android": "Android", "plat_ios": "iOS", "plat_other": "Text only",
+  "help_flow": "Sudden change: a run differs from the last runs (leak, broken or blocked valve). Slow drop: the last 5 runs are below the zone's normal flow, learned from its first 5 runs (clogging filter). After cleaning, reset the zone's flow in Stats.",
   "help_start": "The run starts at this time.", "help_finish": "The run is planned backwards so that it ends at this time.",
   "help_offset_sun": "Offset moves it: -30 = 30 min before, +60 = 1 h after sunrise/sunset (which changes every day).",
   "help_offset_time": "Offset shifts the time by minutes (usually 0 for a fixed time).",
@@ -758,14 +768,21 @@ class EspSprinklerPlannerCard extends HTMLElement {
       p.min += v.min || 0; p.l += v.l || 0; p.kwh += v.kwh || 0; p.runs += v.runs || 0; p.lmin += v.lmin || 0; p.emin += v.emin || 0; allMin += v.lmin || 0; allL += v.l || 0; }); });
     const usual = d.usual_flow || {};
     const maxMin = Math.max(1, ...Object.values(per).map((x) => x.min));
-    const flowCell = (p, z) => { const avg = p.l && p.lmin ? r1(p.l / p.lmin) : null; const u = usual[z.id] ? r1(usual[z.id]) : null;
-      return avg || u ? `${avg ?? "\u2013"}<span class="muted"> / ${u ?? "\u2013"}</span>` : "\u2013"; };
+    const base = d.flow_base || {}; const recent = d.recent_flow || {};
+    const flowCell = (p, z) => {
+      const b = base[z.id]; const r = recent[z.id];
+      if (!b && !r) return "\u2013";
+      if (!b) return `${r1(r)} <span class="muted" title="${esc(t("The normal flow is learned from the first 5 runs."))}">(${t("learning")})</span>`;
+      const ch = r ? Math.round((r - b.flow) / b.flow * 100) : 0;
+      const cls = ch <= -((d.meters || {}).drift_warn || 15) ? "bad" : ch <= -5 ? "warnc" : "";
+      return `<span class="${cls}" title="${esc(t("Last runs {0} L/min, normal {1} L/min since {2}", r1(r), r1(b.flow), new Date(b.since).toLocaleDateString()))}">${r1(r)} <span class="muted">/ ${r1(b.flow)}</span>${ch ? ` <b>${ch > 0 ? "+" : ""}${ch}%</b>` : ""}</span>`;
+    };
     const ztable = `<table class="zt st"><tr><th>${t("Zone")}</th><th>${t("Time")}</th><th class="r">${t("runs")}</th>
-        ${hasL ? `<th class="r">${t("Water")}</th><th class="r" title="${esc(t("average / usual"))}">L/min</th>` : ""}${hasK ? `<th class="r">${t("Energy")}</th><th class="r">W</th>` : ""}</tr>
+        ${hasL ? `<th class="r">${t("Water")}</th><th class="r" title="${esc(t("last runs / normal"))}">L/min</th><th></th>` : ""}${hasK ? `<th class="r">${t("Energy")}</th><th class="r">W</th>` : ""}</tr>
       ${zones.map((z) => { const p = per[z.id] || { min: 0, l: 0, kwh: 0, runs: 0 };
         return `<tr class="${p.min ? "" : "zero"}"><td class="zc">${this._mark(z)}${esc(z.name)}</td>
           <td><div class="tb"><span class="mbar"><i style="width:${(p.min / maxMin * 100).toFixed(0)}%;background:${z.color}"></i></span><span>${fmtMin(p.min)}</span></div></td><td class="r">${p.runs}</td>
-          ${hasL ? `<td class="r">${p.l ? fmtL(p.l) : "\u2013"}</td><td class="r">${flowCell(p, z)}</td>` : ""}
+          ${hasL ? `<td class="r">${p.l ? fmtL(p.l) : "\u2013"}</td><td class="r">${flowCell(p, z)}</td><td>${base[z.id] || recent[z.id] ? `<button class="tb1" data-act="resetflow" data-zone="${esc(z.id)}" title="${esc(t("Reset the normal flow (e.g. after cleaning the filter)"))}"><ha-icon icon="mdi:restore"></ha-icon></button>` : ""}</td>` : ""}
           ${hasK ? `<td class="r">${p.kwh ? fmtKwh(p.kwh) : "\u2013"}</td><td class="r">${p.kwh && p.emin ? Math.round(p.kwh * 1000 / (p.emin / 60)) : "\u2013"}</td>` : ""}</tr>`; }).join("")}</table>`;
     const saved = skMin ? `<div class="muted small">${t("saved by skips")}: ${fmtMin(skMin)}${allL && allMin ? ` \u2248 ${fmtL(skMin * allL / allMin)}` : ""}</div>` : "";
     const sel = (k, opts) => `<span class="seg">${opts.map(([v, l, i]) => `<button class="ab ${String(this._sp[k]) === String(v) ? "on" : ""}" data-act="sp" data-k="${k}" data-v="${v}">${i ? `<ha-icon icon="${i}"></ha-icon>` : ""}${l}</button>`).join("")}</span>`;
@@ -777,7 +794,9 @@ class EspSprinklerPlannerCard extends HTMLElement {
       ${s && s.error ? `<div class="err">${esc(s.error)}</div>` : chart}
       ${metric === "kwh" ? "" : this._legend()}
       <div class="lbl">${t("Last 12 months")}</div>${this._heatmap(metric)}
-      <div class="lbl">${t("Per zone")}</div>${ztable}${saved}`;
+      <div class="lbl">${t("Per zone")}</div>${ztable}${saved}
+      <div class="row"><span class="grow"></span>${hasL ? `<button class="ab" data-act="resetflow" data-zone=""><ha-icon icon="mdi:restore"></ha-icon>${t("Reset flow of all zones")}</button>` : ""}
+        <button class="ab danger" data-act="clearstats"><ha-icon icon="mdi:delete-sweep"></ha-icon>${t("Clear statistics")}</button></div>`;
   }
 
   _heatmap(metric) {
@@ -889,10 +908,16 @@ class EspSprinklerPlannerCard extends HTMLElement {
     const svcName = (x) => (this._hass.states[x] ? this._fname(x) : x.slice(7).replace(/^mobile_app_/, "\ud83d\udcf1 "));
     const allSvc = [...new Set([...services, ...(n.targets || []), ...Object.values(n.events || {}).flatMap((e) => e.targets || [])])].sort();
     const recip = (list, kind, ev) => `<div class="svcs">${list.map((x) => { const known = services.includes(x);
-        return `<span class="svc on ${known ? "" : "bad"}" title="${esc(x)}${known ? "" : " \u2013 " + t("missing")}">${esc(svcName(x))}
+        const det = (d.notify_platforms || {})[x] || "other";
+        const over = ((n.platforms || {})[x]) || "auto";
+        const eff = over === "auto" ? det : over;
+        const pIcon = { android: "mdi:android", ios: "mdi:apple", other: "mdi:text" }[eff];
+        return `<span class="svc on ${known ? "" : "bad"}" title="${esc(x)}${known ? "" : " \u2013 " + t("missing")}"><ha-icon class="pico ${eff}" icon="${pIcon}"></ha-icon>${esc(svcName(x))}
+          <select class="plat" data-plat="${esc(x)}" title="${esc(t("How this recipient is sent: Android and iOS get buttons, Text only gets title + message."))}">${[["auto", t("Auto ({0})", t("plat_" + det))], ["android", "Android"], ["ios", "iOS"], ["other", t("plat_other")]].map(([v, l]) => `<option value="${v}" ${over === v ? "selected" : ""}>${l}</option>`).join("")}</select>
           <button class="tb1" data-act="testsvc" data-svc="${esc(x)}" title="${esc(t("Send test to {0}", x))}"><ha-icon icon="mdi:send"></ha-icon></button>
           <button class="xr" data-act="delsvc" data-kind="${kind}" data-ev="${ev || ""}" data-svc="${esc(x)}" title="${esc(t("Remove"))}"><ha-icon icon="mdi:close"></ha-icon></button></span>`; }).join("") || `<span class="muted">${t("nobody")}</span>`}
         <span class="addsvc"><input list="svclist" data-addsvc="${kind}|${ev || ""}" placeholder="${esc(t("+ add notify service"))}"><button class="ab" data-act="addsvc" data-kind="${kind}" data-ev="${ev || ""}"><ha-icon icon="mdi:plus"></ha-icon></button></span></div>`;
+    const textOnly = (n.targets || []).filter((x) => { const o = ((n.platforms || {})[x]) || "auto"; return (o === "auto" ? (d.notify_platforms || {})[x] || "other" : o) === "other"; });
     const evRows = meta.events.map((ev) => {
       const e = { ...(meta.defaults[ev] || {}), ...((full.events || {})[ev] || {}), ...(((n.events || {})[ev]) || {}) };
       return `<details class="ev" data-d="ev_${ev}" ${this._open_("ev_" + ev, false)}><summary><label><input type="checkbox" data-ne="${ev}|enabled" ${e.enabled ? "checked" : ""}> ${esc(t(ev + "_ev"))}</label>
@@ -968,7 +993,9 @@ class EspSprinklerPlannerCard extends HTMLElement {
         <div class="row"><span class="fl">${t("Water meter (total)")}</span>${this._picker("meters.water_total", m.water_total, unitRe(/^(L|m\u00b3|m3|gal)$/), "wtlist", "L, m\u00b3")}</div>
         <div class="row"><span class="fl">${t("Pump power")}</span>${this._picker("meters.pump_power", m.pump_power, unitRe(/^k?W$/), "pwlist", "W")}</div>
         <div class="row"><span class="fl">${t("Pump energy (total)")}</span>${this._picker("meters.pump_energy", m.pump_energy, unitRe(/^k?Wh$/), "enlist", "kWh")}</div>
-        <div class="grid"><span class="fl">${t("warn when a zone's flow differs by")}</span>${this._slider("meters.flow_warn", m.flow_warn ?? 30, 0, 100, 5, " %")}</div>
+        <div class="grid"><span class="fl">${t("warn when a zone's flow differs by")}</span>${this._slider("meters.flow_warn", m.flow_warn ?? 30, 0, 100, 5, " %")}
+          <span class="fl">${t("warn when the flow slowly drops by")}</span>${this._slider("meters.drift_warn", m.drift_warn ?? 15, 0, 50, 5, " %")}</div>
+        <div class="help">${t("help_flow")}</div>
         <div class="row"><b>${t("Prices")}</b>
           <label>${t("water per m\u00b3")} <input type="number" class="n" min="0" step="0.01" data-k="meters.water_price" data-t="num" value="${esc(m.water_price ?? "")}"> ${esc(this._cur())}</label>
           <label>${t("energy per kWh")} <input type="number" class="n" min="0" step="0.01" data-k="meters.energy_price" data-t="num" value="${esc(m.energy_price ?? "")}"> ${esc(this._cur())}</label></div>
@@ -977,6 +1004,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
         <div class="row"><b>${t("Send to")}</b> <span class="muted">${t("(default for every event, pick any number)")}</span></div>
         ${recip(n.targets || [], "default")}
         <datalist id="svclist">${services.filter((x) => !(n.targets || []).includes(x)).map((x) => `<option value="${esc(x)}">${esc(svcName(x))}</option>`).join("")}</datalist>
+        ${textOnly.length ? `<div class="hintbox"><ha-icon icon="mdi:information-outline"></ha-icon><div>${t("No buttons for {0}: sent as text only. If it is a phone (for example a notify group or your own notify service around the app), set it to Android or iOS above.", textOnly.map((x) => x.slice(7)).join(", "))}</div></div>` : ""}
         <div class="muted small">${t("Any notify service or notify entity, e.g. notify.mobile_app_stefan and notify.mobile_app_wife. Each chip sends a test to just that one.")}</div>
         ${evRows}`, false)}`;
   }
@@ -1031,6 +1059,11 @@ class EspSprinklerPlannerCard extends HTMLElement {
     if (!isChange) {
       if (t0.dataset.ne && t0.type !== "checkbox") this._setEvent(t0.dataset.ne, t0.value, false);
       return;
+    }
+    if (t0.dataset.plat) {
+      const n = this.draft.notifications; n.platforms = n.platforms || {};
+      if (t0.value === "auto") delete n.platforms[t0.dataset.plat]; else n.platforms[t0.dataset.plat] = t0.value;
+      this._markDirty(true); return;
     }
     if (t0.dataset.nown) {
       const ev = t0.dataset.nown; const n = this.draft.notifications; n.events = n.events || {}; n.events[ev] = n.events[ev] || {};
@@ -1103,6 +1136,13 @@ class EspSprinklerPlannerCard extends HTMLElement {
         const ids = new Set(this.draft.slots.map((s) => s.id)); let n = this.draft.slots.length + 1; while (ids.has(`slot_${n}`)) n++;
         this.draft.slots.push({ id: `slot_${n}`, name: `Slot ${n}`, enabled: true, anchor: { mode: "start", ref: "time", at: "06:00" }, zones: [] });
         this._open.add(this.draft.slots.length - 1); this._markDirty(true);
+      } else if (act === "resetflow") {
+        const z = tg.dataset.zone; const name = z ? (this._zone(z) || {}).name || z : t("all zones");
+        if (!confirm(t("Reset the normal flow of {0}? The next 5 runs learn it again.", name))) return;
+        await svc("reset_flow", z ? { zone: z } : {}); setTimeout(() => { this._stats = null; this._load(); }, 600);
+      } else if (act === "clearstats") {
+        if (!confirm(t("Delete ALL statistics (watering time, water, energy, skips, flow)? This cannot be undone."))) return;
+        await svc("clear_stats", { confirm: true }); setTimeout(() => { this._stats = null; this._heat = null; this._load(); }, 600);
       } else if (act === "dupslot") {
         const i = +tg.dataset.i; const src = this.draft.slots[i];
         const ids = new Set(this.draft.slots.map((x) => x.id));
@@ -1314,6 +1354,11 @@ label.day input { display:none; } label.day.on { background:var(--primary-color,
 .dprow { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; padding:6px 0; border-top:1px solid var(--divider-color,#eee); } .dprow.past { opacity:.5; }
 .dpt { display:inline-flex; align-items:center; gap:6px; } .dprow .nz { margin:0; } .dpb { margin-left:auto; display:inline-flex; gap:6px; } .dpb .ab { padding:4px 10px; }
 .svc .xr { width:22px; height:22px; }
+.svc select.plat { min-height:0; height:22px; padding:0 18px 0 6px; font-size:11px; border-radius:11px; background-position:right 4px center; background-size:12px; }
+.pico { --mdc-icon-size:15px; } .pico.android { color:#3ddc84; } .pico.ios { color:var(--primary-text-color,#fff); } .pico.other { color:var(--secondary-text-color,#888); }
+.warnc { color:#c47a00; } td .bad, td .bad b { color:#e5484d; }
+.hintbox { display:flex; gap:8px; align-items:flex-start; font-size:12px; background:color-mix(in srgb, var(--primary-color,#03a9f4) 12%, transparent); border-radius:8px; padding:6px 10px; margin:4px 0 8px; }
+.hintbox ha-icon { --mdc-icon-size:18px; color:var(--primary-color,#03a9f4); flex:none; }
 .zt { border-collapse:collapse; width:100%; margin:6px 0; } .zt td, .zt th { padding:3px 4px; text-align:left; border-bottom:1px solid var(--divider-color,#eee); font-weight:normal; } .zt th { font-size:11px; color:var(--secondary-text-color,#888); }
 .zt td:first-child { white-space:nowrap; } .zt.st td { vertical-align:top; }
 .mbar { height:4px; background:var(--divider-color,#ddd); border-radius:2px; margin-top:3px; width:110px; } .mbar i { display:block; height:100%; border-radius:2px; }

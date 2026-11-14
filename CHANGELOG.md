@@ -1,7 +1,18 @@
 # Changelog
 
-## Unreleased
+## 0.5.2
 
+- **Buttons on Android / iOS for any recipient:** each recipient chip shows how it is sent
+  (Android, iOS or text only) and can be set by hand. Auto detection only knows the
+  `notify.mobile_app_*` services; a notify group or your own notify service around the app was
+  sent as text only, so the buttons were dropped. A hint in Settings names such recipients.
+- **Usage in notifications:** `{{ water_l }}`, `{{ energy_kwh }}`, `{{ cost }}`, `{{ avg_flow }}`
+  for finished (and stopped) runs, `{{ expected_water_l }}` for planned / started / skipped
+  (from each zone's usual flow). A dash when there is no meter.
+- **Slow flow drop** (clogging filter): each zone learns its normal flow from its first 5 runs;
+  when the median of the last 5 runs is 15 % (settable) below it, `flow_drift` notifies once.
+  Stats shows "last runs / normal (±%)" per zone with a reset button; `reset_flow` service.
+- **Clear statistics** button (with confirmation) and `clear_stats` service.
 - Notification variable `{{ zone_count }}`: number of zones in the run (all run events).
 - **Duplicate a slot:** button in the slot editor. The copy goes right below the original, switched
   off (so nothing waters twice) and opened for editing; Save to keep it.

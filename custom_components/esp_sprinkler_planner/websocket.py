@@ -57,6 +57,7 @@ def snapshot(hass, rt, days: int) -> Dict[str, Any]:
         "config": rt.config, "notifications_full": notif,
         "notify_meta": {"events": list(EVENTS), "actions": ACTIONS, "variables": VARIABLES, "defaults": defaults(rt.lang)},
         "notify_services": notify_services,
+        "notify_platforms": {s: rt._platform(s) for s in notify_services},  # what each recipient is detected as
         "plan": rt.plan_dict(days),
         "timing": {"valve_overlap": rt.valve_overlap,
                    "pump_delay": (rt.pump.get("delay") if rt.pump.get("auto_on") else 0) if rt.pump else 0},
@@ -71,6 +72,8 @@ def snapshot(hass, rt, days: int) -> Dict[str, Any]:
         "weather_now": _wx_summary(rt),
         "meters": rt.meters,
         "usual_flow": {z: sorted(v)[len(v) // 2] for z, v in rt.flow_samples.items() if v},
+        "flow_base": rt.flow_base,
+        "recent_flow": {z: sorted(v[-5:])[len(v[-5:]) // 2] for z, v in rt.flow_samples.items() if v},
         "stats_totals": stats_mod.totals(rt.stats, today),
         "stats_days": stats_mod.aggregate(rt.stats, today, "day", 14)["rows"],
     }

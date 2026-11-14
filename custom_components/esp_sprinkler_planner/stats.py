@@ -7,7 +7,8 @@ Meters (optional, part of the planner config):
       "water_total": "sensor.water_meter",  # L or m3, increasing (difference per zone, preferred)
       "pump_power": "sensor.pump_power",    # W or kW (integrated while the pump is on)
       "pump_energy": "sensor.pump_energy",  # kWh or Wh, increasing (difference, preferred)
-      "flow_warn": 30                       # % deviation from the zone's usual flow -> warning (0 = off)
+      "flow_warn": 30,                      # % jump from the zone's usual flow (last runs) -> warning (0 = off)
+      "drift_warn": 15                      # % slow drop below the zone's baseline -> warning (0 = off)
     }
 
 Daily store: {"YYYY-MM-DD": {"zones": {zone: {"min", "runs", "l", "kwh"}}, "skipped": {zone: min},
@@ -30,7 +31,7 @@ class MetersConfigError(ValueError):
 
 def meters_from_dict(d: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     d = dict(d or {})
-    bad = set(d) - set(METER_KEYS) - {"flow_warn", "water_price", "energy_price"}
+    bad = set(d) - set(METER_KEYS) - {"flow_warn", "drift_warn", "water_price", "energy_price"}
     if bad:
         raise MetersConfigError(f"meters: unknown field(s) {', '.join(sorted(bad))}")
     out: Dict[str, Any] = {}
@@ -47,6 +48,12 @@ def meters_from_dict(d: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         raise MetersConfigError("meters.flow_warn: a percentage") from err
     if not 0 <= out["flow_warn"] <= 100:
         raise MetersConfigError("meters.flow_warn: 0 .. 100 %")
+    try:
+        out["drift_warn"] = float(d.get("drift_warn", 15) or 0)
+    except (TypeError, ValueError) as err:
+        raise MetersConfigError("meters.drift_warn: a percentage") from err
+    if not 0 <= out["drift_warn"] <= 90:
+        raise MetersConfigError("meters.drift_warn: 0 .. 90 %")
     for k in ("water_price", "energy_price"):   # per m3 / per kWh, in the HA currency
         v = d.get(k)
         if v in (None, ""):
@@ -172,6 +179,28 @@ def flow_check(samples: List[float], flow: Optional[float], warn: float) -> Opti
     if abs(dev) >= warn:
         return ("high" if dev > 0 else "low", round(flow, 1), round(usual, 1))
     return None
+
+
+BASELINE_RUNS = 5   # the first runs (after setup or a reset) define the zone's normal flow
+RECENT_RUNS = 5     # the drift check uses the median of this many latest runs
+
+
+def baseline_from(samples: List[float]) -> Optional[float]:
+    if len(samples) < BASELINE_RUNS:
+        return None
+    s = sorted(samples[:BASELINE_RUNS])
+    return round(s[len(s) // 2], 2)
+
+
+def drift_check(baseline: Optional[float], samples: List[float], pct: float) -> Optional[Tuple[float, float, float]]:
+    """(recent flow, baseline, change %) when the recent median is pct % or more below the baseline.
+    Catches a slowly clogging filter, which the run-to-run check misses because its median follows."""
+    if not baseline or not pct or len(samples) < RECENT_RUNS:
+        return None
+    r = sorted(samples[-RECENT_RUNS:])
+    recent = r[len(r) // 2]
+    change = (recent - baseline) / baseline * 100
+    return (round(recent, 1), round(baseline, 1), round(change)) if change <= -pct else None
 
 
 def push_sample(samples: List[float], flow: Optional[float]) -> List[float]:

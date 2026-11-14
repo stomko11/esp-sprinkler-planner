@@ -304,6 +304,34 @@
           "description": "Also forget accepted / dismissed suggestions."
         }
       }
+    },
+    "reset_flow": {
+      "name": "Reset flow baseline",
+      "description": "Forget the normal flow of a zone (or all zones), e.g. after cleaning the filter. The next runs define it again.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Planner",
+          "description": "Only with more than one planner."
+        },
+        "zone": {
+          "name": "Zone",
+          "description": "Zone id; empty = all zones."
+        }
+      }
+    },
+    "clear_stats": {
+      "name": "Clear statistics",
+      "description": "Delete all statistics (watering time, water, energy, skips) and the flow baselines.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Planner",
+          "description": "Only with more than one planner."
+        },
+        "confirm": {
+          "name": "Confirm",
+          "description": "Must be on."
+        }
+      }
     }
   }
 }
