@@ -66,6 +66,7 @@ def snapshot(hass, rt, days: int) -> Dict[str, Any]:
         "history": {d: rt.history[d] for d in sorted(rt.history)[-7:]}, "last_run": rt.last_run,
         "entities": _entities(hass, rt.entry.entry_id),
         "lang": rt.lang,
+        "health": {k: rt.health[k] for k in ("missing", "unavailable", "since")},
         "weather_full": rt.weather_cfg,
         "weather_now": _wx_summary(rt),
         "meters": rt.meters,

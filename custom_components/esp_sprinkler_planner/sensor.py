@@ -8,7 +8,7 @@ from homeassistant.util import dt as dt_util
 from . import model
 from .const import DOMAIN
 
-STATUSES = ["idle", "scheduled", "running", "dry_run", "disabled", "error"]
+STATUSES = ["idle", "scheduled", "running", "dry_run", "disabled", "error", "offline"]
 
 
 def device_info(entry) -> DeviceInfo:
@@ -68,7 +68,9 @@ class Status(_Base, SensorEntity):
     def extra_state_attributes(self):
         a = self.rt.active or {}
         return {"active_run": a.get("run"), "dry_run_mode": self.rt.flags["dry_run"], "calls": a.get("calls"),
-                "last_event": self.rt.last_event, "error": self.rt.error}
+                "last_event": self.rt.last_event, "error": self.rt.error,
+                "offline_since": self.rt.health["since"],
+                "missing_entities": self.rt.health["missing"], "unavailable_entities": self.rt.health["unavailable"]}
 
 
 class ActiveZone(_Base, SensorEntity):

@@ -147,3 +147,16 @@ class Executor(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HealthTest(unittest.TestCase):
+    def test_missing_and_unavailable(self):
+        import executor as X
+        valves = [{"id": "zone_1", "enable_switch": "switch.en1", "duration": "number.d1"}]
+        ctrl = {"main_switch": "switch.main"}
+        ok = {"switch.main": {"state": "off"}, "switch.en1": {"state": "on"}, "number.d1": {"state": "5"}}
+        self.assertEqual(X.health(valves, ctrl, ok), {"missing": [], "unavailable": []})
+        down = dict(ok, **{"switch.main": {"state": "unavailable"}})
+        self.assertEqual(X.health(valves, ctrl, down)["unavailable"], ["switch.main"])
+        gone = {"switch.main": {"state": "off"}}
+        self.assertEqual(X.health(valves, ctrl, gone)["missing"], ["switch.en1", "number.d1"])

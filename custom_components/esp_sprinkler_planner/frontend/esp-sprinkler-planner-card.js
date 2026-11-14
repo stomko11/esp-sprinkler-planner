@@ -27,7 +27,11 @@ const SK = {
   "Raining now (binary or mm/h)": "Pr\u00e1ve pr\u0161\u00ed (bin\u00e1rny alebo mm/h)", "skip at gusts \u2265": "presko\u010di\u0165 pri n\u00e1razoch \u2265",
   "Live sensors": "Aktu\u00e1lne senzory", "Prices": "Ceny", "water per m\u00b3": "voda za m\u00b3", "energy per kWh": "energia za kWh",
   "Cost": "N\u00e1klady", "Last 12 months": "Posledn\u00fdch 12 mesiacov", "less": "menej", "more": "viac",
-  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Click to accept": "Kliknut\u00edm prijme\u0161", "Skipped by you. Click to undo.": "Presko\u010dil si. Kliknut\u00edm vr\u00e1ti\u0161.",
+  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Click to accept": "Kliknut\u00edm prijme\u0161", "Click for the day's runs.": "Klikni pre behy d\u0148a.",
+  "Offline": "Offline", "Controller offline": "Ovl\u00e1da\u010d je offline", "Controller entities not found": "Entity ovl\u00e1da\u010da sa nena\u0161li", "since {0}": "od {0}",
+  "The ESPHome device was removed or its entities renamed. Fix it in Settings \u2192 Devices & services \u2192 ESP Sprinkler Planner \u2192 Reconfigure.": "ESPHome zariadenie bolo odstr\u00e1nen\u00e9 alebo premenovan\u00e9 jeho entity. Oprav to v Nastavenia \u2192 Zariadenia a slu\u017eby \u2192 ESP Sprinkler Planner \u2192 Prekonfigurova\u0165.",
+  "The ESP is not reachable. Scheduled runs are skipped until it is back.": "ESP nie je dostupn\u00e9. Napl\u00e1novan\u00e9 behy sa presko\u010dia, k\u00fdm sa nevr\u00e1ti.",
+  "{0} entities": "{0} ent\u00edt", "offline_ev": "ovl\u00e1da\u010d offline", "online_ev": "ovl\u00e1da\u010d op\u00e4\u0165 online", "Skipped by you. Click to undo.": "Presko\u010dil si. Kliknut\u00edm vr\u00e1ti\u0161.",
   "Undo skip": "Zru\u0161i\u0165 presko\u010denie", "Clear all": "Vymaza\u0165 v\u0161etko", "Undo all your skips and forget all weather answers?": "Zru\u0161i\u0165 v\u0161etky tvoje presko\u010denia a zabudn\u00fa\u0165 v\u0161etky odpovede na po\u010dasie?",
   "Totals": "S\u00fahrny", "per day": "po d\u0148och", "per week": "po t\u00fd\u017ed\u0148och", "per month": "po mesiacoch", "per year": "po rokoch", "Accepted. Click to take back.": "Prijat\u00e9. Kliknut\u00edm vr\u00e1ti\u0161.",
   "Dismissed: runs as planned. Click to take back.": "Zamietnut\u00e9: be\u017e\u00ed pod\u013ea pl\u00e1nu. Kliknut\u00edm vr\u00e1ti\u0161.",
@@ -299,6 +303,18 @@ class EspSprinklerPlannerCard extends HTMLElement {
     const v = value ?? min;
     return `<span class="sl"><input type="range" data-k="${path}" data-t="num" data-u="${esc(unit || "")}" min="${min}" max="${max}" step="${step}" value="${esc(v)}"><output>${esc(v)}${esc(unit || "")}</output></span>`;
   }
+  _offline() { const h = (this.data && this.data.health) || {}; return (h.missing || []).length || (h.unavailable || []).length ? h : null; }
+  _offlineBanner() {
+    const h = this._offline();
+    if (!h) return "";
+    const since = h.since ? `${fmtDay(dayOf(new Date(h.since).toLocaleString("sv").replace(" ", "T")))} ${hm(new Date(h.since).toLocaleString("sv").replace(" ", "T"))}` : "";
+    const gone = (h.missing || []).length;
+    const list = (gone ? h.missing : h.unavailable).map((e) => `<code>${esc(e)}</code>`).join(" ");
+    return `<div class="banner offline"><ha-icon icon="${gone ? "mdi:link-variant-off" : "mdi:lan-disconnect"}"></ha-icon><div>
+      <b>${gone ? t("Controller entities not found") : t("Controller offline")}</b>${since ? ` <span class="muted">${t("since {0}", since)}</span>` : ""}<br>
+      ${gone ? t("The ESPHome device was removed or its entities renamed. Fix it in Settings \u2192 Devices & services \u2192 ESP Sprinkler Planner \u2192 Reconfigure.") : t("The ESP is not reachable. Scheduled runs are skipped until it is back.")}
+      <details class="small muted ents"><summary>${t("{0} entities", (gone ? h.missing : h.unavailable).length)}</summary>${list}</details></div></div>`;
+  }
   _cur() { return ((this.data && this.data.weather_now) || {}).currency || "EUR"; }
   _cost(x) {
     const m = (this.data && this.data.meters) || {};
@@ -317,17 +333,18 @@ class EspSprinklerPlannerCard extends HTMLElement {
     LANG = this._lang();
     const d = this.data;
     const flags = d.flags || {};
-    const STATUS = { idle: "Idle", scheduled: "Scheduled", running: "Running", dry_run: "Dry run", disabled: "Disabled", error: "Error" };
+    const STATUS = { idle: "Idle", scheduled: "Scheduled", running: "Running", dry_run: "Dry run", disabled: "Disabled", error: "Error", offline: "Offline" };
     const tabs = [["today", "Overview"], ["week", "Week"], ["stats", "Stats"], ["slots", "Slots"], ["settings", "Settings"]];
     root.innerHTML = `
       <div class="head">
-        <ha-icon class="hicon ${flags.enabled ? "" : "off"}" icon="mdi:sprinkler-variant"></ha-icon>
+        <ha-icon class="hicon ${flags.enabled ? "" : "off"} ${this._offline() ? "bad" : ""}" icon="${this._offline() ? "mdi:lan-disconnect" : "mdi:sprinkler-variant"}"></ha-icon>
         <div class="title">${esc(this._title())}</div>
         <span class="chip st-${esc(d.status)}">${esc(t(STATUS[d.status] || d.status))}</span>
         ${flags.dry_run ? `<span class="chip warn" title="${esc(t("Nothing is sent to the ESP"))}">${t("DRY RUN")}</span>` : ""}
         <label class="master" title="${esc(t("Planner enabled"))}"><input type="checkbox" class="tog" data-flag="enabled" ${flags.enabled ? "checked" : ""}></label>
       </div>
       ${d.error ? `<div class="banner err">${esc(d.error)}</div>` : ""}
+      ${this._offlineBanner()}
       ${this._loadErr ? `<div class="banner err">${esc(this._loadErr)}</div>` : ""}
       <div class="tabs">${tabs.map(([k, l]) => `<button class="tab ${this._tab === k ? "on" : ""}" data-tab="${k}">${t(l)}</button>`).join("")}</div>
       <div class="body">${this[`_tab_${this._tab}`]()}</div>
@@ -405,13 +422,44 @@ class EspSprinklerPlannerCard extends HTMLElement {
     return `<span class="rm ${dec.action === "skip" ? "skip" : "adj"}" title="${esc(tip)}">${what}</span>`;
   }
 
+  // what happens to one run: kind = ok | none | skip | adj | sug-skip | sug-adj | user ; label as shown
+  _runState(r, plan) {
+    const k = runKey(r);
+    const tip = (dec) => `${hm(r.start)} ${r.slots.map((x) => this._slotName(x)).join(" + ")}${dec && dec.reasons.length ? ": " + dec.reasons.join(", ") : ""}`;
+    if ((plan.skipped || []).includes(k)) return { kind: "user", label: "\u2715", tip: `${tip(null)}: ${t("skipped by you")}` };
+    const dec = this._decision(r, plan);
+    if (!dec || dec.status === "none" || dec.status === "dismissed" || dec.action === "run") {
+      const wxOn = ((this.data.weather_full || {}).mode || "off") !== "off";
+      return { kind: wxOn && !dec ? "none" : "ok", label: wxOn && !dec ? "\u00b7" : "\u2713", tip: tip(dec) };
+    }
+    const pct = Math.round((dec.factor - 1) * 100);
+    const label = dec.action === "skip" ? "\u2715" : `${pct > 0 ? "+" : "\u2212"}${Math.abs(pct)}%`;
+    const kind = (dec.status === "pending" ? "sug-" : "") + (dec.action === "skip" ? "skip" : "adj");
+    return { kind, label, tip: (dec.status === "pending" ? t("Suggestion (not applied): {0}", tip(dec)) : tip(dec)) };
+  }
+
+  // one mark per day: the label when every run of the day ends the same, plus one dot per run
+  _dayMark(day, plan, inert) {
+    const runs = (plan.runs || []).filter((r) => r.day === day);
+    if (!runs.length) return `<span class="dm emptyd"></span>`;
+    if (runs.length === 1 && !inert) return this._runMark(runs[0], plan);
+    const st = runs.map((r) => this._runState(r, plan));
+    const same = st.every((x) => x.kind === st[0].kind && x.label === st[0].label);
+    const n = { skip: 0, adj: 0, sug: 0 };
+    st.forEach((x) => { if (x.kind === "skip" || x.kind === "user") n.skip++; else if (x.kind === "adj") n.adj++; else if (x.kind.startsWith("sug")) n.sug++; });
+    const label = same ? st[0].label : n.skip ? `${n.skip}/${runs.length} \u2715` : n.adj ? `${n.adj}/${runs.length} \u00b1` : n.sug ? `${n.sug}/${runs.length}` : "\u2713";
+    const cls = same ? st[0].kind : n.skip ? "mixed-skip" : n.adj ? "mixed-adj" : "mixed-sug";
+    const dots = st.slice(0, 6).map((x) => `<i class="dt ${x.kind}"></i>`).join("") + (st.length > 6 ? `<i class="dt more">+${st.length - 6}</i>` : "");
+    return `<span class="dm ${cls}" ${inert ? "" : `data-act="fday" data-day="${day}"`} title="${esc(st.map((x) => `${x.label}  ${x.tip}`).join("\n"))}${inert ? "" : "\n" + esc(t("Click for the day's runs."))}">
+      <span class="dl">${label}</span><span class="dd">${dots}</span></span>`;
+  }
+
   _wxBadge(day, plan) {
     const w = this._wxDay(day);
-    const runs = (plan.runs || []).filter((r) => r.day === day);
     return `<span class="wxi">${w && w.cond ? `<ha-icon icon="mdi:weather-${WX_ICON[w.cond] || "cloudy"}"></ha-icon>` : ""}</span>
       <span class="wxt">${w && w.tmax !== null && w.tmax !== undefined ? `${Math.round(w.tmax)}\u00b0` : ""}</span>
       <span class="wxr rain">${w && w.rain ? `${r1(w.rain)} mm` : ""}</span>
-      <span class="wxm">${runs.map((r) => this._runMark(r, plan)).join("")}</span>`;
+      <span class="wxm">${this._dayMark(day, plan)}</span>`;
   }
 
   _weekRows(plan, small) {
@@ -423,7 +471,8 @@ class EspSprinklerPlannerCard extends HTMLElement {
       out += `<div class="wrow"><div class="wday">${fmtDay(day)}</div><div class="wtl">${this._timeline(day, plan, true)}</div><div class="wwx">${this._wxBadge(day, plan)}</div></div>`;
     }
     void small;
-    return out + this._legend();
+    const inWeek = this._fday && this._fday >= start && this._fday <= addDays(start, 6);
+    return out + this._legend() + (inWeek && this._tab !== "today" ? this._dayPanel(plan) : "");
   }
 
   _legend(extra) {
@@ -464,9 +513,9 @@ class EspSprinklerPlannerCard extends HTMLElement {
                    <button class="ab danger stopnow" data-act="stop" title="${esc(t("Stop"))}"><ha-icon icon="mdi:stop-circle"></ha-icon>${t("Stop")}</button>`
                 : `<div class="big muted">${t("Nothing running")}</div>`}
         </div>
-        <div class="box ${(d.flags || {}).enabled ? "" : "boxoff"}">
-          <div class="lbl">${t("Next run")}${(d.flags || {}).enabled ? "" : ` <span class="chip offc">${t("Planner off")}</span>`}</div>
-          ${next ? `<div class="big ${(d.flags || {}).enabled ? "" : "struck"}">${fmtDay(next.day)} ${hm(next.start)} ${this._runMark(next, plan)}</div><div class="muted">${next.slots.map((x) => esc(this._slotName(x))).join(" + ")} \u00b7 ${t("until {0}", hm(next.end))}</div>
+        <div class="box ${(d.flags || {}).enabled && !this._offline() ? "" : "boxoff"}">
+          <div class="lbl">${t("Next run")}${(d.flags || {}).enabled ? "" : ` <span class="chip offc">${t("Planner off")}</span>`}${this._offline() ? ` <span class="chip offc">${t("Offline")}</span>` : ""}</div>
+          ${next ? `<div class="big ${(d.flags || {}).enabled && !this._offline() ? "" : "struck"}">${fmtDay(next.day)} ${hm(next.start)} ${this._runMark(next, plan)}</div><div class="muted">${next.slots.map((x) => esc(this._slotName(x))).join(" + ")} \u00b7 ${t("until {0}", hm(next.end))}</div>
                     ${this._zoneStrip(next.zones)}`
                  : `<div class="big muted">\u2013</div>`}
         </div>
@@ -606,14 +655,11 @@ class EspSprinklerPlannerCard extends HTMLElement {
     return `<div class="lbl">${t("Weather")} <span class="muted">${w.temp !== null && w.temp !== undefined ? t("now {0} \u00b0C", r1(w.temp)) : ""}${w.fallen ? " \u00b7 " + t("fallen {0} mm", r1(w.fallen)) : ""}</span>${w.error ? ` <span class="err">${esc(w.error)}</span>` : ""}</div>
       <div class="muted small">${t("Click a day for its runs.")}</div>
       <div class="fc" style="grid-template-columns:repeat(${Math.max(1, days.length)},1fr)">${days.map((x) => {
-        const decs = (plan.runs || []).filter((r) => r.day === x.day).map((r) => this._decision(r, plan)).filter(Boolean);
-        const sk = decs.some((v) => v.action === "skip" && v.status !== "dismissed" && v.status !== "none");
-        const f = decs.find((v) => v.action === "adjust");
         return `<div class="fcd ${x.day === today ? "today" : ""} ${this._fday === x.day ? "sel" : ""}" data-act="fday" data-day="${x.day}" title="${esc(fmtDay(x.day))}"><span>${DAYS()[wd(x.day)]}</span>
           <ha-icon icon="mdi:weather-${WX_ICON[x.cond] || "cloudy"}"></ha-icon>
           <b>${x.tmax !== null && x.tmax !== undefined ? Math.round(x.tmax) + "\u00b0" : "\u2013"}</b><em>${x.tmin !== null && x.tmin !== undefined ? Math.round(x.tmin) + "\u00b0" : ""}</em>
           <span class="rain">${x.rain ? r1(x.rain) + " mm" : " "}</span>
-          <span class="fx ${sk ? "skip" : f ? "adj" : ""}">${sk ? "\u2715" : f ? Math.round(f.factor * 100) + "%" : "100%"}</span></div>`;
+          ${this._dayMark(x.day, plan, true)}</div>`;
       }).join("")}</div>`;
   }
 
@@ -1231,7 +1277,7 @@ ha-icon.zi { --mdc-icon-size:16px; margin-right:4px; flex:none; } ha-icon.zi.big
 .ticks { position:absolute; left:0; right:0; bottom:-15px; height:14px; font-size:10px; color:var(--secondary-text-color,#888); }
 .ticks span { position:absolute; transform:translateX(-2px); }
 .wrow { display:flex; align-items:center; gap:8px; margin:4px 0; } .wday { width:66px; font-size:12px; flex:none; } .wtl { flex:1; }
-.wwx { width:200px; flex:none; font-size:12px; display:grid; grid-template-columns:20px 30px 50px 1fr; align-items:center; white-space:nowrap; }
+.wwx { width:212px; flex:none; font-size:12px; display:grid; grid-template-columns:20px 30px 50px 62px; align-items:center; white-space:nowrap; }
 .wwx .wxi ha-icon { --mdc-icon-size:16px; } .wxt { text-align:right; padding-right:4px; } .wxm { display:flex; gap:3px; }
 .rm { box-sizing:border-box; display:inline-flex; align-items:center; justify-content:center; gap:1px; width:46px; height:18px; font-size:11px; line-height:1; font-weight:700; border-radius:6px; padding:0 2px; border:1px solid transparent; background:var(--secondary-background-color,#eee); vertical-align:middle; white-space:nowrap; }
 .rm.ok { color:#2fbf71; } .rm.skip { color:#fff; background:#e5484d; } .rm.adj { color:#fff; background:#c47a00; } .rm.user { color:var(--secondary-text-color,#888); }
@@ -1329,7 +1375,21 @@ input.picker { width:300px; } input.bad { border-color:#e5484d; }
 .swatches { gap:4px; } .swc { width:20px; height:20px; padding:0; border-radius:50%; border:2px solid transparent; }
 .swc.on { border-color:var(--primary-text-color,#fff); box-shadow:0 0 0 1px #0006; }
 .cost { font-weight:600; color:#c47a00; margin-top:2px; }
-.boxoff { opacity:.7; } .struck { text-decoration:line-through; text-decoration-thickness:2px; color:var(--secondary-text-color,#888); }
+.boxoff { opacity:.7; }
+.st-offline { background:#e5484d; color:#fff; } .hicon.bad { color:#e5484d; }
+.banner.offline { display:flex; gap:10px; align-items:flex-start; background:#e5484d22; border:1px solid #e5484d; border-radius:10px; padding:10px 12px; }
+.banner.offline details.ents summary { cursor:pointer; margin-top:4px; } .banner.offline code { display:inline-block; margin:2px 4px 0 0; }
+.banner.offline > ha-icon { color:#e5484d; --mdc-icon-size:28px; flex:none; }
+.dm { box-sizing:border-box; display:inline-flex; flex-direction:column; align-items:center; justify-content:center; width:58px; height:24px; border-radius:6px; padding:1px 2px; background:var(--secondary-background-color,#eee); cursor:pointer; vertical-align:middle; line-height:1; }
+.fcd .dm { cursor:inherit; } .dm.emptyd { visibility:hidden; }
+.dm .dl { font-size:11px; font-weight:700; white-space:nowrap; } .dm .dd { display:flex; gap:2px; margin-top:2px; }
+.dt { display:block; width:6px; height:6px; border-radius:50%; background:#2fbf71; } .dt.none { background:transparent; box-shadow:inset 0 0 0 1px var(--secondary-text-color,#888); }
+.dt.skip { background:#e5484d; } .dt.adj { background:#c47a00; } .dt.user { background:var(--secondary-text-color,#888); }
+.dt.sug-skip { background:transparent; box-shadow:inset 0 0 0 1.5px #e5484d; } .dt.sug-adj { background:transparent; box-shadow:inset 0 0 0 1.5px #c47a00; }
+.dt.more { width:auto; height:auto; background:none; font-size:8px; font-style:normal; color:var(--secondary-text-color,#888); }
+.dm.skip .dl, .dm.user .dl, .dm.mixed-skip .dl { color:#e5484d; } .dm.adj .dl, .dm.mixed-adj .dl { color:#c47a00; } .dm.ok .dl { color:#2fbf71; }
+.dm.sug-skip, .dm.sug-adj, .dm.mixed-sug { background:transparent; border:1px dashed var(--secondary-text-color,#888); }
+.dm.skip { background:#e5484d22; } .dm.adj { background:#c47a0022; } .struck { text-decoration:line-through; text-decoration-thickness:2px; color:var(--secondary-text-color,#888); }
 .chip.offc { background:#e5484d; color:#fff; text-transform:none; letter-spacing:0; }
 .zt.st { font-size:13px; } .zt.st td, .zt.st th { padding:6px 6px; vertical-align:middle; } .zt.st .r { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
 .zt.st tr.zero td { color:var(--secondary-text-color,#888); } .zt.st .zc { display:flex; align-items:center; }

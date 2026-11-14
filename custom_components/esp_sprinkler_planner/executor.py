@@ -53,6 +53,17 @@ def involved_entities(valves: List[Dict[str, Any]], controller: Dict[str, Option
     return out
 
 
+def health(valves: List[Dict[str, Any]], controller: Dict[str, Optional[str]], states) -> Dict[str, List[str]]:
+    """Controller entities that do not exist (device removed / renamed) or are unavailable (ESP offline)."""
+    missing, unavailable = [], []
+    for eid in involved_entities(valves, controller):
+        if eid not in states:
+            missing.append(eid)
+        elif _state(states, eid) in Unavailable:
+            unavailable.append(eid)
+    return {"missing": missing, "unavailable": unavailable}
+
+
 def precheck(run: Run, valves, controller, states) -> Optional[str]:
     """Reason not to start, or None."""
     main = controller.get("main_switch")

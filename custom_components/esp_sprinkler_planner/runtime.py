@@ -67,6 +67,8 @@ class Runtime:
         self._run_meter: Optional[Dict[str, Any]] = None  # pump energy over the whole run
         self._dyn_unsubs: List[Callable[[], None]] = []
         self._wx_refresh_at = None
+        self.health: Dict[str, Any] = {"missing": [], "unavailable": [], "since": None, "notified": False}
+        self._health_timer = None
 
     # ------------------------------------------------------------------ properties
     @property
@@ -85,6 +87,8 @@ class Runtime:
     def status(self) -> str:
         if self.error:
             return "error"
+        if self.health["missing"] or self.health["unavailable"]:
+            return "offline"
         if self.active:
             return "dry_run" if self.active.get("dry_run") else "running"
         if not self.flags["enabled"]:
@@ -138,6 +142,7 @@ class Runtime:
     def _event(self, kind: str, **data) -> None:
         payload = {"entry_id": self.entry.entry_id, "type": kind, **data}
         self.last_event = {**payload, "time": dt_util.utcnow().isoformat()}
+        self._changed()
         self.hass.bus.async_fire(EVENT, payload)
         _LOGGER.info("%s: %s %s", self.entry.title, kind, data.get("reason") or "")
         if kind in notify_logic.EVENTS:
@@ -574,6 +579,59 @@ class Runtime:
         self._wx_refresh_at = now
         self.hass.async_create_task(self._periodic(now))
 
+    # ------------------------------------------------------------------ controller health
+    OFFLINE_GRACE = timedelta(minutes=3)   # short ESP reconnects do not notify
+
+    @callback
+    def _on_controller_state(self, _event: Event) -> None:
+        self._check_health()
+
+    def _check_health(self, startup: bool = False) -> None:  # noqa: ARG002 - startup: same grace period
+        states = {eid: {"state": st.state} for eid in executor.involved_entities(self.valves, self.controller)
+                  if (st := self.hass.states.get(eid)) is not None}
+        h = executor.health(self.valves, self.controller, states)
+        bad = bool(h["missing"] or h["unavailable"])
+        was_bad = bool(self.health["missing"] or self.health["unavailable"])
+        if bad and not was_bad:
+            self.health.update(h, since=dt_util.utcnow().isoformat(), notified=False)
+            if self._health_timer:
+                self._health_timer()
+            # at startup the ESP may simply not be connected yet: give it the grace period too
+            self._health_timer = async_track_point_in_utc_time(self.hass, self._health_notify,
+                                                               dt_util.utcnow() + self.OFFLINE_GRACE)
+            _LOGGER.warning("%s: controller %s: %s", self.entry.title,
+                            "entities missing" if h["missing"] else "unavailable",
+                            ", ".join(h["missing"] or h["unavailable"]))
+            self._changed()
+        elif bad:
+            self.health.update(h)
+            self._changed()
+        elif was_bad:
+            since, notified = self.health["since"], self.health["notified"]
+            self.health = {"missing": [], "unavailable": [], "since": None, "notified": False}
+            if self._health_timer:
+                self._health_timer()
+                self._health_timer = None
+            _LOGGER.info("%s: controller back online", self.entry.title)
+            if notified:
+                self._event("online", since=self._local_hm(since))
+            self._changed()
+
+    def _local_hm(self, iso: Optional[str]) -> str:
+        return dt_util.as_local(dt_util.parse_datetime(iso)).strftime("%d.%m. %H:%M") if iso else ""
+
+    async def _health_notify(self, _now) -> None:
+        self._health_timer = None
+        h = self.health
+        if not (h["missing"] or h["unavailable"]) or h["notified"]:
+            return
+        h["notified"] = True
+        def short(ids):
+            return ", ".join(ids[:3]) + (f" and {len(ids) - 3} more" if len(ids) > 3 else "")
+        reason = (f"{len(h['missing'])} entities not found (device removed or renamed?): {short(h['missing'])}"
+                  if h["missing"] else f"unavailable: {short(h['unavailable'])}")
+        self._event("offline", reason=reason, since=self._local_hm(h["since"]))
+
     def minutes_today(self, zid: str) -> float:
         return self.history.get(dt_util.now().date().isoformat(), {}).get(zid, 0.0)
 
@@ -621,6 +679,10 @@ class Runtime:
         main = self.controller.get("main_switch")
         if main:
             self._unsubs.append(async_track_state_change_event(self.hass, [main], self._on_main))
+        watched = executor.involved_entities(self.valves, self.controller)
+        if watched:
+            self._unsubs.append(async_track_state_change_event(self.hass, watched, self._on_controller_state))
+        self._check_health(startup=True)
         self._unsubs.append(async_track_time_interval(self.hass, self._periodic, timedelta(minutes=15)))
         self._subscribe_dynamic()
         await self._resume()
@@ -632,10 +694,10 @@ class Runtime:
             u()
         self._unsubs.clear()
         self._dyn_unsubs.clear()
-        for t in (self._timer, self._watchdog, self._dry_timer, self._planned_timer):
+        for t in (self._timer, self._watchdog, self._dry_timer, self._planned_timer, self._health_timer):
             if t:
                 t()
-        self._timer = self._watchdog = self._dry_timer = self._planned_timer = None
+        self._timer = self._watchdog = self._dry_timer = self._planned_timer = self._health_timer = None
 
     async def _periodic(self, _now) -> None:
         await self.refresh_weather()

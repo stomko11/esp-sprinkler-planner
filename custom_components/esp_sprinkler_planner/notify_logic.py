@@ -27,7 +27,7 @@ import re
 from typing import Any, Dict, List, Optional
 
 EVENTS = ("planned", "started", "zone_changed", "finished", "skipped", "stopped", "error", "pump_off", "dry_run",
-          "suggestion", "weather", "flow_warning")
+          "suggestion", "weather", "flow_warning", "offline", "online")
 LANGUAGES = ("en", "sk")
 
 ACTIONS = {
@@ -54,6 +54,8 @@ VARIABLES: Dict[str, List[str]] = {
     "suggestion": COMMON_VARS + ["action", "factor", "reason"],
     "weather": COMMON_VARS + ["action", "factor", "reason"],
     "flow_warning": ["planner", "zone", "flow", "usual", "direction"],
+    "offline": ["planner", "reason", "since"],
+    "online": ["planner", "since"],
 }
 
 DEFAULTS: Dict[str, Dict[str, Any]] = {
@@ -82,6 +84,10 @@ DEFAULTS: Dict[str, Dict[str, Any]] = {
     "flow_warning": {"enabled": True, "title": "{{ zone }}: flow too {{ direction }}",
                      "message": "{{ flow }} L/min, usually {{ usual }} L/min. Check for a leak or a blocked valve.",
                      "actions": []},
+    "offline": {"enabled": True, "title": "{{ planner }}: controller offline",
+                "message": "{{ reason }} (since {{ since }}). Scheduled runs are skipped until it is back.", "actions": []},
+    "online": {"enabled": False, "title": "{{ planner }}: controller back online",
+               "message": "Offline since {{ since }}. Runs are planned again.", "actions": []},
 }
 
 _SK = {
@@ -99,6 +105,9 @@ _SK = {
     "weather": ("Po\u010dasie: {{ slots }} {{ action }}", "{{ reason }}."),
     "flow_warning": ("{{ zone }}: pr\u00edtok je pr\u00edli\u0161 {{ direction }}",
                      "{{ flow }} L/min, zvy\u010dajne {{ usual }} L/min. Skontroluj \u00fanik alebo upchat\u00fd ventil."),
+    "offline": ("{{ planner }}: ovl\u00e1da\u010d je offline",
+                "{{ reason }} (od {{ since }}). Napl\u00e1novan\u00e9 behy sa presko\u010dia, k\u00fdm sa nevr\u00e1ti."),
+    "online": ("{{ planner }}: ovl\u00e1da\u010d je op\u00e4\u0165 online", "Offline od {{ since }}. Behy sa znova pl\u00e1nuj\u00fa."),
 }
 
 
@@ -115,12 +124,13 @@ def defaults(lang: str = "en", emoji: bool = True) -> Dict[str, Dict[str, Any]]:
 # leading emoji per event (shown on every platform) and the Android status-bar icon / colour
 EMOJI = {"planned": "\U0001f4c5", "started": "\U0001f4a7", "zone_changed": "\U0001f6bf", "finished": "\u2705",
          "skipped": "\u23ed\ufe0f", "stopped": "\u26d4", "error": "\u26a0\ufe0f", "pump_off": "\U0001f6b0",
-         "dry_run": "\U0001f9ea", "suggestion": "\U0001f326\ufe0f", "weather": "\U0001f326\ufe0f", "flow_warning": "\U0001f6a8"}
+         "dry_run": "\U0001f9ea", "suggestion": "\U0001f326\ufe0f", "weather": "\U0001f326\ufe0f", "flow_warning": "\U0001f6a8", "offline": "\U0001f4f4", "online": "\U0001f4f6"}
 ICON = {"planned": "mdi:calendar-clock", "started": "mdi:sprinkler-variant", "zone_changed": "mdi:sprinkler",
         "finished": "mdi:check-circle", "skipped": "mdi:skip-next-circle", "stopped": "mdi:stop-circle",
         "error": "mdi:alert-circle", "pump_off": "mdi:pump-off", "dry_run": "mdi:flask-outline",
-        "suggestion": "mdi:weather-partly-rainy", "weather": "mdi:weather-partly-rainy", "flow_warning": "mdi:water-alert"}
-COLOR = {"error": "#e5484d", "flow_warning": "#e5484d", "pump_off": "#f5a524", "stopped": "#f5a524", "finished": "#2fbf71"}
+        "suggestion": "mdi:weather-partly-rainy", "weather": "mdi:weather-partly-rainy", "flow_warning": "mdi:water-alert",
+        "offline": "mdi:lan-disconnect", "online": "mdi:lan-connect"}
+COLOR = {"offline": "#e5484d", "error": "#e5484d", "flow_warning": "#e5484d", "pump_off": "#f5a524", "stopped": "#f5a524", "finished": "#2fbf71"}
 
 ANDROID_MAX_ACTIONS = 3
 FIELDS = ("enabled", "targets", "title", "message", "actions", "lead")
