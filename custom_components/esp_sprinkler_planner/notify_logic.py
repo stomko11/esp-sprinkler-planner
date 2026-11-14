@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import copy
 import re
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Dict, List, Optional
 
 EVENTS = ("planned", "started", "zone_changed", "finished", "skipped", "stopped", "error", "pump_off", "dry_run",
@@ -275,7 +276,8 @@ def variables(event: str, run: Optional[Dict[str, Any]], slot_names: Dict[str, s
         v[k] = val
     for src, dst in (("water_l", "water_m3"), ("expected_water_l", "expected_water_m3")):
         if dst not in v and isinstance(v.get(src), (int, float)):
-            v[dst] = round(v[src] / 1000, 3)   # 245.5 L -> 0.246 m3
+            # half-up on the decimal value: 245.5 L -> 0.246 m3 (float round() would give 0.245)
+            v[dst] = float(Decimal(str(v[src])).scaleb(-3).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP))
     for k in ("water_l", "water_m3", "energy_kwh", "cost", "avg_flow", "expected_water_l", "expected_water_m3"):
         if v.get(k) is None:
             v[k] = "-"              # no meter: a dash instead of "None" in the text
