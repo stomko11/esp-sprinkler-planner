@@ -43,12 +43,12 @@ ACTIONS_SK = {"stop": "Zastavi\u0165", "skip": "Presko\u010di\u0165", "pump_on":
 COMMON_VARS = ["planner", "slots", "zones", "zone_list", "zone_count", "start_time", "end_time", "duration_min", "day",
                "source"]
 VARIABLES: Dict[str, List[str]] = {
-    "planned": COMMON_VARS + ["lead", "expected_water_l"],
-    "started": COMMON_VARS + ["expected_water_l"],
+    "planned": COMMON_VARS + ["lead", "expected_water_l", "expected_water_m3"],
+    "started": COMMON_VARS + ["expected_water_l", "expected_water_m3"],
     "zone_changed": COMMON_VARS + ["zone", "zone_minutes"],
-    "finished": COMMON_VARS + ["actual_minutes", "water_l", "energy_kwh", "cost", "avg_flow"],
-    "skipped": COMMON_VARS + ["reason", "expected_water_l"],
-    "stopped": COMMON_VARS + ["reason", "actual_minutes", "water_l", "energy_kwh", "cost"],
+    "finished": COMMON_VARS + ["actual_minutes", "water_l", "water_m3", "energy_kwh", "cost", "avg_flow"],
+    "skipped": COMMON_VARS + ["reason", "expected_water_l", "expected_water_m3"],
+    "stopped": COMMON_VARS + ["reason", "actual_minutes", "water_l", "water_m3", "energy_kwh", "cost"],
     "error": COMMON_VARS + ["reason"],
     "pump_off": COMMON_VARS + ["pump"],
     "dry_run": COMMON_VARS + ["calls"],
@@ -273,7 +273,10 @@ def variables(event: str, run: Optional[Dict[str, Any]], slot_names: Dict[str, s
         if isinstance(val, float) and val == int(val):
             val = int(val)          # 1.0 min -> 1 min
         v[k] = val
-    for k in ("water_l", "energy_kwh", "cost", "avg_flow", "expected_water_l"):
+    for src, dst in (("water_l", "water_m3"), ("expected_water_l", "expected_water_m3")):
+        if dst not in v and isinstance(v.get(src), (int, float)):
+            v[dst] = round(v[src] / 1000, 3)   # 245.5 L -> 0.246 m3
+    for k in ("water_l", "water_m3", "energy_kwh", "cost", "avg_flow", "expected_water_l", "expected_water_m3"):
         if v.get(k) is None:
             v[k] = "-"              # no meter: a dash instead of "None" in the text
     return {k: v.get(k) for k in VARIABLES[event]}

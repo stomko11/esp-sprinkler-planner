@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Notification variables `{{ water_m3 }}` and `{{ expected_water_m3 }}` next to the litre ones.
+
 ## 0.5.2
 
 - **Buttons on Android / iOS for any recipient:** each recipient chip shows how it is sent

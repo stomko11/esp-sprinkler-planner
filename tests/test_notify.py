@@ -121,3 +121,11 @@ class UsageVarsTest(unittest.TestCase):
         N.merged({"platforms": {"notify.stefan": "android"}})
         with self.assertRaises(N.NotifyConfigError):
             N.merged({"platforms": {"notify.stefan": "nokia"}})
+
+
+class CubicMetresTest(unittest.TestCase):
+    def test_m3(self):
+        v = N.variables("finished", None, {}, "Garden", {"water_l": 245.5})
+        self.assertEqual(v["water_m3"], 0.246)
+        self.assertEqual(N.variables("finished", None, {}, "Garden", {"water_l": None})["water_m3"], "-")
+        self.assertEqual(N.variables("planned", None, {}, "Garden", {"expected_water_l": 1500})["expected_water_m3"], 1.5)
