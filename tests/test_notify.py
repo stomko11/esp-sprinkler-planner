@@ -99,3 +99,13 @@ class EmojiDefaultsTest(unittest.TestCase):
     def test_android_icon_per_event(self):
         p = N.payload("android", "t", "m", [], "E", event="error")
         self.assertEqual((p["data"]["notification_icon"], p["data"]["color"]), ("mdi:alert-circle", "#e5484d"))
+
+
+class ZoneCountTest(unittest.TestCase):
+    def test_zone_count(self):
+        run = {"zones": [{"name": "A", "minutes": 5}, {"name": "B", "minutes": 3}],
+               "start": "2026-07-10T05:00:00+02:00", "end": "2026-07-10T05:08:00+02:00", "slots": ["m"], "day": "2026-07-10"}
+        v = N.variables("started", run, {"m": "Morning"}, "Garden")
+        self.assertEqual(v["zone_count"], 2)
+        self.assertNotIn("zone_count", N.variables("flow_warning", run, {}, "Garden"))
+        self.assertEqual(N.variables("finished", None, {}, "Garden")["zone_count"], 0)

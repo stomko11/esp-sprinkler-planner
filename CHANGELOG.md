@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Notification variable `{{ zone_count }}`: number of zones in the run (all run events).
 - **Duplicate a slot:** button in the slot editor. The copy goes right below the original, switched
   off (so nothing waters twice) and opened for editing; Save to keep it.
 

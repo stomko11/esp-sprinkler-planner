@@ -40,7 +40,8 @@ ACTIONS = {
 ACTIONS_SK = {"stop": "Zastavi\u0165", "skip": "Presko\u010di\u0165", "pump_on": "Zapn\u00fa\u0165 \u010derpadlo",
               "accept": "Prija\u0165", "dismiss": "Zamietnu\u0165"}
 
-COMMON_VARS = ["planner", "slots", "zones", "zone_list", "start_time", "end_time", "duration_min", "day", "source"]
+COMMON_VARS = ["planner", "slots", "zones", "zone_list", "zone_count", "start_time", "end_time", "duration_min", "day",
+               "source"]
 VARIABLES: Dict[str, List[str]] = {
     "planned": COMMON_VARS + ["lead"],
     "started": COMMON_VARS,
@@ -254,6 +255,7 @@ def variables(event: str, run: Optional[Dict[str, Any]], slot_names: Dict[str, s
         "slots": ", ".join(slot_names.get(s, s) for s in run.get("slots") or []),
         "zones": zones,
         "zone_list": ", ".join(zones) or "-",
+        "zone_count": len(zones),
         "start_time": start[11:16], "end_time": end[11:16], "duration_min": dur,
         "day": run.get("day"), "source": (extra or {}).get("source"),
     }
