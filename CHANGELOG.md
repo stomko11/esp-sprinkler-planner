@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.3
 
 - Notification variables `{{ water_m3 }}` and `{{ expected_water_m3 }}` next to the litre ones.
 
