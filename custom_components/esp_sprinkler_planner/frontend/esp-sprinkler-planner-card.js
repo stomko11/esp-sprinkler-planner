@@ -32,7 +32,7 @@ const SK = {
   "Scheduled runs are skipped; manual runs still work.": "Napl\u00e1novan\u00e9 behy sa presko\u010dia; ru\u010dn\u00e9 spustenie funguje.", "paused": "pozastaven\u00e9",
   "waiting for your answer": "\u010dak\u00e1 na tvoju odpove\u010f", "waiting for a blocker": "\u010dak\u00e1, k\u00fdm sa blokovanie skon\u010d\u00ed", "no answer by {0}: {1}": "bez odpovede do {0}: {1}",
   "until {0}, then {1}": "do {0}, potom {1}", "Wait 30 min": "Po\u010dka\u0165 30 min", "skip": "presko\u010di\u0165", "run": "spusti\u0165", "wait": "po\u010dka\u0165",
-  "Blockers": "Blokovanie", "{0} rules": "{0} pravidiel", "1 rule": "1 pravidlo", "{0} rules (2-4)": "{0} pravidl\u00e1", "New blocker": "Nov\u00e9 blokovanie", "is on": "je zapnut\u00e9", "is off": "je vypnut\u00e9", "is": "je", "is not": "nie je",
+  "Blockers": "Blokovanie", "triggered by": "spustil", "{0} rules": "{0} pravidiel", "1 rule": "1 pravidlo", "{0} rules (2-4)": "{0} pravidl\u00e1", "New blocker": "Nov\u00e9 blokovanie", "is on": "je zapnut\u00e9", "is off": "je vypnut\u00e9", "is": "je", "is not": "nie je",
   "above": "nad", "below": "pod", "act_skip": "presko\u010di\u0165", "act_wait": "po\u010dka\u0165", "act_ask": "op\u00fdta\u0165 sa", "Delete": "Zmaza\u0165", "e.g. Mower on the lawn": "napr. Kosa\u010dka na tr\u00e1ve",
   "When": "Ke\u010f", "any entity: mower, switch, sensor\u2026": "\u013eubovo\u013en\u00e1 entita: kosa\u010dka, vyp\u00edna\u010d, senzor\u2026", "now": "teraz", "blocking": "blokuje", "Applies to": "Plat\u00ed pre",
   "every run": "ka\u017ed\u00fd beh", "chosen slots": "vybran\u00e9 sloty", "chosen zones": "vybran\u00e9 z\u00f3ny", "Then": "Potom", "skip the run": "presko\u010di\u0165 beh",
@@ -577,7 +577,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
         e.energy_kwh && e.energy_kwh !== "-" ? `${e.energy_kwh} kWh` : "", e.cost && e.cost !== "-" ? e.cost : "", e.flow ? `${e.flow} L/min` : "",
         e.until ? t("until {0}", e.until) : "", e.zones && ["started", "finished"].includes(e.kind) ? e.zones.join(", ") : ""].filter(Boolean).join(" \u00b7 ");
       return `${head}<div class="logrow ${bad.includes(e.kind) ? "bad" : ""}"><span class="lt">${hm(loc)}</span><ha-icon icon="${icon[e.kind] || "mdi:information"}"></ha-icon>
-        <span class="lk"><b>${esc(t(e.kind + "_ev"))}</b>${what ? ` \u00b7 ${esc(what)}` : ""}${e.dry ? ` <span class="chip warn small">${t("Test")}</span>` : ""}<br><span class="muted small">${esc(det)}</span></span></div>`;
+        <span class="lk"><b>${esc(t(e.kind + "_ev"))}</b>${what ? ` \u00b7 ${esc(what)}` : ""}${e.dry ? ` <span class="chip warn small">${t("Test")}</span>` : ""}${e.by ? ` <span class="by muted small" title="${esc(t("triggered by"))}"><ha-icon icon="mdi:account"></ha-icon>${esc(e.by)}</span>` : ""}<br><span class="muted small">${esc(det)}</span></span></div>`;
     }).join("");
     return `<div class="row"><span class="seg">${[["all", t("All")], ["runs", t("Runs")], ["skips", t("Skips & weather")], ["alarms", t("Alarms")]].map(([v, l]) => `<button class="ab ${F === v ? "on" : ""}" data-act="lf" data-v="${v}">${l}</button>`).join("")}</span>
       <span class="grow"></span><button class="ab" data-act="logrefresh"><ha-icon icon="mdi:refresh"></ha-icon></button></div>
@@ -1925,7 +1925,8 @@ details.ztoday > summary { list-style:none; cursor:pointer; } details.ztoday > s
 .logrow { display:flex; gap:10px; align-items:flex-start; padding:6px 0; border-top:1px solid var(--divider-color,#eee); }
 .logrow .lt { width:42px; flex:none; font-variant-numeric:tabular-nums; color:var(--secondary-text-color,#888); padding-top:1px; }
 .logrow ha-icon { --mdc-icon-size:18px; color:var(--primary-color,#03a9f4); flex:none; } .logrow.bad ha-icon, .logrow.bad b { color:#e5484d; }
-.logrow .lk { min-width:0; } .lkb { display:inline-flex; gap:6px; flex-wrap:wrap; }
+.logrow .lk { min-width:0; } .logrow .by { white-space:nowrap; } .logrow .by ha-icon { --mdc-icon-size:13px; color:inherit; vertical-align:-1px; margin-right:2px; }
+details[data-d="s_zones"] > .secb, details.sub > .secb { overflow-x:clip; } details.sub > .secb input:not([type=checkbox]):not([type=color]) { max-width:100%; } details.sub > .secb .sl { max-width:100%; } details.sub > .secb .sl input[type=range] { min-width:0; flex:1 1 auto; } .lkb { display:inline-flex; gap:6px; flex-wrap:wrap; }
 .banner.offline > ha-icon { color:#e5484d; --mdc-icon-size:28px; flex:none; }
 .dm { box-sizing:border-box; display:inline-flex; flex-direction:column; align-items:center; justify-content:center; width:58px; height:24px; border-radius:6px; padding:1px 2px; background:var(--secondary-background-color,#eee); cursor:pointer; vertical-align:middle; line-height:1; }
 .fcd .dm { cursor:inherit; } .dm.emptyd { visibility:hidden; }

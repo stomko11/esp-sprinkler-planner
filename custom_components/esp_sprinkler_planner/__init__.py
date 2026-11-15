@@ -89,6 +89,7 @@ async def async_setup(hass: HomeAssistant, config) -> bool:
     async def handle(call: ServiceCall):
         rt = _runtime(hass, call)
         d = call.data
+        await rt.set_actor(call.context.user_id if call.context else None)
         try:
             if call.service == "configure":
                 plan = await rt.configure(d.get("zones"), d.get("slots"), d.get("settings"),
@@ -148,6 +149,8 @@ async def async_setup(hass: HomeAssistant, config) -> bool:
                 await rt.async_replan()
         except ConfigError as err:
             raise ServiceValidationError(str(err)) from err
+        finally:
+            rt._actor = None
         return None
 
     for name, schema in SCHEMAS.items():

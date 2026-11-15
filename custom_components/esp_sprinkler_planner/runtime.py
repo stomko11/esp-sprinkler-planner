@@ -34,6 +34,7 @@ class Runtime:
         self.hass = hass
         self.entry = entry
         self.store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
+        self._actor: Optional[str] = None     # HA user behind the service call / notification button being handled
         self.config: Dict[str, Any] = {}
         self.flags: Dict[str, bool] = {"enabled": True, "dry_run": True}
         self.skip: List[str] = []
@@ -185,6 +186,23 @@ class Runtime:
                  "leak", "valve_stuck", "flow_warning", "flow_drift", "offline", "online", "paused", "resumed", "skip_set",
                  "pump_off"}
 
+    ACTOR_KINDS = {"started", "stopped", "skipped", "skip_set", "paused", "resumed", "blocked", "suggestion"}
+
+    async def set_actor(self, user_id: Optional[str]) -> None:
+        """Remember who triggered the action being handled (shown as "by" in the log)."""
+        name = None
+        if user_id:
+            user = await self.hass.auth.async_get_user(user_id)
+            name = (user.name if user else None) or None
+        self._actor = name
+
+    async def _as_user(self, user_id: Optional[str], coro) -> None:
+        await self.set_actor(user_id)
+        try:
+            await coro
+        finally:
+            self._actor = None
+
     def _log_event(self, kind: str, data: Dict[str, Any]) -> None:
         rr = data.get("run") or {}
         entry = {"t": dt_util.utcnow().isoformat(), "kind": kind,
@@ -196,6 +214,8 @@ class Runtime:
                   "water_l", "energy_kwh", "cost", "source"):
             if data.get(k) not in (None, "", []):
                 entry[k] = data[k]
+        if self._actor and kind in self.ACTOR_KINDS:
+            entry["by"] = self._actor
         self.log.append({k: v for k, v in entry.items() if v not in (None, False)})
         del self.log[:-500]
 
@@ -297,23 +317,24 @@ class Runtime:
         if not parsed or parsed[1] != self.entry.entry_id:
             return
         name = parsed[0]
+        uid = event.context.user_id if event.context else None
         _LOGGER.info("%s: notification action %s", self.entry.title, name)
         if name == "stop":
-            self.hass.async_create_task(self.stop())
+            self.hass.async_create_task(self._as_user(uid, self.stop()))
         elif name == "skip":
-            self.hass.async_create_task(self.skip_next())
+            self.hass.async_create_task(self._as_user(uid, self.skip_next()))
         elif name == "pump_on":
-            self.hass.async_create_task(self._pump_switch(True, by_user=True))
+            self.hass.async_create_task(self._as_user(uid, self._pump_switch(True, by_user=True)))
         elif name in ("blk_run", "blk_skip", "blk_wait") and self.held:
-            self.hass.async_create_task(self.answer_blocker({"blk_run": "run", "blk_skip": "skip", "blk_wait": "wait"}[name]))
+            self.hass.async_create_task(self._as_user(uid, self.answer_blocker({"blk_run": "run", "blk_skip": "skip", "blk_wait": "wait"}[name])))
         elif name == "leak_snooze":
-            self.hass.async_create_task(self.leak_snooze())
+            self.hass.async_create_task(self._as_user(uid, self.leak_snooze()))
         elif name == "pump_off":
-            self.hass.async_create_task(self._pump_switch(False))
+            self.hass.async_create_task(self._as_user(uid, self._pump_switch(False)))
         elif name in ("accept", "dismiss"):
             pend = sorted(k for k, v in self.suggestions.items() if v.get("status") == "pending")
             if pend:
-                self.hass.async_create_task(self.answer_suggestion(pend[0], name == "accept"))
+                self.hass.async_create_task(self._as_user(uid, self.answer_suggestion(pend[0], name == "accept")))
 
     # ------------------------------------------------------------------ pump
     @property

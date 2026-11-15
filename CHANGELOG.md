@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.10.0 (on the test HA, not released yet)
+## 0.10.0
 
 - **Blockers** (Settings → Blockers): "when <entity> is on / off / is / is not / above / below",
   for every run, chosen slots or chosen zones. Then: skip, wait until it clears (at most N min, then
@@ -14,6 +14,8 @@
 - **Repairs:** controller missing or offline > 1 h, weather entity missing, notify target missing
   appear under Settings → Repairs.
 - **Diagnostics download** (config, plan, recent log, states; nothing secret).
+- The log shows which Home Assistant user started, stopped, skipped, paused or resumed, also when answered from a notification.
+- Zone settings no longer scroll sideways.
 
 ## 0.9.0
 
