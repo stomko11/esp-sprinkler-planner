@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.10.0 (on the test HA, not released yet)
+
+- **Blockers** (Settings → Blockers): "when <entity> is on / off / is / is not / above / below",
+  for every run, chosen slots or chosen zones. Then: skip, wait until it clears (at most N min, then
+  skip or run), or ask in a notification (Run anyway / Wait 30 min / Skip, with a default after N
+  min). Zone blockers leave those zones out. Optional: stop a run when the blocker turns on during
+  it. Overview banner for a held run with the same buttons; `answer_blocker` service.
+- **Pause** for 1 / 3 / 7 / 14 days or until a date (inclusive), Overview button and banner with
+  Resume; paused runs are dimmed with ⏸; status `paused`; `pause` / `resume` services.
+- **Log tab:** every run, skip, weather decision, blocker, alarm and pause with its reason, minutes,
+  water and energy, grouped by day, filter All / Runs / Skips & weather / Alarms.
+- **Repairs:** controller missing or offline > 1 h, weather entity missing, notify target missing
+  appear under Settings → Repairs.
+- **Diagnostics download** (config, plan, recent log, states; nothing secret).
+
 ## 0.9.0
 
 - **Weekly average** (Settings → Weather): the season level from the average daily maximum of

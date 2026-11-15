@@ -18,7 +18,7 @@ from homeassistant.helpers.template import Template
 from homeassistant.util import slugify
 from homeassistant.util import dt as dt_util
 
-from . import executor, leak as leak_mod, model, notify_logic, planner, stats as stats_mod, weather as wx_mod
+from . import blockers as blk_mod, executor, leak as leak_mod, model, notify_logic, planner, stats as stats_mod, weather as wx_mod
 from .const import (CONF_CONTROLLER, CONF_VALVE_OVERLAP, CONF_VALVES, DEFAULT_WATCHDOG, DOMAIN, EVENT, OPT_RESTORE,
                     OPT_WATCHDOG, PLAN_DAYS, STORAGE_VERSION)
 
@@ -64,6 +64,10 @@ class Runtime:
         self.skip_done: List[str] = []                    # user skips whose start has passed (shown dimmed)
         self.stats: Dict[str, Any] = {}
         self.flow_samples: Dict[str, List[float]] = {}
+        self.log: List[Dict[str, Any]] = []               # event log for the card (newest last, 500 entries)
+        self.pause_until: Optional[str] = None            # local date, inclusive: no scheduled runs until then
+        self.held: Optional[Dict[str, Any]] = None        # a run waiting for a blocker: key, until, mode, reasons
+        self._held_timer = None
         self.leak = leak_mod.LeakWatch()
         self.leak_alarm: Optional[Dict[str, Any]] = None   # active alarm for the card
         self.leak_snooze_until: Optional[str] = None
@@ -106,6 +110,8 @@ class Runtime:
             return "dry_run" if self.active.get("dry_run") else "running"
         if not self.flags["enabled"]:
             return "disabled"
+        if self.paused:
+            return "paused"
         return "scheduled" if self.next_run else "idle"
 
     @property
@@ -121,6 +127,17 @@ class Runtime:
             return wx_mod.merged(self.config.get("weather"))
         except wx_mod.WeatherConfigError:
             return wx_mod.merged({})
+
+    @property
+    def blockers(self) -> List[Dict[str, Any]]:
+        try:
+            return blk_mod.from_list(self.config.get("blockers"))
+        except blk_mod.BlockerConfigError:
+            return []
+
+    @property
+    def paused(self) -> bool:
+        return bool(self.pause_until and dt_util.now().date().isoformat() <= self.pause_until)
 
     @property
     def leak_cfg(self) -> Dict[str, Any]:
@@ -159,11 +176,33 @@ class Runtime:
                                      "stats": self.stats, "flow_samples": self.flow_samples,
                                      "flow_base": self.flow_base, "base_samples": self._base_samples,
                                      "rain_log": self.rain_log, "rain_last": self._rain_last, "tmax_log": self.tmax_log,
-                                     "leak_snooze_until": self.leak_snooze_until,
+                                     "leak_snooze_until": self.leak_snooze_until, "pause_until": self.pause_until,
+                                     "log": self.log,
                                      "rain_entity": self._rain_entity,
                                      "suggestions": self.suggestions, "skip_done": self.skip_done})
 
+    LOG_KINDS = {"started", "finished", "stopped", "skipped", "error", "weather", "suggestion", "blocked", "blocker_ask",
+                 "leak", "valve_stuck", "flow_warning", "flow_drift", "offline", "online", "paused", "resumed", "skip_set",
+                 "pump_off"}
+
+    def _log_event(self, kind: str, data: Dict[str, Any]) -> None:
+        rr = data.get("run") or {}
+        entry = {"t": dt_util.utcnow().isoformat(), "kind": kind,
+                 "slots": rr.get("slots"), "day": rr.get("day"), "start": rr.get("start"),
+                 "zones": [z.get("name") for z in rr.get("zones") or []] or None,
+                 "pass": f"{rr.get('pass_no')}/{rr.get('passes')}" if (rr.get("passes") or 1) > 1 else None,
+                 "dry": bool(data.get("dry") or (kind in ("started", "finished", "stopped") and self.flags.get("dry_run")))}
+        for k in ("reason", "action", "factor", "zone", "flow", "usual", "minutes", "since", "until", "actual_minutes",
+                  "water_l", "energy_kwh", "cost", "source"):
+            if data.get(k) not in (None, "", []):
+                entry[k] = data[k]
+        self.log.append({k: v for k, v in entry.items() if v not in (None, False)})
+        del self.log[:-500]
+
     def _event(self, kind: str, **data) -> None:
+        if kind in self.LOG_KINDS:
+            self._log_event(kind, data)
+            self.hass.async_create_task(self._save())
         payload = {"entry_id": self.entry.entry_id, "type": kind, **data}
         self.last_event = {**payload, "time": dt_util.utcnow().isoformat()}
         self._changed()
@@ -265,6 +304,8 @@ class Runtime:
             self.hass.async_create_task(self.skip_next())
         elif name == "pump_on":
             self.hass.async_create_task(self._pump_switch(True, by_user=True))
+        elif name in ("blk_run", "blk_skip", "blk_wait") and self.held:
+            self.hass.async_create_task(self.answer_blocker({"blk_run": "run", "blk_skip": "skip", "blk_wait": "wait"}[name]))
         elif name == "leak_snooze":
             self.hass.async_create_task(self.leak_snooze())
         elif name == "pump_off":
@@ -903,6 +944,9 @@ class Runtime:
             self._dyn_unsubs.append(async_track_state_change_event(self.hass, [cfg["rain_sensor"]], self._on_rain))
         if self._temp_source():
             self._dyn_unsubs.append(async_track_state_change_event(self.hass, [self._temp_source()], self._on_temp))
+        bents = sorted({b["entity"] for b in self.blockers})
+        if bents:
+            self._dyn_unsubs.append(async_track_state_change_event(self.hass, bents, self._on_blocker_state))
 
     @callback
     def _on_weather_change(self, _event: Event) -> None:
@@ -985,6 +1029,8 @@ class Runtime:
         self.rain_log = data.get("rain_log") or []
         self.tmax_log = data.get("tmax_log") or {}
         self.leak_snooze_until = data.get("leak_snooze_until")
+        self.pause_until = data.get("pause_until")
+        self.log = data.get("log") or []
         self._rain_last = data.get("rain_last")
         self._rain_entity = data.get("rain_entity")
         self._base_samples = data.get("base_samples") or {}
@@ -1030,6 +1076,7 @@ class Runtime:
         await self._resume()
         await self.refresh_weather()
         await self.async_replan()
+        self._update_repairs()
 
     async def async_stop(self) -> None:
         for u in self._unsubs + self._dyn_unsubs:
@@ -1040,6 +1087,9 @@ class Runtime:
         if self._stuck_timer:
             self._stuck_timer()
             self._stuck_timer = None
+        if self._held_timer:
+            self._held_timer()
+            self._held_timer = None
         for t in (self._timer, self._watchdog, self._dry_timer, self._planned_timer, self._health_timer):
             if t:
                 t()
@@ -1048,6 +1098,36 @@ class Runtime:
     async def _periodic(self, _now) -> None:
         await self.refresh_weather()
         await self.async_replan()
+        self._update_repairs()
+
+    # ------------------------------------------------------------------ repairs (Settings -> Repairs)
+    def _update_repairs(self) -> None:
+        from homeassistant.helpers import issue_registry as ir
+        eid = self.entry.entry_id
+
+        def issue(key: str, show: bool, **ph) -> None:
+            iid = f"{key}_{eid}"
+            if show:
+                ir.async_create_issue(self.hass, DOMAIN, iid, is_fixable=False, is_persistent=False,
+                                      severity=ir.IssueSeverity.ERROR if key == "controller_missing" else ir.IssueSeverity.WARNING,
+                                      translation_key=key, translation_placeholders={"planner": self.entry.title, **ph})
+            else:
+                ir.async_delete_issue(self.hass, DOMAIN, iid)
+        h = self.health
+        issue("controller_missing", bool(h["missing"]), entities=", ".join(h["missing"][:3]))
+        long_offline = bool(h["unavailable"] and h["since"]
+                            and dt_util.utcnow() - dt_util.parse_datetime(h["since"]) > timedelta(hours=1))
+        issue("controller_offline", long_offline, since=self._local_hm(h["since"]))
+        w = self.weather_cfg
+        bad_wx = bool(w["mode"] != "off" and w.get("entity") and self.hass.states.get(w["entity"]) is None)
+        issue("weather_missing", bad_wx, entity=w.get("entity") or "")
+        try:
+            targets = notify_logic.merged(self.config.get("notifications"), self.lang)["targets"]
+        except notify_logic.NotifyConfigError:
+            targets = []
+        svcs = self.hass.services.async_services().get("notify", {})
+        gone = [t for t in targets if t.split(".", 1)[1] not in svcs and self.hass.states.get(t) is None]
+        issue("notify_missing", bool(gone), services=", ".join(gone))
 
     # ------------------------------------------------------------------ planning
     def _sun(self, day):
@@ -1103,7 +1183,12 @@ class Runtime:
         stats_mod.prune(self.stats, dt_util.now().date())
         if changed:
             await self._save()
-        blocked = set(self.skip) | set(self.wx_skip)
+        if self.pause_until and dt_util.now().date().isoformat() > self.pause_until:
+            self.pause_until = None              # pause over
+            self._event("resumed")
+            await self._save()
+        paused = {run_key(r) for r in self.plan.runs if self.pause_until and r.day.isoformat() <= self.pause_until}
+        blocked = set(self.skip) | set(self.wx_skip) | paused
         upcoming = [r for r in self.plan.runs if r.start > now and run_key(r) not in blocked]
         self.next_run = upcoming[0] if upcoming else None
         if self.next_run and not self.active:
@@ -1166,7 +1251,173 @@ class Runtime:
                 return
             if d and d["action"] == "adjust" and d["status"] in ("auto", "accepted"):
                 self._event("weather", run=rd, **self._wx_vars(d))
+        await self._start_checked(run)
+
+    # ------------------------------------------------------------------ blockers
+    def _blk_states(self) -> Dict[str, Optional[str]]:
+        return {b["entity"]: (self.hass.states.get(b["entity"]).state if self.hass.states.get(b["entity"]) else None)
+                for b in self.blockers}
+
+    def _txt(self, en: str, sk: str) -> str:
+        return sk if self.lang == "sk" else en
+
+    async def _start_checked(self, run: planner.Run, answered: Optional[str] = None) -> None:
+        """Start a scheduled run unless a blocker says otherwise (skip, drop zones, wait, ask)."""
+        key = run_key(run)
+        names = self.zone_names()
+        v = blk_mod.check(self.blockers, self._blk_states(), run.slot_ids, run.zone_ids(), names)
+        rd = model.run_to_dict(run, names)
+        reason = ", ".join(v.reasons)
+        if answered == "run":
+            v.action = "run"                      # the user said "run anyway": only zone blockers still apply
+        if v.action == "skip":
+            self._clear_held()
+            stats_mod.add_skip(self.stats, run.day.isoformat(), {s.zone_id: s.minutes for s in run.steps})
+            self._event("blocked", run=rd, reason=reason, action=self._txt("skipped", "presko\u010den\u00e9"))
+            await self._save()
+            await self.async_replan()
+            return
+        if v.action in ("wait", "ask"):
+            if self.held and self.held["key"] == key:
+                return                            # already waiting / asking for this run
+            blk = v.blockers
+            if v.action == "ask":
+                tmo = max(b["ask_timeout"] for b in blk if b["action"] == "ask")
+                dflt = next(b["ask_default"] for b in blk if b["action"] == "ask")
+                self._hold(run, "ask", tmo, reason, dflt)
+                self._event("blocker_ask", run=rd, reason=reason, timeout=round(tmo),
+                            default={"skip": self._txt("skip", "presko\u010di\u0165"), "run": self._txt("run", "spusti\u0165"),
+                                     "wait": self._txt("wait", "po\u010dka\u0165")}[dflt])
+            else:
+                after = next(b["after_wait"] for b in blk if b["action"] == "wait")
+                self._hold(run, "wait", v.wait_min, reason, after)
+                self._event("blocked", run=rd, reason=reason,
+                            action=self._txt(f"waiting up to {round(v.wait_min)} min", f"\u010dak\u00e1 najviac {round(v.wait_min)} min"))
+            return
+        self._clear_held()
+        if v.drop_zones:                          # zone blockers: water the rest
+            steps = [st for st in run.steps if st.zone_id not in v.drop_zones]
+            if not steps:
+                return await self._skip_blocked(run, {"reason": reason})
+            settings = model.parse(self.config, self.valves, self.valve_overlap)[2]
+            start = dt_util.now()
+            run = dataclasses.replace(run, steps=steps, notes=list(run.notes) + [f"blocked: {reason}"],
+                                      start=start, end=start + planner.run_length(steps, settings))
+            self._event("blocked", run=model.run_to_dict(run, names), reason=reason,
+                        action=self._txt("without blocked zones", "bez blokovan\u00fdch z\u00f3n"))
         await self.execute(run, "schedule")
+
+    def _hold(self, run: planner.Run, mode: str, minutes: float, reason: str, then: str) -> None:
+        until = dt_util.utcnow() + timedelta(minutes=minutes)
+        self.held = {"key": run_key(run), "pass_no": run.pass_no, "mode": mode, "until": until.isoformat(),
+                     "reason": reason, "then": then, "since": dt_util.utcnow().isoformat()}
+        if self._held_timer:
+            self._held_timer()
+        self._held_timer = async_track_point_in_utc_time(self.hass, self._held_tick, until)
+        self._changed()
+
+    def _clear_held(self) -> None:
+        if self._held_timer:
+            self._held_timer()
+            self._held_timer = None
+        if self.held:
+            self.held = None
+            self._changed()
+
+    def _held_run(self) -> Optional[planner.Run]:
+        if not self.held:
+            return None
+        return next((r for r in (self.plan.runs if self.plan else [])
+                     if run_key(r) == self.held["key"] and r.pass_no == self.held["pass_no"]), None)
+
+    async def _held_tick(self, _now=None) -> None:
+        """Wait / ask time is over: do what was configured."""
+        self._held_timer = None
+        h, run = self.held, self._held_run()
+        if not h or run is None:
+            self._clear_held()
+            return
+        then = h["then"]
+        if then == "wait" and h["mode"] == "ask":   # ask with default "wait": wait for the blockers' wait time
+            blk = [b for b in self.blockers if b["action"] == "ask"]
+            self._hold(run, "wait", max([b["wait"] for b in blk] or [30]), h["reason"],
+                       next((b["after_wait"] for b in blk), "skip"))
+            return
+        if then == "run":
+            self._clear_held()
+            await self._start_checked(run, "run")          # "run anyway" after the wait / no answer
+        else:
+            await self._skip_blocked(run, h)
+
+    async def _skip_blocked(self, run: planner.Run, h: Dict[str, Any]) -> None:
+        stats_mod.add_skip(self.stats, run.day.isoformat(), {s.zone_id: s.minutes for s in run.steps})
+        self._event("blocked", run=model.run_to_dict(run, self.zone_names()), reason=h["reason"],
+                    action=self._txt("skipped", "presko\u010den\u00e9"))
+        self._clear_held()
+        await self._save()
+        await self.async_replan()
+
+    @callback
+    def _on_blocker_state(self, _event: Event) -> None:
+        """A held run starts as soon as its blockers clear; an active run stops if a 'stop' blocker turns on."""
+        st = self._blk_states()
+        if self.held and self.held["mode"] == "wait":
+            run = self._held_run()
+            if run is not None and blk_mod.check(self.blockers, st, run.slot_ids, run.zone_ids()).action == "run":
+                self._clear_held()
+                self.hass.async_create_task(self._start_checked(run))
+        if self.active:
+            rr = self.active["run"]
+            for b in self.blockers:
+                if b["during"] == "stop" and blk_mod.applies(b, rr.get("slots") or [], [z["zone"] for z in rr["zones"]]) \
+                        and blk_mod.active(b, st.get(b["entity"])):
+                    self.hass.async_create_task(self._stop_blocked(b))
+                    break
+
+    async def _stop_blocked(self, b: Dict[str, Any]) -> None:
+        if not self.active:
+            return
+        if self.active.get("dry_run"):
+            await self._finish("stopped", reason=self._txt(f"blocked by {b['name']}", f"zablokovan\u00e9: {b['name']}"))
+        else:
+            await self._turn_off_main()
+            if self.active:
+                await self._finish("stopped", reason=self._txt(f"blocked by {b['name']}", f"zablokovan\u00e9: {b['name']}"))
+
+    async def answer_blocker(self, answer: str) -> None:
+        """Answer to an 'ask' (or override a wait): run | skip | wait."""
+        h, run = self.held, self._held_run()
+        if not h or run is None:
+            raise model.ConfigError("no run is waiting for an answer")
+        if answer == "skip":
+            self.held = None
+            await self._skip_blocked(run, h)
+        elif answer == "run":
+            self._clear_held()
+            await self._start_checked(run, "run")
+        else:
+            blk = [b for b in self.blockers if b["action"] in ("ask", "wait")]
+            self._hold(run, "wait", 30, h["reason"], next((b["after_wait"] for b in blk), "skip"))
+
+    # ------------------------------------------------------------------ pause
+    async def pause(self, until: Optional[str] = None, days: Optional[int] = None) -> Optional[str]:
+        """No scheduled runs until this local date (inclusive). until=None and days=None resumes."""
+        if days:
+            until = (dt_util.now().date() + timedelta(days=int(days) - 1)).isoformat()
+        if until:
+            from datetime import date as _date
+            try:
+                _date.fromisoformat(until)
+            except ValueError as err:
+                raise model.ConfigError("pause: until must be YYYY-MM-DD") from err
+            self.pause_until = until
+            self._event("paused", until=dt_util.parse_date(until).strftime("%d.%m.%Y"))
+        else:
+            self.pause_until = None
+            self._event("resumed")
+        await self._save()
+        await self.async_replan()
+        return self.pause_until
 
     # ------------------------------------------------------------------ execution
     def _states(self) -> Dict[str, Dict[str, Any]]:
@@ -1381,8 +1632,13 @@ class Runtime:
         await self.async_replan()
 
     async def configure(self, zones=None, slots=None, settings=None, notifications=None, pump=None,
-                        weather=None, meters=None, ui=None, leak=None) -> planner.Plan:
+                        weather=None, meters=None, ui=None, leak=None, blockers=None) -> planner.Plan:
         new = copy.deepcopy(self.config)
+        if blockers is not None:
+            try:
+                new["blockers"] = blk_mod.from_list(blockers)
+            except blk_mod.BlockerConfigError as err:
+                raise model.ConfigError(str(err)) from err
         if leak is not None:
             try:
                 leak_mod.merged(leak)
@@ -1423,8 +1679,8 @@ class Runtime:
         if settings is not None:
             new["settings"] = settings
         result = self.compute(days=7, config=new)   # raises ConfigError
-        resub = (new.get("weather"), new.get("meters"), new.get("leak")) != (
-            self.config.get("weather"), self.config.get("meters"), self.config.get("leak"))
+        resub = (new.get("weather"), new.get("meters"), new.get("leak"), new.get("blockers")) != (
+            self.config.get("weather"), self.config.get("meters"), self.config.get("leak"), self.config.get("blockers"))
         if (new.get("weather") or {}).get("mode", "off") != "suggest":
             # leaving suggest mode: open questions are gone (auto decides, off ignores the weather);
             # answers stay - a dismissed skip still means "run anyway" in auto mode
@@ -1563,5 +1819,6 @@ class Runtime:
                 "conflicts": [{"kind": c.kind, "day": c.day.isoformat(), "slots": list(c.slot_ids), "message": c.message}
                               for c in p.conflicts],
                 "skipped": list(self.skip) + list(self.skip_done), "weather": decisions, "weather_skipped": wx_skip,
+                "paused": [run_key(r) for r in p.runs if self.pause_until and r.day.isoformat() <= self.pause_until],
                 "suggestions": {k: v for k, v in self.suggestions.items() if v.get("status") == "pending"}
                 if self.weather_cfg["mode"] == "suggest" else {}}

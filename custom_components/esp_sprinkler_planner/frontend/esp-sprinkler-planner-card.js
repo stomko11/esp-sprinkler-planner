@@ -27,7 +27,24 @@ const SK = {
   "Raining now (binary or mm/h)": "Pr\u00e1ve pr\u0161\u00ed (bin\u00e1rny alebo mm/h)", "skip at gusts \u2265": "presko\u010di\u0165 pri n\u00e1razoch \u2265",
   "Live sensors": "Aktu\u00e1lne senzory", "Prices": "Ceny", "water per m\u00b3": "voda za m\u00b3", "energy per kWh": "energia za kWh",
   "Cost": "N\u00e1klady", "Last 12 months": "Posledn\u00fdch 12 mesiacov", "less": "menej", "more": "viac",
-  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Test mode (dry run)": "Sk\u00fa\u0161obn\u00fd re\u017eim (dry run)", "help_test_mode": "Pl\u00e1n, po\u010dasie, z\u00f3ny a upozornenia be\u017eia ako naostro (s ozna\u010den\u00edm \ud83e\uddea), ale ni\u010d sa nezapne - ani ESP, ani \u010derpadlo.", "Click to accept": "Kliknut\u00edm prijme\u0161", "cycle & soak: passes": "cyklus a vsiaknutie: prechody", "soak at least": "vsiaknutie aspo\u0148",
+  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Test mode (dry run)": "Sk\u00fa\u0161obn\u00fd re\u017eim (dry run)", "help_test_mode": "Pl\u00e1n, po\u010dasie, z\u00f3ny a upozornenia be\u017eia ako naostro (s ozna\u010den\u00edm \ud83e\uddea), ale ni\u010d sa nezapne - ani ESP, ani \u010derpadlo.", "Log": "Z\u00e1znam", "Paused": "Pozastaven\u00e9", "Pause": "Pozastavi\u0165", "Pause watering": "Pozastavi\u0165 polievanie",
+  "{0} days": "{0} dn\u00ed", "until (including)": "do (vr\u00e1tane)", "Paused until {0} (including)": "Pozastaven\u00e9 do {0} (vr\u00e1tane)", "Resume": "Pokra\u010dova\u0165",
+  "Scheduled runs are skipped; manual runs still work.": "Napl\u00e1novan\u00e9 behy sa presko\u010dia; ru\u010dn\u00e9 spustenie funguje.", "paused": "pozastaven\u00e9",
+  "waiting for your answer": "\u010dak\u00e1 na tvoju odpove\u010f", "waiting for a blocker": "\u010dak\u00e1, k\u00fdm sa blokovanie skon\u010d\u00ed", "no answer by {0}: {1}": "bez odpovede do {0}: {1}",
+  "until {0}, then {1}": "do {0}, potom {1}", "Wait 30 min": "Po\u010dka\u0165 30 min", "skip": "presko\u010di\u0165", "run": "spusti\u0165", "wait": "po\u010dka\u0165",
+  "Blockers": "Blokovanie", "{0} rules": "{0} pravidiel", "New blocker": "Nov\u00e9 blokovanie", "is on": "je zapnut\u00e9", "is off": "je vypnut\u00e9", "is": "je", "is not": "nie je",
+  "above": "nad", "below": "pod", "act_skip": "presko\u010di\u0165", "act_wait": "po\u010dka\u0165", "act_ask": "op\u00fdta\u0165 sa", "Delete": "Zmaza\u0165", "e.g. Mower on the lawn": "napr. Kosa\u010dka na tr\u00e1ve",
+  "When": "Ke\u010f", "any entity: mower, switch, sensor\u2026": "\u013eubovo\u013en\u00e1 entita: kosa\u010dka, vyp\u00edna\u010d, senzor\u2026", "now": "teraz", "blocking": "blokuje", "Applies to": "Plat\u00ed pre",
+  "every run": "ka\u017ed\u00fd beh", "chosen slots": "vybran\u00e9 sloty", "chosen zones": "vybran\u00e9 z\u00f3ny", "Then": "Potom", "skip the run": "presko\u010di\u0165 beh",
+  "wait until it clears": "po\u010dka\u0165, k\u00fdm sa skon\u010d\u00ed", "ask me": "op\u00fdta\u0165 sa ma", "wait at most": "\u010daka\u0165 najviac", "still blocked after that": "ak st\u00e1le blokuje",
+  "run anyway": "spusti\u0165 aj tak", "answer within": "odpove\u010f do", "no answer": "bez odpovede", "turns on during a run": "zapne sa po\u010das behu", "let it finish": "necha\u0165 dobehn\u00fa\u0165",
+  "stop the run": "zastavi\u0165 beh", "No blockers yet.": "Zatia\u013e \u017eiadne blokovanie.", "Add blocker": "Prida\u0165 blokovanie",
+  "help_blk_zones": "Z\u00f3ny: tieto z\u00f3ny sa z behu vynechaj\u00fa, ostatn\u00e9 polievaj\u00fa norm\u00e1lne.",
+  "help_blockers": "Ak nie\u010do nesmie by\u0165 polievan\u00e9 pr\u00e1ve teraz (kosa\u010dka, z\u00e1hradn\u00e1 oslava, baz\u00e9n\u2026): presko\u010di\u0165, po\u010dka\u0165 (najviac N min) alebo sa op\u00fdta\u0165 v upozornen\u00ed (Spusti\u0165 aj tak / Po\u010dka\u0165 / Presko\u010di\u0165). Pri viacer\u00fdch plat\u00ed presko\u010di\u0165 > op\u00fdta\u0165 sa > po\u010dka\u0165.",
+  "All": "V\u0161etko", "Runs": "Behy", "Skips & weather": "Presko\u010denia a po\u010dasie", "Alarms": "Alarmy", "Nothing logged yet.": "Zatia\u013e ni\u010d.",
+  "blocked_ev": "blokovan\u00e9", "blocker_ask_ev": "ot\u00e1zka", "paused_ev": "pozastaven\u00e9", "resumed_ev": "pokra\u010duje", "skip_set_ev": "presko\u010denie nastaven\u00e9",
+  "Run anyway_a": "Spusti\u0165 aj tak", "Skip_a": "Presko\u010di\u0165", "Wait 30 min_a": "Po\u010dka\u0165 30 min",
+  "Click to accept": "Kliknut\u00edm prijme\u0161", "cycle & soak: passes": "cyklus a vsiaknutie: prechody", "soak at least": "vsiaknutie aspo\u0148",
   "cycle & soak": "cyklus a vsiaknutie", "other zones run while one soaks": "k\u00fdm jedna vsakuje, be\u017eia ostatn\u00e9 z\u00f3ny", "pause the whole slot": "pauza cel\u00e9ho slotu",
   "pass {0}/{1}": "prechod {0}/{1}", "help_soak": "Min\u00faty z\u00f3ny sa rozdelia na {0} prechody; medzi nimi voda aspo\u0148 {1} min vsakuje. Ru\u010dn\u00e9 spustenie polieva naraz.", "Leak alarm": "Alarm \u00faniku",
   "help_leak": "Upozorn\u00ed, ke\u010f voda te\u010die a \u017eiadna z\u00f3na nepolieva (prasknut\u00e1 hadica, ventil). Pred a po behu je ticho, aby \u0165a neru\u0161il, ke\u010f vodu pou\u017e\u00edva\u0161.",
@@ -161,6 +178,9 @@ const EN = {
   "help_avg": "Season level from the average daily maximum instead of the day's per-degree change. Rain, wind and frost still apply.",
   "help_leak": "Notifies when water flows and no zone is watering (burst hose, stuck valve). Quiet before and after runs, so using water yourself does not trigger it.",
   "help_soak": "The zone's minutes are split into {0} passes with at least {1} min for the water to soak in between. Manual runs water in one go.",
+  "act_skip": "skip", "act_wait": "wait", "act_ask": "ask",
+  "help_blk_zones": "Zones: these zones are left out of the run, the others water as usual.",
+  "help_blockers": "When something must not be watered right now (mower, garden party, pool\u2026): skip, wait (at most N min) or ask in a notification (Run anyway / Wait / Skip). With several, skip > ask > wait.",
   "help_start": "The run starts at this time.", "help_finish": "The run is planned backwards so that it ends at this time.",
   "help_offset_sun": "Offset moves it: -30 = 30 min before, +60 = 1 h after sunrise/sunset (which changes every day).",
   "help_offset_time": "Offset shifts the time by minutes (usually 0 for a fixed time).",
@@ -276,7 +296,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
     return {
       zones: clone(c.zones || {}), slots: clone(c.slots || []), settings: clone(c.settings || {}),
       pump: clone(c.pump || {}), notifications: clone(c.notifications || { targets: [], events: {} }),
-      weather: clone(c.weather || {}), meters: clone(c.meters || {}), ui: clone(c.ui || {}), leak: clone(c.leak || {}),
+      weather: clone(c.weather || {}), meters: clone(c.meters || {}), ui: clone(c.ui || {}), leak: clone(c.leak || {}), blockers: clone(c.blockers || []),
     };
   }
 
@@ -327,7 +347,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
     return { day: dayOf(base), min: m };
   }
   _sun(day) { return (this.data.sun || []).find((s) => s.day === day) || {}; }
-  _blocked(plan) { return new Set([...(plan.skipped || []), ...(plan.weather_skipped || [])]); }
+  _blocked(plan) { return new Set([...(plan.skipped || []), ...(plan.weather_skipped || []), ...(plan.paused || [])]); }
   _nextRun(plan) {
     const now = this.data.now; const b = this._blocked(plan);
     return (plan.runs || []).find((r) => r.start > now && !b.has(runKey(r)));
@@ -458,6 +478,112 @@ class EspSprinklerPlannerCard extends HTMLElement {
     </div>`;
   }
 
+  _pauseBox() {
+    const today = dayOf(this.data.now);
+    const v = this._pz.until || addDays(today, 6);
+    return `<div class="box qr"><div class="lbl">${t("Pause watering")}</div>
+      <div class="row">${[1, 3, 7, 14].map((n) => `<button class="ab" data-act="pzdays" data-n="${n}">${t("{0} days", n)}</button>`).join("")}</div>
+      <div class="row"><label>${t("until (including)")} <input type="date" id="pzuntil" min="${today}" value="${esc(v)}"></label>
+        <span class="grow"></span><button data-act="pzcancel">${t("Cancel")}</button><button class="primary" data-act="pzgo">${t("Pause")}</button></div></div>`;
+  }
+
+  _pauseBanner() {
+    const u = this.data.pause_until;
+    if (!u) return "";
+    return `<div class="banner pausebn"><ha-icon icon="mdi:pause-circle"></ha-icon><div class="grow"><b>${t("Paused until {0} (including)", fmtDay(u))}</b><br>
+      <span class="muted">${t("Scheduled runs are skipped; manual runs still work.")}</span></div><button class="ab primary" data-act="resume"><ha-icon icon="mdi:play"></ha-icon>${t("Resume")}</button></div>`;
+  }
+
+  _heldBanner() {
+    const h = this.data.held;
+    if (!h) return "";
+    const until = hm(new Date(h.until).toLocaleString("sv").replace(" ", "T"));
+    const run = (this.data.plan.runs || []).find((r) => runKey(r) === h.key);
+    const what = run ? `${run.slots.map((x) => esc(this._slotName(x))).join(" + ")} ${hm(run.start)}` : esc(h.key);
+    return `<div class="banner heldbn"><ha-icon icon="${h.mode === "ask" ? "mdi:help-circle" : "mdi:hand-back-left"}"></ha-icon><div class="grow">
+      <b>${what}: ${h.mode === "ask" ? t("waiting for your answer") : t("waiting for a blocker")}</b><br>
+      <span class="muted">${esc(h.reason)} \u00b7 ${h.mode === "ask" ? t("no answer by {0}: {1}", until, t(h.then)) : t("until {0}, then {1}", until, t(h.then))}</span></div>
+      <span class="lkb"><button class="ab primary" data-act="blk" data-a="run"><ha-icon icon="mdi:play"></ha-icon>${t("Run anyway")}</button>
+      <button class="ab" data-act="blk" data-a="wait">${t("Wait 30 min")}</button><button class="ab danger" data-act="blk" data-a="skip">${t("Skip")}</button></span></div>`;
+  }
+
+  _blockersSection() {
+    const list = this.draft.blockers || [];
+    const slots = this.draft.slots || []; const zones = this._zones();
+    const ops = [["on", t("is on")], ["off", t("is off")], ["is", t("is")], ["is_not", t("is not")], ["above", t("above")], ["below", t("below")]];
+    const rows = list.map((b, i) => {
+      const k = (f) => `blockers.${i}.${f}`;
+      const now = this._hass.states[b.entity];
+      const isOn = now && this._blkActive(b, now.state);
+      const sum = `<span class="dot" style="background:${isOn ? "#e5484d" : "#2fbf71"}"></span><b>${esc(b.name || b.entity || t("New blocker"))}</b>
+        <span class="muted">${esc(b.entity ? this._fname(b.entity) : "")} ${esc((ops.find((o) => o[0] === (b.op || "on")) || [0, ""])[1])} ${esc(b.value ?? "")} \u2192 ${t("act_" + (b.scope === "zones" ? "skip" : (b.action || "skip")))}${b.enabled === false ? " \u00b7 " + t("off") : ""}</span>`;
+      return this._det(`blk_${i}`, !b.entity, sum, `
+        <div class="row"><label><input type="checkbox" class="tog" data-k="${k("enabled")}" data-t="bool" data-r="1" ${b.enabled !== false ? "checked" : ""}> ${t("enabled")}</label>
+          <label>${t("Name")} <input class="name" data-k="${k("name")}" value="${esc(b.name || "")}" placeholder="${esc(t("e.g. Mower on the lawn"))}"></label>
+          <span class="grow"></span><button class="ab danger" data-act="blkdel" data-i="${i}"><ha-icon icon="mdi:delete"></ha-icon>${t("Delete")}</button></div>
+        <div class="row"><span class="fl">${t("When")}</span>${this._picker(k("entity"), b.entity, () => true, "blkents" + i, t("any entity: mower, switch, sensor\u2026"))}</div>
+        <div class="row"><span class="fl"></span><select data-k="${k("op")}" data-r="1">${ops.map(([v, l]) => `<option value="${v}" ${(b.op || "on") === v ? "selected" : ""}>${l}</option>`).join("")}</select>
+          ${["is", "is_not", "above", "below"].includes(b.op) ? `<input class="name" data-k="${k("value")}" value="${esc(b.value ?? "")}" placeholder="${["above", "below"].includes(b.op) ? "10" : "mowing"}">` : ""}
+          ${now ? `<span class="muted small">${t("now")}: <b>${esc(now.state)}</b>${isOn ? ` \u00b7 <span class="err">${t("blocking")}</span>` : ""}</span>` : ""}</div>
+        <div class="row"><span class="fl">${t("Applies to")}</span><select data-k="${k("scope")}" data-r="1">${[["all", t("every run")], ["slots", t("chosen slots")], ["zones", t("chosen zones")]].map(([v, l]) => `<option value="${v}" ${(b.scope || "all") === v ? "selected" : ""}>${l}</option>`).join("")}</select>
+          ${b.scope === "slots" ? `<span class="svcs">${slots.map((sl) => `<label class="svc ${(b.slots || []).includes(sl.id) ? "on" : ""}"><input type="checkbox" data-blks="${i}|${esc(sl.id)}" ${(b.slots || []).includes(sl.id) ? "checked" : ""}>${esc(sl.name || sl.id)}</label>`).join("")}</span>` : ""}
+          ${b.scope === "zones" ? `<span class="svcs">${zones.map((z) => `<label class="svc ${(b.zones || []).includes(z.id) ? "on" : ""}"><input type="checkbox" data-blkz="${i}|${esc(z.id)}" ${(b.zones || []).includes(z.id) ? "checked" : ""}>${this._mark(z)}${esc(z.name)}</label>`).join("")}</span>` : ""}</div>
+        ${b.scope === "zones" ? `<div class="help">${t("help_blk_zones")}</div>` : `
+        <div class="row"><span class="fl">${t("Then")}</span><select data-k="${k("action")}" data-r="1">${[["skip", t("skip the run")], ["wait", t("wait until it clears")], ["ask", t("ask me")]].map(([v, l]) => `<option value="${v}" ${(b.action || "skip") === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+        ${b.action === "wait" ? `<div class="grid"><span class="fl">${t("wait at most")}</span>${this._slider(k("wait"), b.wait ?? 30, 5, 240, 5, " min")}</div>
+          <div class="row"><span class="fl">${t("still blocked after that")}</span><select data-k="${k("after_wait")}">${[["skip", t("skip")], ["run", t("run anyway")]].map(([v, l]) => `<option value="${v}" ${(b.after_wait || "skip") === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>` : ""}
+        ${b.action === "ask" ? `<div class="grid"><span class="fl">${t("answer within")}</span>${this._slider(k("ask_timeout"), b.ask_timeout ?? 15, 1, 120, 1, " min")}</div>
+          <div class="row"><span class="fl">${t("no answer")}</span><select data-k="${k("ask_default")}" data-r="1">${[["skip", t("skip")], ["run", t("run anyway")], ["wait", t("wait until it clears")]].map(([v, l]) => `<option value="${v}" ${(b.ask_default || "skip") === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+          ${b.ask_default === "wait" ? `<div class="grid"><span class="fl">${t("wait at most")}</span>${this._slider(k("wait"), b.wait ?? 30, 5, 240, 5, " min")}</div>` : ""}` : ""}
+        <div class="row"><span class="fl">${t("turns on during a run")}</span><select data-k="${k("during")}">${[["ignore", t("let it finish")], ["stop", t("stop the run")]].map(([v, l]) => `<option value="${v}" ${(b.during || "ignore") === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>`}`, "sub");
+    }).join("");
+    return `${rows || `<div class="muted small">${t("No blockers yet.")}</div>`}
+      <div class="row"><button class="ab" data-act="blkadd"><ha-icon icon="mdi:plus"></ha-icon>${t("Add blocker")}</button></div>
+      <div class="help">${t("help_blockers")}</div>`;
+  }
+
+  _blkActive(b, state) {
+    if (state === undefined || state === null || state === "unknown" || state === "unavailable") return false;
+    const on = ["on", "open", "home", "playing", "mowing", "cleaning", "heat", "cool", "detected", "true"];
+    const s = String(state).toLowerCase(); const v = String(b.value ?? "").toLowerCase();
+    switch (b.op || "on") {
+      case "on": return on.includes(s);
+      case "off": return !on.includes(s);
+      case "is": return s === v;
+      case "is_not": return s !== v;
+      case "above": return parseFloat(state) > parseFloat(b.value);
+      case "below": return parseFloat(state) < parseFloat(b.value);
+    }
+    return false;
+  }
+
+  _tab_log() {
+    if (!this._log) { this._ws({ type: `${DOMAIN}/log`, limit: 300 }).then((r) => { this._log = r.log; this._render(); }).catch(() => {}); return `<div class="muted pad">${t("Loading\u2026")}</div>`; }
+    const F = this._lf || "all";
+    const groups = { all: null, runs: ["started", "finished", "stopped"], skips: ["skipped", "blocked", "blocker_ask", "weather", "suggestion", "skip_set", "paused", "resumed"],
+      alarms: ["leak", "valve_stuck", "flow_warning", "flow_drift", "offline", "online", "error", "pump_off"] };
+    const icon = { started: "mdi:play-circle", finished: "mdi:check-circle", stopped: "mdi:stop-circle", skipped: "mdi:skip-next-circle", blocked: "mdi:hand-back-left",
+      blocker_ask: "mdi:help-circle", weather: "mdi:weather-partly-rainy", suggestion: "mdi:lightbulb-on-outline", skip_set: "mdi:skip-next", leak: "mdi:pipe-leak",
+      valve_stuck: "mdi:pipe-valve", flow_warning: "mdi:water-alert", flow_drift: "mdi:trending-down", offline: "mdi:lan-disconnect", online: "mdi:lan-connect",
+      error: "mdi:alert-circle", pump_off: "mdi:pump-off", paused: "mdi:pause-circle", resumed: "mdi:play-circle-outline" };
+    const bad = ["leak", "valve_stuck", "flow_warning", "flow_drift", "offline", "error", "pump_off"];
+    const rows = this._log.filter((e) => !groups[F] || groups[F].includes(e.kind));
+    let lastDay = "";
+    const body = rows.map((e) => {
+      const loc = new Date(e.t).toLocaleString("sv").replace(" ", "T"); const day = dayOf(loc);
+      const head = day !== lastDay ? `<div class="logday">${fmtDay(day)}</div>` : ""; lastDay = day;
+      const what = [e.slots ? e.slots.map((x) => this._slotName(x)).join(" + ") : "", e.pass ? `(${e.pass})` : "", e.zone || ""].filter(Boolean).join(" ");
+      const det = [e.reason, e.action, e.actual_minutes ? fmtMin(e.actual_minutes) : "", e.water_l && e.water_l !== "-" ? `${e.water_l} L` : "",
+        e.energy_kwh && e.energy_kwh !== "-" ? `${e.energy_kwh} kWh` : "", e.cost && e.cost !== "-" ? e.cost : "", e.flow ? `${e.flow} L/min` : "",
+        e.until ? t("until {0}", e.until) : "", e.zones && ["started", "finished"].includes(e.kind) ? e.zones.join(", ") : ""].filter(Boolean).join(" \u00b7 ");
+      return `${head}<div class="logrow ${bad.includes(e.kind) ? "bad" : ""}"><span class="lt">${hm(loc)}</span><ha-icon icon="${icon[e.kind] || "mdi:information"}"></ha-icon>
+        <span class="lk"><b>${esc(t(e.kind + "_ev"))}</b>${what ? ` \u00b7 ${esc(what)}` : ""}${e.dry ? ` <span class="chip warn small">${t("Test")}</span>` : ""}<br><span class="muted small">${esc(det)}</span></span></div>`;
+    }).join("");
+    return `<div class="row"><span class="seg">${[["all", t("All")], ["runs", t("Runs")], ["skips", t("Skips & weather")], ["alarms", t("Alarms")]].map(([v, l]) => `<button class="ab ${F === v ? "on" : ""}" data-act="lf" data-v="${v}">${l}</button>`).join("")}</span>
+      <span class="grow"></span><button class="ab" data-act="logrefresh"><ha-icon icon="mdi:refresh"></ha-icon></button></div>
+      ${body || `<div class="muted pad">${t("Nothing logged yet.")}</div>`}`;
+  }
+
   _cur() { return ((this.data && this.data.weather_now) || {}).currency || "EUR"; }
   _cost(x) {
     const m = (this.data && this.data.meters) || {};
@@ -476,8 +602,8 @@ class EspSprinklerPlannerCard extends HTMLElement {
     LANG = this._lang();
     const d = this.data;
     const flags = d.flags || {};
-    const STATUS = { idle: "Idle", scheduled: "Scheduled", running: "Running", dry_run: "Dry run", disabled: "Disabled", error: "Error", offline: "Offline" };
-    const tabs = [["today", "Overview"], ["week", "Week"], ["stats", "Stats"], ["slots", "Slots"], ["settings", "Settings"]];
+    const STATUS = { idle: "Idle", scheduled: "Scheduled", running: "Running", dry_run: "Dry run", disabled: "Disabled", error: "Error", offline: "Offline", paused: "Paused" };
+    const tabs = [["today", "Overview"], ["week", "Week"], ["stats", "Stats"], ["log", "Log"], ["slots", "Slots"], ["settings", "Settings"]];
     root.innerHTML = `
       <div class="head">
         <ha-icon class="hicon ${flags.enabled ? "" : "off"} ${this._offline() ? "bad" : ""}" icon="${this._offline() ? "mdi:lan-disconnect" : "mdi:sprinkler-variant"}"></ha-icon>
@@ -489,6 +615,8 @@ class EspSprinklerPlannerCard extends HTMLElement {
       ${d.error ? `<div class="banner err">${esc(d.error)}</div>` : ""}
       ${this._offlineBanner()}
       ${this._leakBanner()}
+      ${this._pauseBanner()}
+      ${this._heldBanner()}
       ${this._loadErr ? `<div class="banner err">${esc(this._loadErr)}</div>` : ""}
       <div class="tabs">${tabs.map(([k, l]) => `<button class="tab ${this._tab === k ? "on" : ""}" data-tab="${k}">${t(l)}</button>`).join("")}</div>
       <div class="body">${this[`_tab_${this._tab}`]()}</div>
@@ -518,7 +646,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
     const sun = this._sun(day);
     const now = this._nowIso();
     const bars = [];
-    const userSkip = new Set(plan.skipped || []); const wxSkip = new Set(plan.weather_skipped || []);
+    const userSkip = new Set([...(plan.skipped || []), ...(plan.paused || [])]); const wxSkip = new Set(plan.weather_skipped || []);
     for (const r of plan.runs || []) {
       const sd = dayOf(r.start), ed = dayOf(r.end);
       if (sd !== day && ed !== day) continue;
@@ -545,6 +673,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
   _wxDay(day) { return ((this.data.weather_now || {}).days || []).find((x) => x.day === day); }
   _runMark(r, plan) {
     const k = runKey(r);
+    if ((plan.paused || []).includes(k)) return `<span class="rm user" title="${esc(t("paused"))}">\u23f8</span>`;
     if ((plan.skipped || []).includes(k)) {
       if (r.start <= this.data.now) return `<span class="rm user" title="${esc(t("skipped by you"))}">\u2715</span>`;
       return `<span class="rm user ans" data-act="unskip" data-key="${esc(k)}" title="${esc(t("Skipped by you. Click to undo."))}">\u2715</span>`;
@@ -573,6 +702,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
     const k = runKey(r);
     const tip = (dec) => `${hm(r.start)} ${r.slots.map((x) => this._slotName(x)).join(" + ")}${dec && dec.reasons.length ? ": " + dec.reasons.join(", ") : ""}`;
     if ((plan.skipped || []).includes(k)) return { kind: "user", label: "\u2715", tip: `${tip(null)}: ${t("skipped by you")}` };
+    if ((plan.paused || []).includes(k)) return { kind: "user", label: "\u23f8", tip: `${tip(null)}: ${t("paused")}` };
     const dec = this._decision(r, plan);
     if (!dec || dec.status === "none" || dec.status === "dismissed" || dec.action === "run") {
       const wxOn = ((this.data.weather_full || {}).mode || "off") !== "off";
@@ -670,6 +800,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
       </div>
       ${this._actionBar(act, next, slots)}
       ${this._qr ? this._quickRun() : ""}
+      ${this._pz ? this._pauseBox() : ""}
       ${this._suggestBox(plan)}
       ${this._skippedBox(plan)}
       ${this._liveRow()}
@@ -741,6 +872,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
   _actionBar(act, next, slots) {
     return `<div class="abar">
       <button class="ab ${this._qr ? "on" : ""}" data-act="qr"><ha-icon icon="mdi:play-speed"></ha-icon>${t("Quick run")}</button>
+      ${this.data.pause_until ? "" : `<button class="ab ${this._pz ? "on" : ""}" data-act="pz"><ha-icon icon="mdi:pause-circle-outline"></ha-icon>${t("Pause")}</button>`}
       ${next ? `<button class="ab" data-act="skip" title="${esc(t("Skip next"))}: ${fmtDay(next.day)} ${hm(next.start)}"><ha-icon icon="mdi:skip-next-circle-outline"></ha-icon>${t("Skip")} <span class="muted">${DAYS()[wd(next.day)]} ${hm(next.start)}</span></button>` : ""}
       ${slots.length ? `<span class="ag" title="${esc(t("Run slot now"))}"><ha-icon icon="mdi:calendar-clock"></ha-icon><span class="agl">${t("Run slot")}</span>
         <select id="runslot">${slots.map((s) => `<option value="${esc(s.id)}">${esc(s.name || s.id)}</option>`).join("")}</select>
@@ -1183,6 +1315,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
         <div class="row"><label>${t("Name")} <input class="name" data-k="ui.title" value="${esc(ui.title || "")}" placeholder="${esc(d.title)}"></label>
           <label>${t("Language")} <select data-k="ui.language" data-r="1">${[["auto", t("automatic")], ["en", "English"], ["sk", "Slovensky"]].map(([v, l]) => `<option value="${v}" ${(ui.language || "auto") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label></div>`, true)}
       ${sec("s_zones", "mdi:sprinkler", t("Zones"), t("{0} zones", this._zones().length), this._zonesSection(), false)}
+      ${sec("s_blockers", "mdi:hand-back-left", t("Blockers"), (this.draft.blockers || []).length ? t("{0} rules", (this.draft.blockers || []).length) : "\u2013", this._blockersSection(), false)}
       ${sec("s_merge", "mdi:call-merge", t("Merging slots"), `${t(mergeNames[mm])}${mm === "window" ? ` ${st.merge_window ?? 60} min` : ""}`, `
         <div class="row">
           <select data-k="settings.merge_mode" data-r="1">${Object.entries(mergeNames).map(([v, l]) => `<option value="${v}" ${mm === v ? "selected" : ""}>${t(l)}</option>`).join("")}</select>
@@ -1319,6 +1452,12 @@ class EspSprinklerPlannerCard extends HTMLElement {
       n.events[ev].targets = t0.checked ? [...new Set([...cur, svc])] : cur.filter((x) => x !== svc);
       this._markDirty(true); return;
     }
+    if (t0.dataset.blks || t0.dataset.blkz) {
+      if (!isChange) return;
+      const [i, id] = (t0.dataset.blks || t0.dataset.blkz).split("|"); const b = this.draft.blockers[+i]; const key = t0.dataset.blks ? "slots" : "zones";
+      b[key] = t0.checked ? [...new Set([...(b[key] || []), id])] : (b[key] || []).filter((x) => x !== id);
+      this._markDirty(true); return;
+    }
     if (t0.dataset.leak) {
       if (!isChange) return;
       this.draft.leak = { ...(this.data.leak_full || {}), ...(this.draft.leak || {}), mode: t0.checked ? "on" : "off" };
@@ -1401,7 +1540,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
   async _onClick(e) {
     const tg = e.target.closest("[data-tab],[data-act]");
     if (!tg) return;
-    if (tg.dataset.tab) { this._tab = tg.dataset.tab; if (this._tab === "stats") { this._stats = null; this._heat = null; } this._render(); return; }
+    if (tg.dataset.tab) { this._tab = tg.dataset.tab; if (this._tab === "stats") { this._stats = null; this._heat = null; } if (this._tab === "log") this._log = null; this._render(); return; }
     if (e.target.closest("label.sw, label.master")) return;     // switches inside clickable headers
     const act = tg.dataset.act;
     const svc = (s, data) => this._hass.callService(DOMAIN, s, { ...(this._cfg.entry_id ? { config_entry_id: this._cfg.entry_id } : {}), ...data });
@@ -1420,6 +1559,16 @@ class EspSprinklerPlannerCard extends HTMLElement {
         if (!confirm(t("Delete ALL statistics (watering time, water, energy, skips, flow)? This cannot be undone."))) return;
         await svc("clear_stats", { confirm: true }); setTimeout(() => { this._stats = null; this._heat = null; this._load(); }, 600);
       } else if (act === "sview") { this._sv = tg.dataset.v; localStorage.setItem("esp_sprinkler_sview", this._sv); this._render();
+      } else if (act === "blkadd") { this.draft.blockers = [...(this.draft.blockers || []), { id: `b${Date.now().toString(36)}`, enabled: true, op: "on", scope: "all", action: "wait", wait: 30, after_wait: "skip" }]; this._markDirty(true);
+      } else if (act === "blkdel") { this.draft.blockers.splice(+tg.dataset.i, 1); this._markDirty(true);
+      } else if (act === "blk") { await svc("answer_blocker", { answer: tg.dataset.a }); setTimeout(() => this._load(), 800);
+      } else if (act === "pz") { this._pz = this._pz ? null : {}; this._render();
+      } else if (act === "pzcancel") { this._pz = null; this._render();
+      } else if (act === "pzdays") { await svc("pause", { days: +tg.dataset.n }); this._pz = null; setTimeout(() => this._load(), 600);
+      } else if (act === "pzgo") { const u = this.shadowRoot.getElementById("pzuntil").value; if (!u) return; await svc("pause", { until: u }); this._pz = null; setTimeout(() => this._load(), 600);
+      } else if (act === "resume") { await svc("resume", {}); setTimeout(() => this._load(), 600);
+      } else if (act === "lf") { this._lf = tg.dataset.v; this._render();
+      } else if (act === "logrefresh") { this._log = null; this._render();
       } else if (act === "leaksnooze") { await svc("leak_snooze", {}); setTimeout(() => this._load(), 600);
       } else if (act === "pumpoff") {
         await this._hass.callService("homeassistant", "turn_off", { entity_id: this.data.config.pump.entity }); setTimeout(() => this._load(), 600);
@@ -1767,7 +1916,16 @@ details.ztoday > summary { list-style:none; cursor:pointer; } details.ztoday > s
 .st-offline { background:#e5484d; color:#fff; } .hicon.bad { color:#e5484d; }
 .banner.offline { display:flex; gap:10px; align-items:flex-start; background:#e5484d22; border:1px solid #e5484d; border-radius:10px; padding:10px 12px; }
 .banner.offline details.ents summary { cursor:pointer; margin-top:4px; } .banner.offline code { display:inline-block; margin:2px 4px 0 0; }
-.banner.leak { align-items:center; } .lkb { display:inline-flex; gap:6px; flex-wrap:wrap; }
+.banner.leak { align-items:center; }
+.banner.pausebn, .banner.heldbn { display:flex; gap:10px; align-items:center; border-radius:10px; padding:10px 12px; }
+.banner.pausebn { background:color-mix(in srgb, var(--primary-color,#03a9f4) 14%, transparent); border:1px solid var(--primary-color,#03a9f4); }
+.banner.heldbn { background:#c47a0022; border:1px solid #c47a00; } .banner.pausebn > ha-icon, .banner.heldbn > ha-icon { --mdc-icon-size:28px; flex:none; }
+.banner.pausebn > ha-icon { color:var(--primary-color,#03a9f4); } .banner.heldbn > ha-icon { color:#c47a00; }
+.logday { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--secondary-text-color,#777); margin:12px 0 4px; }
+.logrow { display:flex; gap:10px; align-items:flex-start; padding:6px 0; border-top:1px solid var(--divider-color,#eee); }
+.logrow .lt { width:42px; flex:none; font-variant-numeric:tabular-nums; color:var(--secondary-text-color,#888); padding-top:1px; }
+.logrow ha-icon { --mdc-icon-size:18px; color:var(--primary-color,#03a9f4); flex:none; } .logrow.bad ha-icon, .logrow.bad b { color:#e5484d; }
+.logrow .lk { min-width:0; } .lkb { display:inline-flex; gap:6px; flex-wrap:wrap; }
 .banner.offline > ha-icon { color:#e5484d; --mdc-icon-size:28px; flex:none; }
 .dm { box-sizing:border-box; display:inline-flex; flex-direction:column; align-items:center; justify-content:center; width:58px; height:24px; border-radius:6px; padding:1px 2px; background:var(--secondary-background-color,#eee); cursor:pointer; vertical-align:middle; line-height:1; }
 .fcd .dm { cursor:inherit; } .dm.emptyd { visibility:hidden; }

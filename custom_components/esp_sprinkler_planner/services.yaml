@@ -214,3 +214,35 @@ leak_snooze:
           min: 1
           max: 1440
           unit_of_measurement: min
+pause:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: esp_sprinkler_planner
+    days:
+      selector:
+        number:
+          min: 1
+          max: 365
+    until:
+      example: "2026-11-30"
+      selector:
+        date:
+resume:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: esp_sprinkler_planner
+answer_blocker:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: esp_sprinkler_planner
+    answer:
+      required: true
+      selector:
+        select:
+          options: [run, skip, wait]

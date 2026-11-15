@@ -8,7 +8,7 @@ from homeassistant.util import dt as dt_util
 from . import model
 from .const import DOMAIN
 
-STATUSES = ["idle", "scheduled", "running", "dry_run", "disabled", "error", "offline"]
+STATUSES = ["idle", "scheduled", "running", "dry_run", "disabled", "error", "offline", "paused"]
 
 
 def device_info(entry) -> DeviceInfo:

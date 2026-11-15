@@ -69,6 +69,8 @@ def snapshot(hass, rt, days: int) -> Dict[str, Any]:
         "lang": rt.lang,
         "health": {k: rt.health[k] for k in ("missing", "unavailable", "since")},
         "tmax_log": rt.tmax_log,
+        "pause_until": rt.pause_until, "held": rt.held, "blockers_full": rt.blockers,
+        "blocker_states": rt._blk_states(),
         "leak_full": rt.leak_cfg, "leak_alarm": rt.leak_alarm, "leak_snooze_until": rt.leak_snooze_until,
         "leak_flowing": rt.leak.minutes(dt_util.utcnow()) if rt.leak.since else 0,
         "weather_full": rt.weather_cfg,
@@ -148,7 +150,7 @@ async def ws_save(hass, connection, msg):
     c = msg["config"]
     try:
         await rt.configure(c.get("zones"), c.get("slots"), c.get("settings"), c.get("notifications"), c.get("pump"),
-                           c.get("weather"), c.get("meters"), c.get("ui"), c.get("leak"))
+                           c.get("weather"), c.get("meters"), c.get("ui"), c.get("leak"), c.get("blockers"))
     except ConfigError as err:
         connection.send_error(msg["id"], "invalid", str(err))
         return
@@ -182,6 +184,17 @@ def ws_stats(hass, connection, msg):
                                        "totals": stats_mod.totals(rt.stats, today)})
 
 
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/log", vol.Optional("entry_id"): str,
+                                  vol.Optional("limit", default=200): vol.All(int, vol.Range(1, 500))})
+@callback
+def ws_log(hass, connection, msg):
+    rt = _runtime(hass, msg.get("entry_id"))
+    if rt is None:
+        connection.send_error(msg["id"], "not_found", "no planner found")
+        return
+    connection.send_result(msg["id"], {"log": list(reversed(rt.log[-msg["limit"]:]))})
+
+
 def async_register(hass: HomeAssistant) -> None:
-    for cmd in (ws_get, ws_list, ws_preview, ws_save, ws_flag, ws_stats):
+    for cmd in (ws_get, ws_list, ws_preview, ws_save, ws_flag, ws_stats, ws_log):
         websocket_api.async_register_command(hass, cmd)

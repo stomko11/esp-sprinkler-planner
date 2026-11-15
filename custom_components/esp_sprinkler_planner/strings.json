@@ -110,6 +110,10 @@
         "leak": {
           "name": "Leak alarm",
           "description": "Leak alarm settings (see README)."
+        },
+        "blockers": {
+          "name": "Blockers",
+          "description": "List of blockers (see README)."
         }
       }
     },
@@ -358,6 +362,66 @@
           "description": "How long."
         }
       }
+    },
+    "pause": {
+      "name": "Pause",
+      "description": "No scheduled watering for N days or until a date (inclusive).",
+      "fields": {
+        "config_entry_id": {
+          "name": "Planner",
+          "description": "Only with more than one planner."
+        },
+        "days": {
+          "name": "Days",
+          "description": "Including today."
+        },
+        "until": {
+          "name": "Until",
+          "description": "Last day of the pause (inclusive)."
+        }
+      }
+    },
+    "resume": {
+      "name": "Resume",
+      "description": "End the pause now.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Planner",
+          "description": "Only with more than one planner."
+        }
+      }
+    },
+    "answer_blocker": {
+      "name": "Answer a blocked run",
+      "description": "Run anyway, skip, or wait 30 minutes more.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Planner",
+          "description": "Only with more than one planner."
+        },
+        "answer": {
+          "name": "Answer",
+          "description": "run, skip or wait."
+        }
+      }
+    }
+  },
+  "issues": {
+    "controller_missing": {
+      "title": "{planner}: sprinkler controller not found",
+      "description": "The entities of the ESPHome sprinkler controller do not exist (for example {entities}). The device was removed or renamed. Open the integration and use **Reconfigure** to map the valves again."
+    },
+    "controller_offline": {
+      "title": "{planner}: sprinkler controller offline",
+      "description": "The ESP has not been reachable since {since}. Scheduled runs are skipped until it is back. Check its power and Wi-Fi."
+    },
+    "weather_missing": {
+      "title": "{planner}: weather entity missing",
+      "description": "The weather entity {entity} does not exist. Pick another one in the card: Settings → Weather."
+    },
+    "notify_missing": {
+      "title": "{planner}: notification target missing",
+      "description": "These notify services do not exist any more: {services}. Change the recipients in the card: Settings → Notifications."
     }
   }
 }
