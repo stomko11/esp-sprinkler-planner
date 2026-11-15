@@ -18,15 +18,22 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence
 
 CONTROLLER_ROLES = {
-    # role: (domain, words that identify it)
-    "main_switch": ("switch", (("cycle", "start"), ("main",), ("cycle",))),
-    "auto_advance": ("switch", (("auto", "advance"),)),
-    "reverse": ("switch", (("reverse",),)),
-    "standby": ("switch", (("standby",),)),
-    "queue_enable": ("switch", (("queue",),)),
-    "multiplier": ("number", (("multiplier",),)),
-    "repeat": ("number", (("repeat",),)),
+    # role: (domain, word groups that identify it; names are compared without accents)
+    "main_switch": ("switch", (("cycle", "start"), ("main",), ("cycle",), ("cyklus",), ("spustit",), ("hlavny",),
+                               ("start",), ("zyklus",), ("hauptschalter",))),
+    "auto_advance": ("switch", (("auto", "advance"), ("automaticky",), ("auto",))),
+    "reverse": ("switch", (("reverse",), ("opacne",), ("obratene",), ("reverz",), ("umgekehrt",), ("odwrotnie",))),
+    "standby": ("switch", (("standby",), ("pohotovost",), ("pauza",), ("pause",), ("bereitschaft",))),
+    "queue_enable": ("switch", (("queue",), ("rad",), ("fronta",))),
+    "multiplier": ("number", (("multiplier",), ("nasobic",), ("nasobok",), ("koeficient",), ("faktor",), ("multiplikator",),
+                              ("mnoznik",))),
+    "repeat": ("number", (("repeat",), ("opakovanie",), ("opakovat",), ("opakovani",), ("wiederholung",), ("powtorz",))),
 }
+# words that mark a run duration number / an enable switch (any of these languages)
+DURATION_WORDS = ("duration", "run", "time", "min", "mins", "minutes", "trvanie", "cas", "doba", "dlzka", "minut",
+                  "minuty", "dauer", "laufzeit", "zeit", "czas", "trwania", "durata", "duree", "tiempo")
+ENABLE_WORDS = ("enable", "enabled", "povolit", "povolene", "povol", "povoleny", "zapnut", "zapnute", "aktivny",
+                "aktivovat", "aktivni", "aktivieren", "freigabe", "aktiv", "wlacz", "aktywny", "attiva", "activer", "use")
 
 
 @dataclass
@@ -62,8 +69,14 @@ class Proposal:
 _WORD = re.compile(r"[a-z0-9]+")
 
 
+def _fold(text: str) -> str:
+    """'Záhony Povoliť' -> 'zahony povolit' (letters with accents count as the plain letter)."""
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFKD", text or "") if not unicodedata.combining(c)).lower()
+
+
 def words(text: str) -> List[str]:
-    return _WORD.findall((text or "").lower())
+    return _WORD.findall(_fold(text))
 
 
 def _strip_device(name: str, device_name: str) -> str:
@@ -84,29 +97,62 @@ def propose(entities: Sequence[Entity], device_name: str = "") -> Proposal:
     used: set = set()
     prop = Proposal()
 
+    controller_ids = set()
+    for role, (domain, patterns) in CONTROLLER_ROLES.items():
+        if domain == "number":
+            for e in numbers:
+                if any(all(p in words(e.name) for p in pat) for pat in patterns):
+                    controller_ids.add(e.entity_id)
+
+    def pair(n, base) -> ValveProposal:
+        v = ValveProposal(name=" ".join(base).title(), duration=n.entity_id, max_minutes=n.max)
+        free = [s for s in switches if s.entity_id not in used]
+        for s in free:                                  # 1) keyword match
+            sw = words(s.name)
+            if any(w in sw for w in ENABLE_WORDS) and _base(sw, ENABLE_WORDS) == base:
+                v.enable_switch = v.enable_switch or s.entity_id
+            elif tuple(sw) == base:
+                v.valve_switch = v.valve_switch or s.entity_id
+        if not v.enable_switch:                         # 2) any language: same name plus exactly one more word
+            extra = [s for s in free if s.entity_id != v.valve_switch
+                     and set(base) <= set(words(s.name)) and len(words(s.name)) == len(base) + 1]
+            if len(extra) == 1:
+                v.enable_switch = extra[0].entity_id
+        return v
+
     # valves: every duration number is a valve
     for n in sorted(numbers, key=lambda e: e.order):
-        ws = words(n.name)
-        if "duration" not in ws:
+        if n.entity_id in controller_ids:
             continue
-        base = _base(ws, ("duration", "run", "time", "min", "minutes"))
+        ws = words(n.name)
+        if not any(w in ws for w in DURATION_WORDS):
+            continue
+        base = _base(ws, DURATION_WORDS)
         if not base:
             continue
-        v = ValveProposal(name=" ".join(base).title(), duration=n.entity_id, max_minutes=n.max)
+        v = pair(n, base)
         used.add(n.entity_id)
-        for s in switches:
-            if s.entity_id in used:
-                continue
-            sw = words(s.name)
-            if "enable" in sw and _base(sw, ("enable", "enabled")) == base:
-                v.enable_switch = s.entity_id
-            elif tuple(sw) == base:
-                v.valve_switch = s.entity_id
         for x in (v.enable_switch, v.valve_switch):
             if x:
                 used.add(x)
-        # display name: drop a word every valve shares (e.g. "Irrigation")
         prop.valves.append(v)
+    # no duration word in any language: a number that shares its whole name with a switch is a valve
+    if not prop.valves:
+        for n in sorted(numbers, key=lambda e: e.order):
+            if n.entity_id in controller_ids or n.entity_id in used:
+                continue
+            nws = words(n.name)
+            # the number's name minus its last word (often the language's "duration") must name a switch
+            for cut in (nws[:-1], nws[1:], nws):
+                base = tuple(cut)
+                if base and any(tuple(words(s.name)) == base for s in switches if s.entity_id not in used):
+                    v = pair(n, base)
+                    used.add(n.entity_id)
+                    for x in (v.enable_switch, v.valve_switch):
+                        if x:
+                            used.add(x)
+                    prop.valves.append(v)
+                    break
     shared = None
     for v in prop.valves:
         ws = set(words(v.name))

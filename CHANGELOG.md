@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.8.0
+
+- **Setup finds the zones on its own and confirms them in one step:** after the controller step a
+  "Found N zones" page lists every zone in ESP order. Submit takes them all; "check each" goes
+  through them one by one; "add a valve that was not found" maps an extra one. No more ticking
+  "add another" for every zone. Same in Reconfigure.
+- **Discovery understands more names:** accents are ignored (Záhony = Zahony), Slovak, Czech,
+  German and Polish words for duration / enable / multiplier / repeat / reverse / standby / main
+  switch, and names without any known word are paired by name (a switch, the same name plus one
+  word for the enable switch, and a number).
+- By zone view on narrow screens: day pills with two letters and a smaller layout, so the days
+  fit the card instead of running off the side.
+
 ## 0.7.6
 
 - Weather suggestions: the run and the suggested action in bold, the full reason below in smaller

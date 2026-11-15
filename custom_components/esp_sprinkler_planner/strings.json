@@ -34,6 +34,14 @@
           "skip": "Skip this valve",
           "add_another": "Add another valve after this one"
         }
+      },
+      "zones": {
+        "title": "Found {count} zones",
+        "description": "{zones}\\n\\nThese zones were found on the device, in their order on the ESP. Submit to use them as they are - names, colours, minutes and days can be changed later in the card. Tick 'check each' to go through them one by one.",
+        "data": {
+          "check_each": "Check each zone one by one",
+          "add_more": "Add a valve that was not found"
+        }
       }
     },
     "error": {

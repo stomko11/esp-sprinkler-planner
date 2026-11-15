@@ -102,6 +102,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             self._data[CONF_CONTROLLER] = {k: user_input.get(k) for k in CONTROLLER_KEYS}
             self._data[CONF_VALVE_OVERLAP] = int(user_input.get(CONF_VALVE_OVERLAP) or 0)
+            if any(v.enable_switch and v.duration for v in self._proposal.valves):
+                return await self.async_step_zones()
             return await self.async_step_valve()
         fields: Dict[Any, Any] = {}
         for key in CONTROLLER_KEYS:
@@ -117,6 +119,40 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         fields[vol.Optional(CONF_VALVE_OVERLAP, default=overlap)] = selector.NumberSelector(
             {"min": 0, "max": 600, "step": 1, "unit_of_measurement": "s", "mode": "box"})
         return self.async_show_form(step_id="controller", data_schema=vol.Schema(fields))
+
+    async def async_step_zones(self, user_input=None):
+        """All detected zones at once: take them as they are, or go through them one by one."""
+        props = self._proposal.valves
+        complete = [v for v in props if v.enable_switch and v.duration]
+        if user_input is not None:
+            if user_input.get("check_each"):
+                return await self.async_step_valve()
+            for i, v in enumerate(props):
+                if not (v.enable_switch and v.duration):
+                    continue
+                self._idx = i
+                self._valves.append({
+                    "id": self._zone_id(), "name": v.name, "order": v.order,
+                    "enabled": self._enabled[i] if self._reconf and i < len(self._enabled) else True,
+                    "valve_switch": v.valve_switch, "enable_switch": v.enable_switch, "duration": v.duration,
+                    "max_minutes": v.max_minutes,
+                })
+            self._idx = len(props)
+            if user_input.get("add_more"):
+                self._extra = True
+                return await self.async_step_valve()
+            return self._finish()
+        lines = []
+        for v in props:
+            ok = v.enable_switch and v.duration
+            lines.append(f"{v.order + 1}. **{v.name}**" + ("" if ok else " - incomplete, check it one by one")
+                         + ("" if v.valve_switch or not ok else " (no valve switch: status from the controller only)"))
+        schema = vol.Schema({
+            vol.Required("check_each", default=len(complete) < len(props)): bool,
+            vol.Required("add_more", default=False): bool,
+        })
+        return self.async_show_form(step_id="zones", data_schema=schema, description_placeholders={
+            "count": str(len(complete)), "zones": "\n".join(lines)})
 
     async def async_step_valve(self, user_input=None):
         props = self._proposal.valves

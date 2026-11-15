@@ -83,3 +83,35 @@ class ShortNames(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MoreLanguagesTest(unittest.TestCase):
+    def run_names(self, rows, device=""):
+        ents = [D.Entity(eid, name, order=i) for i, (eid, name) in enumerate(rows)]
+        return D.propose(ents, device)
+
+    def test_slovak_with_accents(self):
+        p = self.run_names([
+            ("switch.k_zahony", "Záhony"), ("switch.k_povolit_zahony", "Povoliť Záhony"), ("number.k_zahony_trvanie", "Záhony Trvanie"),
+            ("switch.k_tuje", "Tuje"), ("switch.k_povolit_tuje", "Povoliť Tuje"), ("number.k_tuje_trvanie", "Tuje Trvanie"),
+            ("switch.k_spustit", "Spustiť cyklus"), ("switch.k_opacne", "Opačné poradie"), ("number.k_nasobic", "Násobič"),
+        ])
+        self.assertEqual([(v.name, bool(v.valve_switch), bool(v.enable_switch)) for v in p.valves],
+                         [("Zahony", True, True), ("Tuje", True, True)])
+        self.assertEqual(p.controller["main_switch"], "switch.k_spustit")
+        self.assertEqual(p.controller["reverse"], "switch.k_opacne")
+        self.assertEqual(p.controller["multiplier"], "number.k_nasobic")
+
+    def test_no_known_words_pairs_by_name(self):
+        p = self.run_names([
+            ("switch.z1", "Vlavo"), ("switch.z1e", "Vlavo Zap"), ("number.z1d", "Vlavo Cislo"),
+            ("switch.z2", "Vpravo"), ("switch.z2e", "Vpravo Zap"), ("number.z2d", "Vpravo Cislo"),
+        ])
+        self.assertEqual([(v.name, v.valve_switch, v.enable_switch, v.duration) for v in p.valves],
+                         [("Vlavo", "switch.z1", "switch.z1e", "number.z1d"), ("Vpravo", "switch.z2", "switch.z2e", "number.z2d")])
+
+    def test_english_unchanged(self):
+        p = self.run_names([("switch.a", "Irrigation Lawn"), ("switch.b", "Enable Irrigation Lawn"), ("number.c", "Irrigation Lawn Duration"),
+                            ("number.m", "Irrigation Multiplier")])
+        self.assertEqual(len(p.valves), 1)
+        self.assertEqual(p.controller["multiplier"], "number.m")

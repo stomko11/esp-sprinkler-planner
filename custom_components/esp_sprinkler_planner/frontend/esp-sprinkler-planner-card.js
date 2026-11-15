@@ -909,7 +909,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
   _daysCell(sl, i, e, idx) {
     const slotDays = sl.every_n_days ? [0, 1, 2, 3, 4, 5, 6] : (sl.days || [0, 1, 2, 3, 4, 5, 6]);
     if (!e) return `<button class="sdays" data-act="zdaysnew" data-i="${i}" data-zone="__ZID__" title="${esc(t("Give this zone its own days"))}">${t("slot days")}</button>`;
-    if (e.days) return `<span class="days own">${DAYS().map((dn, di) => `<label class="day sm ${e.days.includes(di) ? "on" : ""} ${slotDays.includes(di) ? "" : "extra"}" title="${esc(slotDays.includes(di) ? "" : t("The slot has this day off; this zone runs anyway."))}"><input type="checkbox" data-zday="${i}|${idx}|${di}" ${e.days.includes(di) ? "checked" : ""}>${dn}</label>`).join("")}</span>
+    if (e.days) return `<span class="days own">${DAYS().map((dn, di) => `<label class="day sm ${e.days.includes(di) ? "on" : ""} ${slotDays.includes(di) ? "" : "extra"}" title="${esc(slotDays.includes(di) ? "" : t("The slot has this day off; this zone runs anyway."))}"><input type="checkbox" data-zday="${i}|${idx}|${di}" ${e.days.includes(di) ? "checked" : ""}><span class="dl3">${dn}</span><span class="dl2">${dn.slice(0, 2)}</span></label>`).join("")}</span>
       <button class="tb1" data-act="zdaysclr" data-i="${i}" data-idx="${idx}" title="${esc(t("Back to the slot's days"))}"><ha-icon icon="mdi:calendar-refresh"></ha-icon></button>`;
     return `<button class="sdays" data-act="zdays" data-i="${i}" data-idx="${idx}" title="${esc(t("Give this zone its own days"))}">${t("slot days")}${sl.every_n_days ? "" : ` <span class="muted">${slotDays.length === 7 ? t("every day") : slotDays.map((x) => DAYS()[x]).join(" ")}</span>`}</button>`;
   }
@@ -979,7 +979,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
             ${zones.map((z) => { const e = zin.get(z.id); const idx = (s.zones || []).findIndex((x) => x.zone === z.id);
               return `<tr class="${z.enabled ? "" : "dis"} ${this._on(e) ? "" : "zoff"}"><td><input type="checkbox" data-zin="${i}|${esc(z.id)}" ${this._on(e) ? "checked" : ""}></td>
                 <td>${this._mark(z)}${esc(z.name)}${z.enabled ? "" : ` <span class='muted'>${t("(disabled)")}</span>`}</td>
-                <td>${this._minutesCell(i, z.id, e, idx, z.max_minutes ? ` <span class="muted">${t("max {0}", z.max_minutes)}</span>` : "")}</td>
+                <td>${this._minutesCell(i, z.id, e, idx, z.max_minutes ? ` <span class="muted mx">${t("max {0}", z.max_minutes)}</span>` : "")}</td>
                 <td>${this._daysCell(s, i, e, idx).replace("__ZID__", esc(z.id))}</td></tr>`; }).join("")}
           </table>
           <div class="help">${t(s.every_n_days ? "help_zone_days_n" : "help_zone_days")}</div>
@@ -1403,7 +1403,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
 const CSS = `
 :host { display:block; }
 ha-card { overflow:hidden; }
-.wrap { padding:12px 14px 0; font-size:14px; color:var(--primary-text-color,#1c1c1c); }
+.wrap { container:card / inline-size; padding:12px 14px 0; font-size:14px; color:var(--primary-text-color,#1c1c1c); }
 .pad { padding:12px 0; }
 .head { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .title { font-size:18px; font-weight:600; margin-right:auto; }
@@ -1509,6 +1509,14 @@ ha-icon.zi { --mdc-icon-size:16px; margin-right:4px; flex:none; } ha-icon.zi.big
 label.day { display:inline-grid; place-items:center; min-width:34px; height:26px; padding:0 4px; border-radius:13px; border:1px solid var(--divider-color,#ccc); font-size:12px; cursor:pointer; user-select:none; }
 label.day input { display:none; } label.day.on { background:var(--primary-color,#03a9f4); border-color:transparent; color:#fff; font-weight:600; }
 tr.zoff td:not(:first-child) { opacity:.55; } input.offv { font-style:italic; }
+.dl2 { display:none; } .secb, .sbody { overflow-x:auto; }
+@container card (max-width: 560px) {
+  .dl3 { display:none; } .dl2 { display:inline; }
+  label.day.sm { min-width:21px; height:21px; padding:0 2px; font-size:10px; }
+  .days.own { gap:1px; } .zt td .muted.mx { display:none; } .zt td, .zt th { padding:3px 2px; }
+  .zt td:nth-child(2) { max-width:120px; white-space:normal; } .zt td:nth-child(2) .muted { white-space:normal; font-size:11px; }
+  .zt input.n { width:46px; } label.day.sm { min-width:19px; } .zt .tb1 { width:22px; height:22px; }
+}
 label.day.sm { min-width:26px; height:22px; font-size:11px; } label.day.extra { border-style:dashed; }
 .days.own { gap:2px; } button > ha-icon { --mdc-icon-size:16px; vertical-align:-3px; }
 button.sdays { padding:3px 10px; border-radius:12px; font-size:12px; }
