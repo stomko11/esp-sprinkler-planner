@@ -659,13 +659,18 @@ class EspSprinklerPlannerCard extends HTMLElement {
   }
 
   _liveRow() {
-    const c = (this.data.weather_now || {}).current || {};
+    const w = this.data.weather_now || {}; const c = w.current || {};
+    const wxOn = ((this.data.weather_full || {}).mode || "off") !== "off";
     const items = [];
-    if (c.temp !== undefined) items.push(["mdi:thermometer", `${r1(c.temp)} \u00b0C`, t("Temperature sensor")]);
+    const temp = c.temp !== undefined ? c.temp : (wxOn && w.temp !== null && w.temp !== undefined ? w.temp : undefined);
+    if (temp !== undefined) items.push(["mdi:thermometer", `${r1(temp)} \u00b0C`, c.temp !== undefined ? t("Temperature sensor") : t("Weather")]);
     if (c.humidity !== undefined) items.push(["mdi:water-percent", `${Math.round(c.humidity)} %`, t("humidity")]);
     if (c.wind !== undefined) items.push(["mdi:weather-windy", `${Math.round(c.wind)} km/h`, t("wind")]);
     if (c.gust !== undefined) items.push(["mdi:weather-windy-variant", `${Math.round(c.gust)} km/h`, t("gusts")]);
-    if (c.rain !== undefined) items.push(["mdi:weather-rainy", `${r1(c.rain)} mm`, t("Rain sensor (fallen)")]);
+    if (c.rain !== undefined || (w.fallen !== null && w.fallen !== undefined)) {
+      const hrs = (this.data.weather_full || {}).rain_window || 24;
+      items.push(["mdi:weather-rainy", w.fallen !== null && w.fallen !== undefined ? `${r1(w.fallen)} mm / ${hrs} h` : `${r1(c.rain)} mm`, t("{0} mm in the last {1} h", r1(w.fallen || 0), hrs)]);
+    }
     if (c.raining !== undefined) items.push([c.raining ? "mdi:weather-pouring" : "mdi:weather-sunny", c.raining ? (c.rain_rate ? `${r1(c.rain_rate)} mm/h` : t("raining")) : t("dry"), t("Raining now (binary or mm/h)")]);
     const m = this.data.meters || {};
     if (m.pump_power) items.push(["mdi:pump", this._liveVal("power"), t("Pump power"), "power"]);
@@ -744,7 +749,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
     if (!full.mode || full.mode === "off") return "";
     const today = dayOf(this.data.now);
     const days = (w.days || []).filter((x) => x.day >= today).slice(0, 7);
-    return `<div class="lbl">${t("Weather")} <span class="muted">${w.temp !== null && w.temp !== undefined ? t("now {0} \u00b0C", r1(w.temp)) : ""}${w.fallen ? " \u00b7 " + t("{0} mm in the last {1} h", r1(w.fallen), (this.data.weather_full || {}).rain_window || 24) : ""}</span>${w.error ? ` <span class="err">${esc(w.error)}</span>` : ""}</div>
+    return `<div class="lbl">${t("Weather")}${w.error ? ` <span class="err">${esc(w.error)}</span>` : ""}</div>
       <div class="muted small">${t("Click a day for its runs.")}</div>
       <div class="fc" style="grid-template-columns:repeat(${Math.max(1, days.length)},1fr)">${days.map((x) => {
         return `<div class="fcd ${x.day === today ? "today" : ""} ${this._fday === x.day ? "sel" : ""}" data-act="fday" data-day="${x.day}" title="${esc(fmtDay(x.day))}"><span>${DAYS()[wd(x.day)]}</span>

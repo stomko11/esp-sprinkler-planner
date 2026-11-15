@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.2
+
+- Overview: current weather only in the chips. The "Weather" heading no longer repeats the
+  temperature and the rain; the temperature chip falls back to the weather entity when there is
+  no temperature sensor, and the rain chip shows the tracked rain of the window ("3.2 mm / 24 h").
+
 ## 0.8.1
 
 - Forecast on the Overview: the day marks line up on every day, also on days without rain.
