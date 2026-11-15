@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.2
+
+- **Test mode (dry run) simulates the whole run:** started, every zone change on the real timing
+  (pump delay, valve overlap), finished / stopped, skips - with the same notifications as a real
+  run, titled "🧪 Test:". Nothing is switched: not the ESP, not the pump. Statistics are not
+  touched. The Overview shows the simulated zone and a "Test" chip.
+- Overview: Stop sits in the header row of the Now box (no longer over the zone name); between
+  zones it shows "Switching zone…", at the end "Finishing…", after Stop "Stopping…" instead of
+  "Starting…".
+- Live chips for **pump power in kW** and **water flow in L/min** when those meters are set.
+- Starting a run asks "Start watering now?" (the dry-run wording is gone).
+
 ## 0.7.1
 
 - Unticking a zone in a slot keeps its minutes and days (stored as switched off); ticking it again

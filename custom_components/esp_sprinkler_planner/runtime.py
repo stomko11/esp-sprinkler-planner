@@ -55,6 +55,7 @@ class Runtime:
         self._valve_of: Dict[str, str] = {}
         self._planned_timer = None
         self._noticed: set = set()
+        self._sim_timers: List[Callable[[], None]] = []
         # milestone 5: weather, suggestions, stats
         self.wx: Dict[str, Any] = {"hourly": [], "daily": [], "fallen": None, "temp": None, "updated": None, "error": None}
         self.decisions: Dict[str, Dict[str, Any]] = {}   # run key -> weather decision (+ status)
@@ -197,6 +198,9 @@ class Runtime:
         slot_names = {x["id"]: x.get("name") or x["id"] for x in self.config.get("slots") or []}
         v = notify_logic.variables(event, run, slot_names, self.entry.title, extra)
         title, msg = self._render(e["title"], v), self._render(e["message"], v)
+        # dry run: everything is sent like for real, marked so it cannot be mistaken for watering
+        if extra.get("dry") or (self.flags.get("dry_run") and event in ("planned", "skipped", "weather", "suggestion")):
+            title = ("\U0001f9ea Sk\u00fa\u0161ka: " if self.lang == "sk" else "\U0001f9ea Test: ") + title
         sent = []
         for t in targets:
             data = notify_logic.payload(self._platform(t), title, msg, e.get("actions") or [], self.entry.entry_id,
@@ -879,6 +883,7 @@ class Runtime:
             u()
         self._unsubs.clear()
         self._dyn_unsubs.clear()
+        self._cancel_sim()
         for t in (self._timer, self._watchdog, self._dry_timer, self._planned_timer, self._health_timer):
             if t:
                 t()
@@ -1049,6 +1054,9 @@ class Runtime:
             for t in texts:
                 _LOGGER.info("%s DRY RUN would call: %s", self.entry.title, t)
             self._event("dry_run", run=rd, calls=texts, source=source)
+            # simulate the whole run: same notifications and states as a real one, nothing sent
+            self._event("started", run=rd, source=source, dry=True)
+            self._simulate(run)
             self._dry_timer = async_track_point_in_utc_time(self.hass, self._dry_done, dt_util.as_utc(run.end))
             self._changed()
             return
@@ -1097,6 +1105,31 @@ class Runtime:
             await self._turn_off_main()
             await self._finish("stopped", reason="watchdog: the run took longer than planned")
 
+    def _simulate(self, run: planner.Run) -> None:
+        """Dry run: walk the zones on the planned timing (pump delay, valve overlap), like the ESP would."""
+        self._cancel_sim()
+        pump = self.pump
+        t = dt_util.as_utc(run.start) + timedelta(seconds=pump["delay"] if pump and pump["auto_on"] else 0)
+        names = self.zone_names()
+        for st in run.steps:
+            start, end = t, t + timedelta(minutes=st.minutes)
+
+            async def _zone_on(_now, zid=st.zone_id, minutes=st.minutes, start=start, end=end):
+                if not (self.active and self.active.get("dry_run")) or end <= dt_util.utcnow():
+                    return
+                self.active_zone = {"zone": zid, "name": names.get(zid, zid), "since": start.isoformat(),
+                                    "minutes": minutes, "until": end.isoformat(), "dry": True}
+                self.notify("zone_changed", self.active["run"], zone=names.get(zid, zid), zone_minutes=minutes, dry=True)
+                self._changed()
+
+            self._sim_timers.append(async_track_point_in_utc_time(self.hass, _zone_on, max(start, dt_util.utcnow())))
+            t = end - timedelta(seconds=self.valve_overlap)
+
+    def _cancel_sim(self) -> None:
+        for u in getattr(self, "_sim_timers", []):
+            u()
+        self._sim_timers = []
+
     async def _dry_done(self, _now) -> None:
         self._dry_timer = None
         if self.active and self.active.get("dry_run"):
@@ -1112,6 +1145,9 @@ class Runtime:
 
     async def _finish(self, kind: str, reason: str = "") -> None:
         active, self.active = self.active, None
+        if active and active.get("dry_run"):
+            self._cancel_sim()
+            self.active_zone = None
         for attr in ("_watchdog", "_dry_timer"):
             t = getattr(self, attr)
             if t:
@@ -1131,8 +1167,10 @@ class Runtime:
         run_kwh = self._run_meter_stop() if active and not active.get("dry_run") else None
         await self._save()
         actual = round(sum(((active or {}).get("actual") or {}).values()), 1)
+        if active and active.get("dry_run") and not actual:
+            actual = round(sum(z["minutes"] for z in active["run"]["zones"]), 1) if kind == "finished" else actual
         self._event(kind, reason=reason, run=(active or {}).get("run"), actual_minutes=actual,
-                    **self._usage((active or {}).get("metered"), run_kwh))
+                    dry=bool(active and active.get("dry_run")), **self._usage((active or {}).get("metered"), run_kwh))
         await self.async_replan()
 
     @callback
@@ -1153,6 +1191,14 @@ class Runtime:
             end = dt_util.parse_datetime(self.active["expected_end"])
             if end > dt_util.utcnow():
                 self._dry_timer = async_track_point_in_utc_time(self.hass, self._dry_done, end)
+                try:
+                    zones, slots, settings = model.parse(self.config, self.valves, self.valve_overlap)
+                    r = self.active["run"]
+                    steps = [planner.Step(z["zone"], z["minutes"], z["minutes"], (r.get("slots") or ["?"])[0]) for z in r["zones"]]
+                    start = dt_util.parse_datetime(r["start"])
+                    self._simulate(planner.Run(start.date(), start, end, steps, r.get("slots") or [], "start", start))
+                except Exception:  # noqa: BLE001 - only the display of the simulated zone is lost
+                    pass
             else:
                 await self._finish("finished", reason="dry run (after restart)")
             return

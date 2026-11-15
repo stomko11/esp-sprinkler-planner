@@ -27,7 +27,8 @@ const SK = {
   "Raining now (binary or mm/h)": "Pr\u00e1ve pr\u0161\u00ed (bin\u00e1rny alebo mm/h)", "skip at gusts \u2265": "presko\u010di\u0165 pri n\u00e1razoch \u2265",
   "Live sensors": "Aktu\u00e1lne senzory", "Prices": "Ceny", "water per m\u00b3": "voda za m\u00b3", "energy per kWh": "energia za kWh",
   "Cost": "N\u00e1klady", "Last 12 months": "Posledn\u00fdch 12 mesiacov", "less": "menej", "more": "viac",
-  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Click to accept": "Kliknut\u00edm prijme\u0161", "By slot": "Pod\u013ea slotu", "By zone": "Pod\u013ea z\u00f3ny", "Slot": "Slot", "in no slot": "v \u017eiadnom slote",
+  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Test mode (dry run)": "Sk\u00fa\u0161obn\u00fd re\u017eim (dry run)", "help_test_mode": "Pl\u00e1n, po\u010dasie, z\u00f3ny a upozornenia be\u017eia ako naostro (s ozna\u010den\u00edm \ud83e\uddea), ale ni\u010d sa nezapne - ani ESP, ani \u010derpadlo.", "Click to accept": "Kliknut\u00edm prijme\u0161", "Test": "Sk\u00fa\u0161ka", "Stopping\u2026": "Zastavujem\u2026", "Finishing\u2026": "Kon\u010d\u00ed\u2026",
+  "Switching zone\u2026": "Prep\u00edna z\u00f3nu\u2026", "Start watering now?": "Spusti\u0165 polievanie teraz?", "Start watering for {0} now?": "Spusti\u0165 polievanie na {0} teraz?", "By slot": "Pod\u013ea slotu", "By zone": "Pod\u013ea z\u00f3ny", "Slot": "Slot", "in no slot": "v \u017eiadnom slote",
   "Each zone: in which slots, how long, on which days.": "Ka\u017ed\u00e1 z\u00f3na: v ktor\u00fdch slotoch, ako dlho, v ktor\u00e9 dni.", "Each slot: when, and which zones.": "Ka\u017ed\u00fd slot: kedy a ktor\u00e9 z\u00f3ny.", "Days": "Dni", "slot days": "dni slotu", "Back to the slot's days": "Sp\u00e4\u0165 na dni slotu",
   "Give this zone its own days": "Nastavi\u0165 tejto z\u00f3ne vlastn\u00e9 dni", "The slot has this day off; this zone runs anyway.": "Slot m\u00e1 tento de\u0148 vo\u013eno; t\u00e1to z\u00f3na aj tak be\u017e\u00ed.",
   "help_zone_days": "Dni pod\u013ea z\u00f3ny: \"dni slotu\" sa riadia d\u0148ami vy\u0161\u0161ie. Vlastn\u00e9 dni ich pre z\u00f3nu nahradia - m\u00f4\u017ee be\u017ea\u0165 aj v de\u0148, ke\u010f m\u00e1 slot vo\u013eno (preru\u0161ovane). \u21ba vr\u00e1ti dni slotu.",
@@ -141,6 +142,7 @@ const EN = {
   "rain_warn_total": "This looks like a growing total (weekly / monthly / yearly / all-time). Its value would always exceed the limit and skip every run - pick event rain, rain in the last 24 h or daily rain.",
   "help_zone_days": "Days per zone: \"slot days\" follows the weekdays above. Own days replace them for that zone - it can also run on a day the slot has off (dashed). \u21ba goes back to the slot's days.",
   "help_zone_days_n": "Days per zone: own days narrow this every-N-days slot for that zone (it runs only on the N-th days that fall on those weekdays). \u21ba goes back to the slot's days.",
+  "Test mode (dry run)": "Test mode (dry run)", "help_test_mode": "Plan, weather, zones and notifications run as for real (marked \ud83e\uddea), but nothing is switched - neither the ESP nor the pump.",
   "help_start": "The run starts at this time.", "help_finish": "The run is planned backwards so that it ends at this time.",
   "help_offset_sun": "Offset moves it: -30 = 30 min before, +60 = 1 h after sunrise/sunset (which changes every day).",
   "help_offset_time": "Offset shifts the time by minutes (usually 0 for a fixed time).",
@@ -217,6 +219,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
     const ids = [e.status, e.next_run, e.active_zone].filter(Boolean);
     const sig = ids.map((id) => (this._hass.states[id] || {}).last_updated).join("|");
     if (this._sig !== undefined && sig !== this._sig) { clearTimeout(this._wt); this._wt = setTimeout(() => this._load(), 400); }
+    if (this.shadowRoot) for (const el of this.shadowRoot.querySelectorAll("[data-lv]")) el.textContent = this._liveVal(el.dataset.lv);
     this._sig = sig;
   }
 
@@ -548,11 +551,11 @@ class EspSprinklerPlannerCard extends HTMLElement {
     return `
       <div class="grid2">
         <div class="box">
-          <div class="lbl">${t("Now")}</div>
-          ${act ? `<div class="big">${az ? `${this._mark(this._zone(az.zone), true)}${esc(az.name)}` : act.dry_run ? t("Dry run") : t("Starting\u2026")}</div>
+          <div class="lbl lrow nowhead">${t("Now")}${act && act.dry_run ? ` <span class="chip warn small">${t("Test")}</span>` : ""}<span class="grow"></span>
+            ${act ? `<button class="ab danger stopnow" data-act="stop" ${this._stopping ? "disabled" : ""}><ha-icon icon="mdi:stop-circle"></ha-icon>${t("Stop")}</button>` : ""}</div>
+          ${act ? `<div class="big">${az ? `${this._mark(this._zone(az.zone), true)}${esc(az.name)}` : `<span class="muted">${this._phase(act)}</span>`}</div>
                    <div class="muted">${az && az.until ? `${t("until {0}", hm(az.until))} \u00b7 ` : ""}${t("run ends {0}", hm(act.run.end))}</div>
-                   ${this._progress(act)}
-                   <button class="ab danger stopnow" data-act="stop" title="${esc(t("Stop"))}"><ha-icon icon="mdi:stop-circle"></ha-icon>${t("Stop")}</button>`
+                   ${this._progress(act)}`
                 : `<div class="big muted">${t("Nothing running")}</div>`}
         </div>
         <div class="box ${(d.flags || {}).enabled && !this._offline() ? "" : "boxoff"}">
@@ -575,6 +578,16 @@ class EspSprinklerPlannerCard extends HTMLElement {
         <button class="vt ${this._zview() === "list" ? "on" : ""}" data-act="zview" data-v="list" title="${t("list")}"><ha-icon icon="mdi:view-list"></ha-icon></button>
         <button class="vt ${this._zview() === "tiles" ? "on" : ""}" data-act="zview" data-v="tiles" title="${t("tiles")}"><ha-icon icon="mdi:view-grid"></ha-icon></button></div>
       ${this._zonesToday(zones, plan, todayHist, today, blocked, az)}`;
+  }
+
+  // what to show while no zone is open: the controller is starting, between zones, finishing or stopping
+  _phase(act) {
+    if (this._stopping) return t("Stopping\u2026");
+    const done = Object.keys(act.actual || {}).length;
+    const total = (act.run.zones || []).length;
+    if (Date.now() >= Date.parse(act.run.end) - 30000 || (done && done >= total)) return t("Finishing\u2026");
+    if (done) return t("Switching zone\u2026");
+    return t("Starting\u2026");
   }
 
   _zoneStrip(zs) {
@@ -645,8 +658,23 @@ class EspSprinklerPlannerCard extends HTMLElement {
     if (c.gust !== undefined) items.push(["mdi:weather-windy-variant", `${Math.round(c.gust)} km/h`, t("gusts")]);
     if (c.rain !== undefined) items.push(["mdi:weather-rainy", `${r1(c.rain)} mm`, t("Rain sensor (fallen)")]);
     if (c.raining !== undefined) items.push([c.raining ? "mdi:weather-pouring" : "mdi:weather-sunny", c.raining ? (c.rain_rate ? `${r1(c.rain_rate)} mm/h` : t("raining")) : t("dry"), t("Raining now (binary or mm/h)")]);
+    const m = this.data.meters || {};
+    if (m.pump_power) items.push(["mdi:pump", this._liveVal("power"), t("Pump power"), "power"]);
+    if (m.flow) items.push(["mdi:waves-arrow-right", this._liveVal("flow"), t("Water flow"), "flow"]);
     if (!items.length) return "";
-    return `<div class="live">${items.map(([i, v, l]) => `<span class="lc" title="${esc(l)}"><ha-icon icon="${i}"></ha-icon>${esc(v)}</span>`).join("")}</div>`;
+    return `<div class="live">${items.map(([i, v, l, k]) => `<span class="lc" title="${esc(l)}"><ha-icon icon="${i}"></ha-icon><span ${k ? `data-lv="${k}"` : ""}>${esc(v)}</span></span>`).join("")}</div>`;
+  }
+
+  // pump power in kW, water flow in L/min - read straight from Home Assistant, updated live
+  _liveVal(kind) {
+    const m = (this.data && this.data.meters) || {};
+    const st = this._hass.states[kind === "power" ? m.pump_power : m.flow];
+    const v = st ? parseFloat(st.state) : NaN;
+    if (!st || isNaN(v)) return "\u2013";
+    const u = ((st.attributes || {}).unit_of_measurement || "").replace("\u00b3", "3").toLowerCase();
+    if (kind === "power") { const kw = u === "kw" ? v : v / 1000; return `${kw.toFixed(kw < 10 ? 2 : 1)} kW`; }
+    const lmin = u === "m3/h" ? v * 1000 / 60 : u === "l/h" ? v / 60 : u === "l/s" ? v * 60 : v;
+    return `${lmin.toFixed(lmin < 10 ? 1 : 0)} L/min`;
   }
 
   _quickRun() {
@@ -1020,7 +1048,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
     return `
       ${sec("s_planner", "mdi:tune-variant", t("Planner"), `${flags.enabled ? t("enabled") : t("off")}${flags.dry_run ? " \u00b7 " + t("Dry run") : ""}`, `
         <div class="row"><label><input type="checkbox" class="tog" data-flag="enabled" ${flags.enabled ? "checked" : ""}> ${t("Planner enabled")}</label>
-          <label><input type="checkbox" class="tog" data-flag="dry_run" ${flags.dry_run ? "checked" : ""}> ${t("Dry run (send nothing to the ESP)")}</label></div>
+          <label><input type="checkbox" class="tog" data-flag="dry_run" ${flags.dry_run ? "checked" : ""}> ${t("Test mode (dry run)")}</label><span class="muted small">${t("help_test_mode")}</span><label style="display:none"></label></div>
         <div class="row"><label>${t("Name")} <input class="name" data-k="ui.title" value="${esc(ui.title || "")}" placeholder="${esc(d.title)}"></label>
           <label>${t("Language")} <select data-k="ui.language" data-r="1">${[["auto", t("automatic")], ["en", "English"], ["sk", "Slovensky"]].map(([v, l]) => `<option value="${v}" ${(ui.language || "auto") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label></div>`, true)}
       ${sec("s_zones", "mdi:sprinkler", t("Zones"), t("{0} zones", this._zones().length), this._zonesSection(), false)}
@@ -1280,7 +1308,10 @@ class EspSprinklerPlannerCard extends HTMLElement {
           this.data = await this._ws({ type: `${DOMAIN}/save`, config: this.draft });
           this._fetched = Date.now(); this.dirty = false; this.draft = this._makeDraft(this.data); this.preview = null; this._render();
         } catch (err) { this._saveErr = err.message || String(err); this._renderBar(); }
-      } else if (act === "stop") { await svc("stop", {}); setTimeout(() => this._load(), 1500); }
+      } else if (act === "stop") {
+        this._stopping = true; this._render();
+        try { await svc("stop", {}); } finally { setTimeout(() => { this._stopping = false; this._load(); }, 1500); }
+      }
       else if (act === "skip") { await svc("skip_next", {}); setTimeout(() => this._load(), 800); }
       else if (act === "unskip") { await svc("unskip", { run: tg.dataset.key }); setTimeout(() => this._load(), 800); }
       else if (act === "sugreset") { await svc("answer_suggestion", { run: tg.dataset.key, reset: true }); setTimeout(() => this._load(), 800); }
@@ -1292,17 +1323,17 @@ class EspSprinklerPlannerCard extends HTMLElement {
         const zones = this._zones().filter((z) => z.enabled && this._qr.sel[z.id]).map((z) => ({ zone: z.id, minutes: +this._qr.min[z.id] || 5 }));
         if (!zones.length) { alert(t("Pick at least one zone.")); return; }
         const total = zones.reduce((a, z) => a + z.minutes, 0);
-        if (real() && !confirm(t("Dry run is OFF - this will really water for {0} min. Start now?", total))) return;
+        if (real() && !confirm(t("Start watering for {0} now?", fmtMin(total)))) return;
         await svc("quick_run", { zones, reverse: !!this._qr.reverse }); this._qr = null; setTimeout(() => this._load(), 2500);
       } else if (act === "runslot" || act === "runslot1") {
         if (this.dirty) { alert(t("Save the changes first.")); return; }
         const slot = act === "runslot" ? this.shadowRoot.getElementById("runslot").value : tg.dataset.slot;
-        if (real() && !confirm(t("Dry run is OFF - this will really water. Start now?"))) return;
+        if (real() && !confirm(t("Start watering now?"))) return;
         await svc("run_slot", { slot }); setTimeout(() => this._load(), 2500);
       } else if (act === "runzone") {
         const m = num(this.shadowRoot.getElementById(`rz-${tg.dataset.zone}`).value);
         if (!m) return;
-        if (real() && !confirm(t("Dry run is OFF - this will really water for {0} min. Start now?", m))) return;
+        if (real() && !confirm(t("Start watering for {0} now?", fmtMin(m)))) return;
         await svc("run_zone", { zone: tg.dataset.zone, minutes: m }); setTimeout(() => this._load(), 2500);
       } else if (act === "testnotif") {
         e.preventDefault(); e.stopPropagation();
@@ -1459,7 +1490,8 @@ label.day.sm { min-width:26px; height:22px; font-size:11px; } label.day.extra { 
 .days.own { gap:2px; } button > ha-icon { --mdc-icon-size:16px; vertical-align:-3px; }
 button.sdays { padding:3px 10px; border-radius:12px; font-size:12px; }
 .help { font-size:12px; color:var(--secondary-text-color,#888); margin:-2px 0 8px; line-height:1.4; }
-.box { position:relative; } .stopnow { position:absolute; top:8px; right:8px; padding:4px 10px; }
+.box { position:relative; } .nowhead { margin-top:2px; min-height:30px; } .stopnow { padding:4px 12px; }
+.stopnow[disabled] { opacity:.5; cursor:default; }
 .rm.ans { cursor:pointer; } .rm.ans:hover { outline:2px solid var(--primary-text-color,#fff); outline-offset:-1px; }
 .fcd { cursor:pointer; transition:box-shadow .1s; } .fcd:hover { box-shadow:0 0 0 1px var(--divider-color,#bbb); } .fcd.sel { box-shadow:0 0 0 2px var(--primary-color,#03a9f4); }
 .dpanel { box-shadow:inset 3px 0 0 var(--primary-color,#03a9f4); }
