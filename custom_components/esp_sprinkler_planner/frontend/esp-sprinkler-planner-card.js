@@ -219,7 +219,10 @@ class EspSprinklerPlannerCard extends HTMLElement {
     const ids = [e.status, e.next_run, e.active_zone].filter(Boolean);
     const sig = ids.map((id) => (this._hass.states[id] || {}).last_updated).join("|");
     if (this._sig !== undefined && sig !== this._sig) { clearTimeout(this._wt); this._wt = setTimeout(() => this._load(), 400); }
-    if (this.shadowRoot) for (const el of this.shadowRoot.querySelectorAll("[data-lv]")) el.textContent = this._liveVal(el.dataset.lv);
+    if (this.shadowRoot) for (const el of this.shadowRoot.querySelectorAll("[data-lv]")) {
+      el.textContent = this._liveVal(el.dataset.lv);
+      el.parentElement.style.display = this._liveIdle(el.dataset.lv) ? "none" : "";
+    }
     this._sig = sig;
   }
 
@@ -662,19 +665,30 @@ class EspSprinklerPlannerCard extends HTMLElement {
     if (m.pump_power) items.push(["mdi:pump", this._liveVal("power"), t("Pump power"), "power"]);
     if (m.flow) items.push(["mdi:waves-arrow-right", this._liveVal("flow"), t("Water flow"), "flow"]);
     if (!items.length) return "";
-    return `<div class="live">${items.map(([i, v, l, k]) => `<span class="lc" title="${esc(l)}"><ha-icon icon="${i}"></ha-icon><span ${k ? `data-lv="${k}"` : ""}>${esc(v)}</span></span>`).join("")}</div>`;
+    return `<div class="live">${items.map(([i, v, l, k]) => `<span class="lc" title="${esc(l)}" ${k && this._liveIdle(k) ? 'style="display:none"' : ""}><ha-icon icon="${i}"></ha-icon><span ${k ? `data-lv="${k}"` : ""}>${esc(v)}</span></span>`).join("")}</div>`;
+  }
+
+  // pump / flow chips are hidden while idle: flow below 0.5 L/min, pump below 20 W (standby)
+  _liveIdle(kind) {
+    const v = this._liveNum(kind);
+    return v === null || (kind === "flow" ? v < 0.5 : v < 0.02);
   }
 
   // pump power in kW, water flow in L/min - read straight from Home Assistant, updated live
-  _liveVal(kind) {
+  _liveNum(kind) {        // kW for the pump, L/min for the flow; null when unknown
     const m = (this.data && this.data.meters) || {};
     const st = this._hass.states[kind === "power" ? m.pump_power : m.flow];
     const v = st ? parseFloat(st.state) : NaN;
-    if (!st || isNaN(v)) return "\u2013";
+    if (!st || isNaN(v)) return null;
     const u = ((st.attributes || {}).unit_of_measurement || "").replace("\u00b3", "3").toLowerCase();
-    if (kind === "power") { const kw = u === "kw" ? v : v / 1000; return `${kw.toFixed(kw < 10 ? 2 : 1)} kW`; }
-    const lmin = u === "m3/h" ? v * 1000 / 60 : u === "l/h" ? v / 60 : u === "l/s" ? v * 60 : v;
-    return `${lmin.toFixed(lmin < 10 ? 1 : 0)} L/min`;
+    if (kind === "power") return u === "kw" ? v : v / 1000;
+    return u === "m3/h" ? v * 1000 / 60 : u === "l/h" ? v / 60 : u === "l/s" ? v * 60 : v;
+  }
+
+  _liveVal(kind) {
+    const v = this._liveNum(kind);
+    if (v === null) return "\u2013";
+    return kind === "power" ? `${v.toFixed(v < 10 ? 2 : 1)} kW` : `${v.toFixed(v < 10 ? 1 : 0)} L/min`;
   }
 
   _quickRun() {

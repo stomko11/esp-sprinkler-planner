@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.3
+
+- The pump power and water flow chips on the Overview are hidden while idle (flow below
+  0.5 L/min, pump below 20 W) and appear live as soon as the pump runs.
+
 ## 0.7.2
 
 - **Test mode (dry run) simulates the whole run:** started, every zone change on the real timing
