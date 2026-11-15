@@ -462,7 +462,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
     const tip2 = rs.tip;
     if (dec.partial) return `<span class="rm adj part ${dec.status === "accepted" ? "ans" : ""}" ${dec.status === "accepted" ? `data-act="sugreset" data-key="${esc(k)}"` : dec.status === "pending" ? `data-act="sugyes" data-key="${esc(k)}"` : ""} title="${esc(tip2)}">${what}</span>`;
     if (dec.status === "pending")      // only a suggestion: nothing changes until you accept it
-      return `<span class="rm sug ${dec.action}" data-act="sugyes" data-key="${esc(k)}" title="${esc(t("Suggestion (not applied): {0}", tip))}\n${esc(t("Click to accept"))}"><ha-icon icon="mdi:lightbulb-on-outline"></ha-icon>${what}</span>`;
+      return `<span class="rm sug ${dec.action}" data-act="sugyes" data-key="${esc(k)}" title="${esc(t("Suggestion (not applied): {0}", tip))}\n${esc(t("Click to accept"))}"><ha-icon icon="mdi:lightbulb-on-outline"></ha-icon><span class="rl">${what}</span></span>`;
     if (dec.status === "accepted")
       return `<span class="rm ${dec.action === "skip" ? "skip" : "adj"} ans" data-act="sugreset" data-key="${esc(k)}" title="${esc(t("Accepted. Click to take back."))}\n${esc(tip)}">${what}</span>`;
     return `<span class="rm ${dec.action === "skip" ? "skip" : "adj"}" title="${esc(tip)}">${what}</span>`;
@@ -593,6 +593,11 @@ class EspSprinklerPlannerCard extends HTMLElement {
     return t("Starting\u2026");
   }
 
+  _yesNo(k) {
+    return `<span class="yn"><button class="ynb yes" data-act="sugyes" data-key="${esc(k)}" title="${esc(t("Accept"))}"><ha-icon icon="mdi:check"></ha-icon></button>
+      <button class="ynb no" data-act="sugno" data-key="${esc(k)}" title="${esc(t("Dismiss"))}"><ha-icon icon="mdi:close"></ha-icon></button></span>`;
+  }
+
   _zoneStrip(zs) {
     const total = zs.reduce((a, z) => a + z.minutes, 0) || 1;
     const MAX = 6;
@@ -713,8 +718,8 @@ class EspSprinklerPlannerCard extends HTMLElement {
       const s = sug[k]; const r = (plan.runs || []).find((x) => runKey(x) === k);
       const label = r ? `${fmtDay(r.day)} ${hm(r.start)} ${r.slots.map((x) => esc(this._slotName(x))).join(" + ")}` : esc(k);
       const what = s.action === "skip" ? t("skip") : `${t("adjust")} \u2192 ${t("{0} % of the minutes", Math.round(s.factor * 100))}`;
-      return `<div class="row"><b>${label}</b><span>${esc(what)}</span><span class="muted">${esc((s.reasons || []).join(", "))}</span><span class="grow"></span>
-        <button data-act="sugno" data-key="${esc(k)}">${t("Dismiss")}</button><button class="primary" data-act="sugyes" data-key="${esc(k)}">${t("Accept")}</button></div>`;
+      return `<div class="sugrow"><b>${label}</b><span class="sw2">${esc(what)}</span><span class="muted sr">${esc((s.reasons || []).join(", "))}</span>
+        ${this._yesNo(k)}</div>`;
     }).join("")}</div>`;
   }
 
@@ -761,7 +766,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
       if (!past) {
         if (user.has(k)) B.push(`<button class="ab" data-act="unskip" data-key="${esc(k)}"><ha-icon icon="mdi:undo"></ha-icon>${t("Undo skip")}</button>`);
         if (answered) B.push(`<button class="ab" data-act="sugreset" data-key="${esc(k)}"><ha-icon icon="mdi:undo"></ha-icon>${t(dec.status === "accepted" ? "Take back accept" : "Take back dismiss")}</button>`);
-        else if (sug[k] || (dec && dec.status === "pending")) B.push(`<button class="ab" data-act="sugno" data-key="${esc(k)}">${t("Dismiss")}</button><button class="ab primary" data-act="sugyes" data-key="${esc(k)}">${t("Accept")}</button>`);
+        else if (sug[k] || (dec && dec.status === "pending")) B.push(this._yesNo(k));
         if (wx.has(k) && !answered) B.push(`<button class="ab" data-act="unskip" data-key="${esc(k)}"><ha-icon icon="mdi:play"></ha-icon>${t("Run anyway")}</button>`);
         if (!user.has(k) && !wx.has(k)) B.push(`<button class="ab" data-act="skiprun" data-key="${esc(k)}"><ha-icon icon="mdi:skip-next-circle-outline"></ha-icon>${t("Skip")}</button>`);
       }
@@ -1483,7 +1488,8 @@ ha-icon.zi { --mdc-icon-size:16px; margin-right:4px; flex:none; } ha-icon.zi.big
 .rm { box-sizing:border-box; display:inline-flex; align-items:center; justify-content:center; gap:1px; width:46px; height:18px; font-size:11px; line-height:1; font-weight:700; border-radius:6px; padding:0 2px; border:1px solid transparent; background:var(--secondary-background-color,#eee); vertical-align:middle; white-space:nowrap; }
 .rm.part { font-size:10px; width:auto; min-width:46px; padding:0 4px; }
 .rm.ok { color:#2fbf71; } .rm.skip { color:#fff; background:#e5484d; } .rm.adj { color:#fff; background:#c47a00; } .rm.user { color:var(--secondary-text-color,#888); }
-.rm.sug ha-icon { width:11px; height:11px; display:inline-flex; --mdc-icon-size:11px; overflow:hidden; }
+.rm.sug ha-icon { width:11px; height:11px; display:flex; align-items:center; justify-content:center; line-height:0; --mdc-icon-size:11px; overflow:hidden; flex:none; }
+.rm.sug .rl { display:block; line-height:11px; height:11px; }
 .rm.sug { background:transparent; border:1px dashed currentColor; cursor:pointer; } .rm.sug:hover { background:currentColor; } .rm.sug:hover, .rm.sug:hover ha-icon { color:#fff !important; }
 .rm.sug ha-icon { --mdc-icon-size:12px; } .rm.sug.skip { color:#e5484d; } .rm.sug.adjust { color:#c47a00; }
 .wx ha-icon { --mdc-icon-size:16px; vertical-align:-3px; margin-right:2px; } .rain { color:#4e9cf5; }
@@ -1555,6 +1561,12 @@ input.picker { width:300px; } input.bad { border-color:#e5484d; }
 .qz { display:flex; align-items:center; gap:4px; padding:4px 6px; border-radius:8px; border:1px solid var(--divider-color,#ccc); }
 .qz.on { border-color:var(--primary-color,#03a9f4); } .qz input.n { margin-left:auto; width:56px; }
 .sug { box-shadow:inset 3px 0 0 #4e9cf5; }
+.sugrow { display:flex; align-items:center; gap:8px; padding:4px 0; border-top:1px solid var(--divider-color,#eee); min-width:0; }
+.sugrow > b { white-space:nowrap; } .sugrow .sw2 { white-space:nowrap; font-weight:500; }
+.sugrow .sr { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }
+.yn { display:inline-flex; gap:6px; flex:none; margin-left:auto; }
+.ynb { width:30px; height:30px; border-radius:50%; padding:0; display:inline-grid; place-items:center; border:0; color:#fff; }
+.ynb ha-icon { --mdc-icon-size:18px; } .ynb.yes { background:#2fbf71; } .ynb.no { background:#e5484d; } .ynb:hover { filter:brightness(1.1); }
 .fc { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
 .fcd { display:flex; flex-direction:column; align-items:center; gap:1px; padding:5px 2px; border-radius:8px; background:var(--secondary-background-color,#f4f4f4); font-size:12px; }
 .fcd.today { box-shadow:0 0 0 1px var(--primary-color,#03a9f4); } .fcd ha-icon { --mdc-icon-size:22px; } .fcd em { font-style:normal; color:var(--secondary-text-color,#888); font-size:11px; }

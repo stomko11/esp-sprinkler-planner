@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.5
+
+- Weather suggestions on the Overview take one line each: run, action, reason (shortened) and
+  round green ✓ / red ✕ buttons on the right. Same buttons in the day panel.
+- Bulb and label in suggestion marks are vertically centred.
+
 ## 0.7.4
 
 - Minutes fields step by whole minutes with the arrows (decimals can still be typed).
