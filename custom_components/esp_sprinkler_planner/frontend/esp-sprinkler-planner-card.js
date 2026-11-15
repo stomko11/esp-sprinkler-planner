@@ -577,10 +577,11 @@ class EspSprinklerPlannerCard extends HTMLElement {
       ${this._dayPanel(plan)}
       <div class="lbl">${t("Today")}</div>
       ${this._timeline(today, plan, false)}
-      <div class="lbl lrow">${t("Zones today")}<span class="grow"></span>
-        <button class="vt ${this._zview() === "list" ? "on" : ""}" data-act="zview" data-v="list" title="${t("list")}"><ha-icon icon="mdi:view-list"></ha-icon></button>
-        <button class="vt ${this._zview() === "tiles" ? "on" : ""}" data-act="zview" data-v="tiles" title="${t("tiles")}"><ha-icon icon="mdi:view-grid"></ha-icon></button></div>
-      ${this._zonesToday(zones, plan, todayHist, today, blocked, az)}`;
+      <details class="ztoday" data-d="zones_today" ${this._open_("zones_today", true)}>
+        <summary class="lbl lrow"><span class="caretz"></span>${t("Zones today")}<span class="grow"></span>
+          <button class="vt ${this._zview() === "list" ? "on" : ""}" data-act="zview" data-v="list" title="${t("list")}"><ha-icon icon="mdi:view-list"></ha-icon></button>
+          <button class="vt ${this._zview() === "tiles" ? "on" : ""}" data-act="zview" data-v="tiles" title="${t("tiles")}"><ha-icon icon="mdi:view-grid"></ha-icon></button></summary>
+        ${this._zonesToday(zones, plan, todayHist, today, blocked, az)}</details>`;
   }
 
   // what to show while no zone is open: the controller is starting, between zones, finishing or stopping
@@ -718,7 +719,8 @@ class EspSprinklerPlannerCard extends HTMLElement {
       const s = sug[k]; const r = (plan.runs || []).find((x) => runKey(x) === k);
       const label = r ? `${fmtDay(r.day)} ${hm(r.start)} ${r.slots.map((x) => esc(this._slotName(x))).join(" + ")}` : esc(k);
       const what = s.action === "skip" ? t("skip") : `${t("adjust")} \u2192 ${t("{0} % of the minutes", Math.round(s.factor * 100))}`;
-      return `<div class="sugrow"><b>${label}</b><span class="sw2">${esc(what)}</span><span class="muted sr">${esc((s.reasons || []).join(", "))}</span>
+      return `<div class="sugrow"><div class="st"><div class="l1"><b>${label}</b> \u00b7 <span class="sw2">${esc(what)}</span></div>
+          <div class="l2 muted">${esc((s.reasons || []).join(" \u00b7 ")) || "&nbsp;"}</div></div>
         ${this._yesNo(k)}</div>`;
     }).join("")}</div>`;
   }
@@ -1319,7 +1321,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
         if (!confirm(t("Undo all your skips and forget all weather answers?"))) return;
         await svc("clear_skips", { answers: true }); setTimeout(() => this._load(), 800);
       } else if (act === "skiprun") { await svc("skip_run", { run: tg.dataset.key }); setTimeout(() => this._load(), 800);
-      } else if (act === "zview") { this._zv = tg.dataset.v; localStorage.setItem("esp_sprinkler_zview", this._zv); this._render();
+      } else if (act === "zview") { e.preventDefault(); this._zv = tg.dataset.v; localStorage.setItem("esp_sprinkler_zview", this._zv); this._render();
       } else if (act === "seticon") { this._setPath(`zones.${tg.dataset.zone}.icon`, tg.dataset.icon || null); this._markDirty(true);
       } else if (act === "revert") { this.dirty = false; this.draft = this._makeDraft(this.data); this.preview = null; this._render(); }
       else if (act === "save") {
@@ -1416,6 +1418,7 @@ details.sec > summary::-webkit-details-marker, details.sub > summary::-webkit-de
 details.sec > summary::after, details.sub > summary::after { content:"\u25b8"; margin-left:auto; color:var(--secondary-text-color,#888); }
 details.sec[open] > summary::after, details.sub[open] > summary::after { content:"\u25be"; }
 details.sec > summary ha-icon { --mdc-icon-size:20px; color:var(--primary-color,#03a9f4); }
+details.sec > summary > b, details.sub > summary > b { white-space:nowrap; flex:none; max-width:45%; overflow:hidden; text-overflow:ellipsis; }
 details.sec > summary .muted, details.sub > summary .muted { font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .secb { padding:0 12px 8px; border-top:1px solid var(--divider-color,#eee); }
 details.sub { border-bottom:1px solid var(--divider-color,#eee); } details.sub > summary { padding:7px 2px; } details.sub .secb { border:0; padding:0 2px 6px 26px; }
@@ -1561,9 +1564,11 @@ input.picker { width:300px; } input.bad { border-color:#e5484d; }
 .qz { display:flex; align-items:center; gap:4px; padding:4px 6px; border-radius:8px; border:1px solid var(--divider-color,#ccc); }
 .qz.on { border-color:var(--primary-color,#03a9f4); } .qz input.n { margin-left:auto; width:56px; }
 .sug { box-shadow:inset 3px 0 0 #4e9cf5; }
-.sugrow { display:flex; align-items:center; gap:8px; padding:4px 0; border-top:1px solid var(--divider-color,#eee); min-width:0; }
-.sugrow > b { white-space:nowrap; } .sugrow .sw2 { white-space:nowrap; font-weight:500; }
-.sugrow .sr { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }
+details.ztoday > summary { list-style:none; cursor:pointer; } details.ztoday > summary::-webkit-details-marker { display:none; }
+.caretz::before { content:"\u25b8"; display:inline-block; width:12px; } details.ztoday[open] .caretz::before { content:"\u25be"; }
+.sugrow { display:flex; align-items:center; gap:10px; padding:6px 0; border-top:1px solid var(--divider-color,#eee); min-width:0; }
+.sugrow .st { flex:1; min-width:0; } .sugrow .l1 { font-weight:600; } .sugrow .sw2 { font-weight:700; }
+.sugrow .l2 { font-size:12px; line-height:1.35; min-height:1.35em; margin-top:2px; }
 .yn { display:inline-flex; gap:6px; flex:none; margin-left:auto; }
 .ynb { width:30px; height:30px; border-radius:50%; padding:0; display:inline-grid; place-items:center; border:0; color:#fff; }
 .ynb ha-icon { --mdc-icon-size:18px; } .ynb.yes { background:#2fbf71; } .ynb.no { background:#e5484d; } .ynb:hover { filter:brightness(1.1); }

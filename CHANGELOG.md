@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.6
+
+- Weather suggestions: the run and the suggested action in bold, the full reason below in smaller
+  text; every suggestion has the same height, also without a reason.
+- "Zones today" on the Overview is collapsible (list / tiles toggle stays in its header).
+- Long zone names no longer wrap in section headers (By zone view, Settings → Zones).
+
 ## 0.7.5
 
 - Weather suggestions on the Overview take one line each: run, action, reason (shortened) and
