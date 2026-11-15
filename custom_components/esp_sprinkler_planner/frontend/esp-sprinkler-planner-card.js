@@ -32,7 +32,7 @@ const SK = {
   "Scheduled runs are skipped; manual runs still work.": "Napl\u00e1novan\u00e9 behy sa presko\u010dia; ru\u010dn\u00e9 spustenie funguje.", "paused": "pozastaven\u00e9",
   "waiting for your answer": "\u010dak\u00e1 na tvoju odpove\u010f", "waiting for a blocker": "\u010dak\u00e1, k\u00fdm sa blokovanie skon\u010d\u00ed", "no answer by {0}: {1}": "bez odpovede do {0}: {1}",
   "until {0}, then {1}": "do {0}, potom {1}", "Wait 30 min": "Po\u010dka\u0165 30 min", "skip": "presko\u010di\u0165", "run": "spusti\u0165", "wait": "po\u010dka\u0165",
-  "Blockers": "Blokovanie", "{0} rules": "{0} pravidiel", "New blocker": "Nov\u00e9 blokovanie", "is on": "je zapnut\u00e9", "is off": "je vypnut\u00e9", "is": "je", "is not": "nie je",
+  "Blockers": "Blokovanie", "{0} rules": "{0} pravidiel", "1 rule": "1 pravidlo", "{0} rules (2-4)": "{0} pravidl\u00e1", "New blocker": "Nov\u00e9 blokovanie", "is on": "je zapnut\u00e9", "is off": "je vypnut\u00e9", "is": "je", "is not": "nie je",
   "above": "nad", "below": "pod", "act_skip": "presko\u010di\u0165", "act_wait": "po\u010dka\u0165", "act_ask": "op\u00fdta\u0165 sa", "Delete": "Zmaza\u0165", "e.g. Mower on the lawn": "napr. Kosa\u010dka na tr\u00e1ve",
   "When": "Ke\u010f", "any entity: mower, switch, sensor\u2026": "\u013eubovo\u013en\u00e1 entita: kosa\u010dka, vyp\u00edna\u010d, senzor\u2026", "now": "teraz", "blocking": "blokuje", "Applies to": "Plat\u00ed pre",
   "every run": "ka\u017ed\u00fd beh", "chosen slots": "vybran\u00e9 sloty", "chosen zones": "vybran\u00e9 z\u00f3ny", "Then": "Potom", "skip the run": "presko\u010di\u0165 beh",
@@ -1315,7 +1315,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
         <div class="row"><label>${t("Name")} <input class="name" data-k="ui.title" value="${esc(ui.title || "")}" placeholder="${esc(d.title)}"></label>
           <label>${t("Language")} <select data-k="ui.language" data-r="1">${[["auto", t("automatic")], ["en", "English"], ["sk", "Slovensky"]].map(([v, l]) => `<option value="${v}" ${(ui.language || "auto") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label></div>`, true)}
       ${sec("s_zones", "mdi:sprinkler", t("Zones"), t("{0} zones", this._zones().length), this._zonesSection(), false)}
-      ${sec("s_blockers", "mdi:hand-back-left", t("Blockers"), (this.draft.blockers || []).length ? t("{0} rules", (this.draft.blockers || []).length) : "\u2013", this._blockersSection(), false)}
+      ${sec("s_blockers", "mdi:hand-back-left", t("Blockers"), (this.draft.blockers || []).length ? ((n) => n === 1 ? t("1 rule") : (LANG === "sk" && n < 5) ? t("{0} rules (2-4)", n) : t("{0} rules", n))((this.draft.blockers || []).length) : "\u2013", this._blockersSection(), false)}
       ${sec("s_merge", "mdi:call-merge", t("Merging slots"), `${t(mergeNames[mm])}${mm === "window" ? ` ${st.merge_window ?? 60} min` : ""}`, `
         <div class="row">
           <select data-k="settings.merge_mode" data-r="1">${Object.entries(mergeNames).map(([v, l]) => `<option value="${v}" ${mm === v ? "selected" : ""}>${t(l)}</option>`).join("")}</select>
