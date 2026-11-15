@@ -23,7 +23,7 @@ SCHEMAS = {
     "configure": vol.Schema({ENTRY: cv.string, vol.Optional("zones"): dict, vol.Optional("slots"): list,
                              vol.Optional("settings"): dict, vol.Optional("notifications"): dict,
                              vol.Optional("pump"): dict, vol.Optional("weather"): dict,
-                             vol.Optional("meters"): dict, vol.Optional("ui"): dict}),
+                             vol.Optional("meters"): dict, vol.Optional("ui"): dict, vol.Optional("leak"): dict}),
     "test_notification": vol.Schema({ENTRY: cv.string, vol.Required("event"): vol.In(EVENTS),
                                      vol.Optional("targets"): [cv.string], vol.Optional("title"): cv.string,
                                      vol.Optional("message"): cv.string, vol.Optional("actions"): [cv.string]}),
@@ -39,6 +39,7 @@ SCHEMAS = {
     "skip_run": vol.Schema({ENTRY: cv.string, vol.Required("run"): cv.string}),
     "clear_skips": vol.Schema({ENTRY: cv.string, vol.Optional("answers", default=True): cv.boolean}),
     "reset_flow": vol.Schema({ENTRY: cv.string, vol.Optional("zone"): cv.string}),
+    "leak_snooze": vol.Schema({ENTRY: cv.string, vol.Optional("minutes"): vol.All(vol.Coerce(float), vol.Range(min=1, max=1440))}),
     "clear_stats": vol.Schema({ENTRY: cv.string, vol.Required("confirm"): cv.boolean}),
     "answer_suggestion": vol.Schema({ENTRY: cv.string, vol.Required("run"): cv.string,
                                      vol.Optional("accept"): cv.boolean, vol.Optional("reset", default=False): cv.boolean}),
@@ -87,7 +88,7 @@ async def async_setup(hass: HomeAssistant, config) -> bool:
             if call.service == "configure":
                 plan = await rt.configure(d.get("zones"), d.get("slots"), d.get("settings"),
                                           d.get("notifications"), d.get("pump"), d.get("weather"),
-                                          d.get("meters"), d.get("ui"))
+                                          d.get("meters"), d.get("ui"), d.get("leak"))
                 return {"runs": len(plan.runs), "conflicts": [c.message for c in plan.conflicts]}
             if call.service == "test_notification":
                 over = {k: d[k] for k in ("title", "message", "actions") if k in d}
@@ -100,6 +101,8 @@ async def async_setup(hass: HomeAssistant, config) -> bool:
                 await rt.run_zone(d["zone"], d["minutes"])
             elif call.service == "quick_run":
                 await rt.quick_run(d["zones"], d["reverse"])
+            elif call.service == "leak_snooze":
+                return {"until": await rt.leak_snooze(d.get("minutes"))}
             elif call.service == "reset_flow":
                 return {"reset": await rt.reset_flow(d.get("zone"))}
             elif call.service == "clear_stats":
@@ -136,7 +139,7 @@ async def async_setup(hass: HomeAssistant, config) -> bool:
 
     for name, schema in SCHEMAS.items():
         support = {"get_plan": SupportsResponse.ONLY, "configure": SupportsResponse.OPTIONAL,
-                   "skip_next": SupportsResponse.OPTIONAL, "unskip": SupportsResponse.OPTIONAL, "skip_run": SupportsResponse.OPTIONAL, "clear_skips": SupportsResponse.OPTIONAL, "reset_flow": SupportsResponse.OPTIONAL,
+                   "skip_next": SupportsResponse.OPTIONAL, "unskip": SupportsResponse.OPTIONAL, "skip_run": SupportsResponse.OPTIONAL, "clear_skips": SupportsResponse.OPTIONAL, "reset_flow": SupportsResponse.OPTIONAL, "leak_snooze": SupportsResponse.OPTIONAL,
                    "get_stats": SupportsResponse.ONLY,
                    "test_notification": SupportsResponse.OPTIONAL}.get(name, SupportsResponse.NONE)
         hass.services.async_register(DOMAIN, name, handle, schema=schema, supports_response=support)

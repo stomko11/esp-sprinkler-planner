@@ -69,6 +69,8 @@ def snapshot(hass, rt, days: int) -> Dict[str, Any]:
         "lang": rt.lang,
         "health": {k: rt.health[k] for k in ("missing", "unavailable", "since")},
         "tmax_log": rt.tmax_log,
+        "leak_full": rt.leak_cfg, "leak_alarm": rt.leak_alarm, "leak_snooze_until": rt.leak_snooze_until,
+        "leak_flowing": rt.leak.minutes(dt_util.utcnow()) if rt.leak.since else 0,
         "weather_full": rt.weather_cfg,
         "weather_now": _wx_summary(rt),
         "meters": rt.meters,
@@ -146,7 +148,7 @@ async def ws_save(hass, connection, msg):
     c = msg["config"]
     try:
         await rt.configure(c.get("zones"), c.get("slots"), c.get("settings"), c.get("notifications"), c.get("pump"),
-                           c.get("weather"), c.get("meters"), c.get("ui"))
+                           c.get("weather"), c.get("meters"), c.get("ui"), c.get("leak"))
     except ConfigError as err:
         connection.send_error(msg["id"], "invalid", str(err))
         return

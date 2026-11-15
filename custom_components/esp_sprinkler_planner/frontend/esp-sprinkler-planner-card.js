@@ -27,7 +27,14 @@ const SK = {
   "Raining now (binary or mm/h)": "Pr\u00e1ve pr\u0161\u00ed (bin\u00e1rny alebo mm/h)", "skip at gusts \u2265": "presko\u010di\u0165 pri n\u00e1razoch \u2265",
   "Live sensors": "Aktu\u00e1lne senzory", "Prices": "Ceny", "water per m\u00b3": "voda za m\u00b3", "energy per kWh": "energia za kWh",
   "Cost": "N\u00e1klady", "Last 12 months": "Posledn\u00fdch 12 mesiacov", "less": "menej", "more": "viac",
-  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Test mode (dry run)": "Sk\u00fa\u0161obn\u00fd re\u017eim (dry run)", "help_test_mode": "Pl\u00e1n, po\u010dasie, z\u00f3ny a upozornenia be\u017eia ako naostro (s ozna\u010den\u00edm \ud83e\uddea), ale ni\u010d sa nezapne - ani ESP, ani \u010derpadlo.", "Click to accept": "Kliknut\u00edm prijme\u0161", "Weekly average": "T\u00fd\u017edenn\u00fd priemer",
+  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Test mode (dry run)": "Sk\u00fa\u0161obn\u00fd re\u017eim (dry run)", "help_test_mode": "Pl\u00e1n, po\u010dasie, z\u00f3ny a upozornenia be\u017eia ako naostro (s ozna\u010den\u00edm \ud83e\uddea), ale ni\u010d sa nezapne - ani ESP, ani \u010derpadlo.", "Click to accept": "Kliknut\u00edm prijme\u0161", "Leak alarm": "Alarm \u00faniku",
+  "help_leak": "Upozorn\u00ed, ke\u010f voda te\u010die a \u017eiadna z\u00f3na nepolieva (prasknut\u00e1 hadica, ventil). Pred a po behu je ticho, aby \u0165a neru\u0161il, ke\u010f vodu pou\u017e\u00edva\u0161.",
+  "counts as flowing from": "te\u010die od", "alarm after flowing for": "alarm po te\u010den\u00ed", "quiet before a run": "ticho pred behom", "quiet after a run": "ticho po behu",
+  "valve did not close: check after": "ventil sa nezavrel: kontrola po", "\"That's me\" silences for": "\"To som ja\" ut\u00ed\u0161i na", "stricter at night": "v noci pr\u00edsnej\u0161ie",
+  "switch the pump off on an alarm": "pri alarme vypn\u00fa\u0165 \u010derpadlo", "silenced until {0}": "ut\u00ed\u0161en\u00e9 do {0}", "I'm using water now": "Pr\u00e1ve pou\u017e\u00edvam vodu",
+  "Flowing outside irrigation for {0} min.": "Mimo polievania te\u010die {0} min.", "Pick a water flow sensor to use the leak alarm.": "Pre alarm \u00faniku vyber senzor prietoku vody.",
+  "Water is flowing and no zone is watering": "Te\u010die voda a \u017eiadna z\u00f3na nepolieva", "{0} L/min since {1}": "{0} L/min od {1}", "That's me": "To som ja", "Pump OFF": "Vypn\u00fa\u0165 \u010derpadlo",
+  "leak_ev": "\u00fanik vody", "valve_stuck_ev": "ventil sa nezavrel", "That's me_a": "To som ja", "Pump OFF_a": "Vypn\u00fa\u0165 \u010derpadlo", "Weekly average": "T\u00fd\u017edenn\u00fd priemer",
   "help_avg": "\u00darove\u0148 sez\u00f3ny z priemernej dennej maxim\u00e1lnej teploty namiesto zmeny na stupe\u0148 v dan\u00fd de\u0148. D\u00e1\u017e\u010f, vietor a mr\u00e1z platia na\u010falej.",
   "measured days back": "nameran\u00e9 dni dozadu", "forecast days ahead (incl. today)": "dni predpovede dopredu (vr\u00e1tane dne\u0161ka)",
   "today's deviation, per degree": "odch\u00fdlka dne\u0161ka, na stupe\u0148", "at most \u00b1": "najviac \u00b1", "average daily max": "priemern\u00e9 denn\u00e9 maximum",
@@ -150,6 +157,7 @@ const EN = {
   "help_zone_days_n": "Days per zone: own days narrow this every-N-days slot for that zone (it runs only on the N-th days that fall on those weekdays). \u21ba goes back to the slot's days.",
   "Test mode (dry run)": "Test mode (dry run)", "help_test_mode": "Plan, weather, zones and notifications run as for real (marked \ud83e\uddea), but nothing is switched - neither the ESP nor the pump.",
   "help_avg": "Season level from the average daily maximum instead of the day's per-degree change. Rain, wind and frost still apply.",
+  "help_leak": "Notifies when water flows and no zone is watering (burst hose, stuck valve). Quiet before and after runs, so using water yourself does not trigger it.",
   "help_start": "The run starts at this time.", "help_finish": "The run is planned backwards so that it ends at this time.",
   "help_offset_sun": "Offset moves it: -30 = 30 min before, +60 = 1 h after sunrise/sunset (which changes every day).",
   "help_offset_time": "Offset shifts the time by minutes (usually 0 for a fixed time).",
@@ -265,7 +273,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
     return {
       zones: clone(c.zones || {}), slots: clone(c.slots || []), settings: clone(c.settings || {}),
       pump: clone(c.pump || {}), notifications: clone(c.notifications || { targets: [], events: {} }),
-      weather: clone(c.weather || {}), meters: clone(c.meters || {}), ui: clone(c.ui || {}),
+      weather: clone(c.weather || {}), meters: clone(c.meters || {}), ui: clone(c.ui || {}), leak: clone(c.leak || {}),
     };
   }
 
@@ -410,6 +418,43 @@ class EspSprinklerPlannerCard extends HTMLElement {
     this._markDirty(true);
   }
 
+  _leakBanner() {
+    const a = this.data.leak_alarm;
+    if (!a) return "";
+    const since = hm(new Date(a.since).toLocaleString("sv").replace(" ", "T"));
+    return `<div class="banner offline leak"><ha-icon icon="mdi:pipe-leak"></ha-icon><div class="grow">
+      <b>${t("Water is flowing and no zone is watering")}</b><br><span class="muted">${t("{0} L/min since {1}", a.flow, since)}</span></div>
+      <span class="lkb"><button class="ab" data-act="leaksnooze"><ha-icon icon="mdi:account-check"></ha-icon>${t("That's me")}</button>
+      ${(this.data.config.pump || {}).entity ? `<button class="ab danger" data-act="pumpoff"><ha-icon icon="mdi:pump-off"></ha-icon>${t("Pump OFF")}</button>` : ""}</span></div>`;
+  }
+
+  _leakSection() {
+    const L = { ...(this.data.leak_full || {}), ...(this.draft.leak || {}) };
+    const on = L.mode === "on";
+    const lk = (f) => `leak.${f}`;
+    const sl = (f, dflt, mn, mx, st, u) => this._slider(lk(f), L[f] ?? dflt, mn, mx, st, u);
+    const snz = this.data.leak_snooze_until && Date.parse(this.data.leak_snooze_until) > Date.now();
+    return `<div class="avgbox">
+      <div class="row"><label><input type="checkbox" class="tog" data-leak="mode" ${on ? "checked" : ""}> <b>${t("Leak alarm")}</b></label>
+        <span class="muted small">${t("help_leak")}</span></div>
+      ${on ? `<div class="grid">
+          <span class="fl">${t("counts as flowing from")}</span>${sl("min_flow", 1, 0.5, 10, 0.5, " L/min")}
+          <span class="fl">${t("alarm after flowing for")}</span>${sl("duration", 20, 1, 120, 1, " min")}
+          <span class="fl">${t("quiet before a run")}</span>${sl("quiet_before", 15, 0, 60, 5, " min")}
+          <span class="fl">${t("quiet after a run")}</span>${sl("quiet_after", 15, 0, 60, 5, " min")}
+          <span class="fl">${t("valve did not close: check after")}</span>${sl("stuck", 3, 0, 15, 1, " min")}
+          <span class="fl">${t("\"That's me\" silences for")}</span>${sl("snooze", 60, 5, 480, 5, " min")}
+        </div>
+        <div class="row"><label><input type="checkbox" class="tog" data-k="${lk("night")}" data-t="bool" data-r="1" ${L.night ? "checked" : ""}> ${t("stricter at night")}</label>
+          ${L.night ? `<input type="time" data-k="${lk("night_from")}" value="${esc(L.night_from || "23:00")}"> \u2013 <input type="time" data-k="${lk("night_to")}" value="${esc(L.night_to || "05:00")}">
+            <span class="grow"></span>${sl("night_duration", 5, 1, 60, 1, " min")}` : ""}</div>
+        <div class="row"><label><input type="checkbox" class="tog" data-k="${lk("pump_off")}" data-t="bool" ${L.pump_off ? "checked" : ""}> ${t("switch the pump off on an alarm")}</label>
+          <span class="grow"></span>${snz ? `<span class="muted small">${t("silenced until {0}", hm(new Date(this.data.leak_snooze_until).toLocaleString("sv").replace(" ", "T")))}</span>`
+            : `<button class="ab" data-act="leaksnooze"><ha-icon icon="mdi:account-check"></ha-icon>${t("I'm using water now")}</button>`}</div>
+        ${this.data.leak_flowing ? `<div class="muted small">${t("Flowing outside irrigation for {0} min.", Math.round(this.data.leak_flowing))}</div>` : ""}` : ""}
+    </div>`;
+  }
+
   _cur() { return ((this.data && this.data.weather_now) || {}).currency || "EUR"; }
   _cost(x) {
     const m = (this.data && this.data.meters) || {};
@@ -440,6 +485,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
       </div>
       ${d.error ? `<div class="banner err">${esc(d.error)}</div>` : ""}
       ${this._offlineBanner()}
+      ${this._leakBanner()}
       ${this._loadErr ? `<div class="banner err">${esc(this._loadErr)}</div>` : ""}
       <div class="tabs">${tabs.map(([k, l]) => `<button class="tab ${this._tab === k ? "on" : ""}" data-tab="${k}">${t(l)}</button>`).join("")}</div>
       <div class="body">${this[`_tab_${this._tab}`]()}</div>
@@ -1185,7 +1231,8 @@ class EspSprinklerPlannerCard extends HTMLElement {
         <div class="row"><b>${t("Prices")}</b>
           <label>${t("water per m\u00b3")} <input type="number" class="n" min="0" step="0.01" data-k="meters.water_price" data-t="num" value="${esc(m.water_price ?? "")}"> ${esc(this._cur())}</label>
           <label>${t("energy per kWh")} <input type="number" class="n" min="0" step="0.01" data-k="meters.energy_price" data-t="num" value="${esc(m.energy_price ?? "")}"> ${esc(this._cur())}</label></div>
-        <div class="muted small">${t("Totals are preferred; without them the rate is integrated while a zone is open.")}</div>`, false)}
+        <div class="muted small">${t("Totals are preferred; without them the rate is integrated while a zone is open.")}</div>
+        ${m.flow ? this._leakSection() : `<div class="muted small">${t("Pick a water flow sensor to use the leak alarm.")}</div>`}`, false)}
       ${sec("s_notify", "mdi:bell-outline", t("Notifications"), (n.targets || []).map((x) => esc(x.slice(7))).join(", ") || t("nobody"), `
         <div class="row"><b>${t("Send to")}</b> <span class="muted">${t("(default for every event, pick any number)")}</span></div>
         ${recip(n.targets || [], "default")}
@@ -1260,6 +1307,11 @@ class EspSprinklerPlannerCard extends HTMLElement {
       const [ev, svc] = t0.dataset.nev.split("|"); const n = this.draft.notifications; n.events = n.events || {}; n.events[ev] = n.events[ev] || {};
       const cur = n.events[ev].targets || [];
       n.events[ev].targets = t0.checked ? [...new Set([...cur, svc])] : cur.filter((x) => x !== svc);
+      this._markDirty(true); return;
+    }
+    if (t0.dataset.leak) {
+      if (!isChange) return;
+      this.draft.leak = { ...(this.data.leak_full || {}), ...(this.draft.leak || {}), mode: t0.checked ? "on" : "off" };
       this._markDirty(true); return;
     }
     if (t0.dataset.avg) {
@@ -1358,6 +1410,9 @@ class EspSprinklerPlannerCard extends HTMLElement {
         if (!confirm(t("Delete ALL statistics (watering time, water, energy, skips, flow)? This cannot be undone."))) return;
         await svc("clear_stats", { confirm: true }); setTimeout(() => { this._stats = null; this._heat = null; this._load(); }, 600);
       } else if (act === "sview") { this._sv = tg.dataset.v; localStorage.setItem("esp_sprinkler_sview", this._sv); this._render();
+      } else if (act === "leaksnooze") { await svc("leak_snooze", {}); setTimeout(() => this._load(), 600);
+      } else if (act === "pumpoff") {
+        await this._hass.callService("homeassistant", "turn_off", { entity_id: this.data.config.pump.entity }); setTimeout(() => this._load(), 600);
       } else if (act === "bandadd") {
         this._setBands((b) => { const lim = b.filter((x) => x[0] !== null && x[0] !== ""); const last = lim.length ? +lim[lim.length - 1][0] : 20;
           b.splice(lim.length, 0, [last + 4, b[b.length - 1][1]]); return b; });
@@ -1702,6 +1757,7 @@ details.ztoday > summary { list-style:none; cursor:pointer; } details.ztoday > s
 .st-offline { background:#e5484d; color:#fff; } .hicon.bad { color:#e5484d; }
 .banner.offline { display:flex; gap:10px; align-items:flex-start; background:#e5484d22; border:1px solid #e5484d; border-radius:10px; padding:10px 12px; }
 .banner.offline details.ents summary { cursor:pointer; margin-top:4px; } .banner.offline code { display:inline-block; margin:2px 4px 0 0; }
+.banner.leak { align-items:center; } .lkb { display:inline-flex; gap:6px; flex-wrap:wrap; }
 .banner.offline > ha-icon { color:#e5484d; --mdc-icon-size:28px; flex:none; }
 .dm { box-sizing:border-box; display:inline-flex; flex-direction:column; align-items:center; justify-content:center; width:58px; height:24px; border-radius:6px; padding:1px 2px; background:var(--secondary-background-color,#eee); cursor:pointer; vertical-align:middle; line-height:1; }
 .fcd .dm { cursor:inherit; } .dm.emptyd { visibility:hidden; }

@@ -18,7 +18,7 @@ from homeassistant.helpers.template import Template
 from homeassistant.util import slugify
 from homeassistant.util import dt as dt_util
 
-from . import executor, model, notify_logic, planner, stats as stats_mod, weather as wx_mod
+from . import executor, leak as leak_mod, model, notify_logic, planner, stats as stats_mod, weather as wx_mod
 from .const import (CONF_CONTROLLER, CONF_VALVE_OVERLAP, CONF_VALVES, DEFAULT_WATCHDOG, DOMAIN, EVENT, OPT_RESTORE,
                     OPT_WATCHDOG, PLAN_DAYS, STORAGE_VERSION)
 
@@ -64,6 +64,12 @@ class Runtime:
         self.skip_done: List[str] = []                    # user skips whose start has passed (shown dimmed)
         self.stats: Dict[str, Any] = {}
         self.flow_samples: Dict[str, List[float]] = {}
+        self.leak = leak_mod.LeakWatch()
+        self.leak_alarm: Optional[Dict[str, Any]] = None   # active alarm for the card
+        self.leak_snooze_until: Optional[str] = None
+        self._last_end: Optional[datetime] = None
+        self._last_zone: Optional[str] = None
+        self._stuck_timer = None
         self.tmax_log: Dict[str, float] = {}             # local day -> highest temperature seen (deg C), 30 days
         self.rain_log: List[List[Any]] = []               # [iso time, mm] increments of the rain counter (72 h)
         self._rain_last: Optional[float] = None           # last reading of the rain counter, mm
@@ -117,6 +123,13 @@ class Runtime:
             return wx_mod.merged({})
 
     @property
+    def leak_cfg(self) -> Dict[str, Any]:
+        try:
+            return leak_mod.merged(self.config.get("leak"))
+        except leak_mod.LeakConfigError:
+            return leak_mod.merged({})
+
+    @property
     def meters(self) -> Dict[str, Any]:
         try:
             return stats_mod.meters_from_dict(self.config.get("meters"))
@@ -146,6 +159,7 @@ class Runtime:
                                      "stats": self.stats, "flow_samples": self.flow_samples,
                                      "flow_base": self.flow_base, "base_samples": self._base_samples,
                                      "rain_log": self.rain_log, "rain_last": self._rain_last, "tmax_log": self.tmax_log,
+                                     "leak_snooze_until": self.leak_snooze_until,
                                      "rain_entity": self._rain_entity,
                                      "suggestions": self.suggestions, "skip_done": self.skip_done})
 
@@ -246,6 +260,10 @@ class Runtime:
             self.hass.async_create_task(self.skip_next())
         elif name == "pump_on":
             self.hass.async_create_task(self._pump_switch(True, by_user=True))
+        elif name == "leak_snooze":
+            self.hass.async_create_task(self.leak_snooze())
+        elif name == "pump_off":
+            self.hass.async_create_task(self._pump_switch(False))
         elif name in ("accept", "dismiss"):
             pend = sorted(k for k, v in self.suggestions.items() if v.get("status") == "pending")
             if pend:
@@ -478,6 +496,68 @@ class Runtime:
                 return None
             total += s[len(s) // 2] * float(z["minutes"])
         return round(total, 0)
+
+    # ------------------------------------------------------------------ leak alarm
+    def _leak_quiet(self, now) -> bool:
+        """No alarm while watering, shortly before a run and shortly after one."""
+        c = self.leak_cfg
+        if self.active and not self.active.get("dry_run"):
+            return True
+        if self.next_run and dt_util.as_utc(self.next_run.start) - now <= timedelta(minutes=c["quiet_before"]):
+            return True
+        return bool(self._last_end and now - self._last_end <= timedelta(minutes=c["quiet_after"]))
+
+    def _leak_snoozed(self, now) -> bool:
+        return bool(self.leak_snooze_until and dt_util.parse_datetime(self.leak_snooze_until) > now)
+
+    @callback
+    def _leak_check(self, *_args) -> None:
+        if not self.meters.get("flow"):
+            return
+        now = dt_util.utcnow()
+        flow = self._rate("flow")
+        c = self.leak_cfg
+        hit = self.leak.step(c, now, flow, self._leak_quiet(now), self._leak_snoozed(now), dt_util.as_local(now))
+        was = self.leak_alarm
+        if hit:
+            since = dt_util.as_local(self.leak.since).strftime("%H:%M")
+            self.leak_alarm = {"since": self.leak.since.isoformat(), "flow": round(flow, 1)}
+            self._event("leak", flow=round(flow, 1), minutes=round(self.leak.minutes(now)), since=since)
+            if c["pump_off"]:
+                self.hass.async_create_task(self._pump_switch(False))
+        elif was and not self.leak.alarmed:
+            self.leak_alarm = None             # flow stopped (or a run took over)
+        if was != self.leak_alarm:
+            self._changed()
+
+    async def leak_snooze(self, minutes: Optional[float] = None) -> str:
+        until = dt_util.utcnow() + timedelta(minutes=minutes or self.leak_cfg["snooze"])
+        self.leak_snooze_until = until.isoformat()
+        self.leak_alarm = None
+        self.leak.alarmed = False
+        self.leak.since = None
+        await self._save()
+        self._changed()
+        return self.leak_snooze_until
+
+    def _arm_stuck_check(self) -> None:
+        c = self.leak_cfg
+        if self._stuck_timer:
+            self._stuck_timer()
+            self._stuck_timer = None
+        if c["mode"] != "on" or not c["stuck"] or not self.meters.get("flow"):
+            return
+
+        async def _check(_now):
+            self._stuck_timer = None
+            flow = self._rate("flow")
+            if self.active or flow is None or flow < c["min_flow"] or self._leak_snoozed(dt_util.utcnow()):
+                return
+            self._event("valve_stuck", flow=round(flow, 1), zone=self._last_zone or "-", minutes=round(c["stuck"]))
+            if c["pump_off"]:
+                await self._pump_switch(False)
+
+        self._stuck_timer = async_track_point_in_utc_time(self.hass, _check, dt_util.utcnow() + timedelta(minutes=c["stuck"]))
 
     # ------------------------------------------------------------------ weather
     async def refresh_weather(self) -> None:
@@ -807,6 +887,9 @@ class Runtime:
         rates = [m[k] for k in ("flow", "pump_power") if m.get(k)]
         if rates:
             self._dyn_unsubs.append(async_track_state_change_event(self.hass, rates, self._on_meter))
+        if m.get("flow") and self.leak_cfg["mode"] == "on":
+            self._dyn_unsubs.append(async_track_state_change_event(self.hass, [m["flow"]], self._leak_check))
+            self._dyn_unsubs.append(async_track_time_interval(self.hass, self._leak_check, timedelta(minutes=1)))
         cfg = self.weather_cfg
         watch = [cfg[k] for k in ("entity", "rain_sensor", "rain_now") if cfg["mode"] != "off" and cfg.get(k)]
         if watch:
@@ -896,6 +979,7 @@ class Runtime:
         self.flow_base = data.get("flow_base") or {}
         self.rain_log = data.get("rain_log") or []
         self.tmax_log = data.get("tmax_log") or {}
+        self.leak_snooze_until = data.get("leak_snooze_until")
         self._rain_last = data.get("rain_last")
         self._rain_entity = data.get("rain_entity")
         self._base_samples = data.get("base_samples") or {}
@@ -948,6 +1032,9 @@ class Runtime:
         self._unsubs.clear()
         self._dyn_unsubs.clear()
         self._cancel_sim()
+        if self._stuck_timer:
+            self._stuck_timer()
+            self._stuck_timer = None
         for t in (self._timer, self._watchdog, self._dry_timer, self._planned_timer, self._health_timer):
             if t:
                 t()
@@ -1226,6 +1313,11 @@ class Runtime:
                 except Exception:  # noqa: BLE001
                     _LOGGER.warning("%s: restore failed for %s", self.entry.title, c.entity_id)
         p = self.pump
+        if active and not active.get("dry_run"):
+            self._last_end = dt_util.utcnow()
+            zs = (active.get("run") or {}).get("zones") or []
+            self._last_zone = zs[-1]["name"] if zs else None
+            self._arm_stuck_check()
         if active and not active.get("dry_run") and p and p["auto_off"] and active.get("pump_started"):
             await self._pump_switch(False)
         run_kwh = self._run_meter_stop() if active and not active.get("dry_run") else None
@@ -1283,8 +1375,14 @@ class Runtime:
         await self.async_replan()
 
     async def configure(self, zones=None, slots=None, settings=None, notifications=None, pump=None,
-                        weather=None, meters=None, ui=None) -> planner.Plan:
+                        weather=None, meters=None, ui=None, leak=None) -> planner.Plan:
         new = copy.deepcopy(self.config)
+        if leak is not None:
+            try:
+                leak_mod.merged(leak)
+            except leak_mod.LeakConfigError as err:
+                raise model.ConfigError(str(err)) from err
+            new["leak"] = {k: v for k, v in leak.items() if v is not None and v != ""}
         if weather is not None:
             try:
                 wx_mod.merged(weather)
@@ -1319,7 +1417,8 @@ class Runtime:
         if settings is not None:
             new["settings"] = settings
         result = self.compute(days=7, config=new)   # raises ConfigError
-        resub = (new.get("weather"), new.get("meters")) != (self.config.get("weather"), self.config.get("meters"))
+        resub = (new.get("weather"), new.get("meters"), new.get("leak")) != (
+            self.config.get("weather"), self.config.get("meters"), self.config.get("leak"))
         if (new.get("weather") or {}).get("mode", "off") != "suggest":
             # leaving suggest mode: open questions are gone (auto decides, off ignores the weather);
             # answers stay - a dismissed skip still means "run anyway" in auto mode

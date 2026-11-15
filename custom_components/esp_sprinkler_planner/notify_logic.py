@@ -28,7 +28,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Dict, List, Optional
 
 EVENTS = ("planned", "started", "zone_changed", "finished", "skipped", "stopped", "error", "pump_off", "dry_run",
-          "suggestion", "weather", "flow_warning", "flow_drift", "offline", "online")
+          "suggestion", "weather", "flow_warning", "flow_drift", "offline", "online", "leak", "valve_stuck")
 LANGUAGES = ("en", "sk")
 
 ACTIONS = {
@@ -37,9 +37,12 @@ ACTIONS = {
     "pump_on": "Turn pump ON",
     "accept": "Accept",
     "dismiss": "Dismiss",
+    "leak_snooze": "That's me",
+    "pump_off": "Pump OFF",
 }
 ACTIONS_SK = {"stop": "Zastavi\u0165", "skip": "Presko\u010di\u0165", "pump_on": "Zapn\u00fa\u0165 \u010derpadlo",
-              "accept": "Prija\u0165", "dismiss": "Zamietnu\u0165"}
+              "accept": "Prija\u0165", "dismiss": "Zamietnu\u0165", "leak_snooze": "To som ja",
+              "pump_off": "Vypn\u00fa\u0165 \u010derpadlo"}
 
 COMMON_VARS = ["planner", "slots", "zones", "zone_list", "zone_count", "start_time", "end_time", "duration_min", "day",
                "source"]
@@ -58,6 +61,8 @@ VARIABLES: Dict[str, List[str]] = {
     "flow_warning": ["planner", "zone", "flow", "usual", "direction"],
     "flow_drift": ["planner", "zone", "flow", "baseline", "change", "since"],
     "offline": ["planner", "reason", "since"],
+    "leak": ["planner", "flow", "minutes", "since"],
+    "valve_stuck": ["planner", "flow", "zone", "minutes"],
     "online": ["planner", "since"],
 }
 
@@ -90,6 +95,12 @@ DEFAULTS: Dict[str, Dict[str, Any]] = {
     "flow_drift": {"enabled": True, "title": "{{ zone }}: flow is dropping",
                    "message": "{{ flow }} L/min in the last runs, {{ baseline }} L/min since {{ since }} ({{ change }} %). "
                               "Clean the filter, then reset the zone's flow in Stats.", "actions": []},
+    "leak": {"enabled": True, "title": "{{ planner }}: water is flowing",
+             "message": "{{ flow }} L/min for {{ minutes }} min (since {{ since }}) and no zone is watering.",
+             "actions": ["leak_snooze", "pump_off"]},
+    "valve_stuck": {"enabled": True, "title": "{{ planner }}: a valve did not close",
+                    "message": "{{ flow }} L/min {{ minutes }} min after the run ended (last zone: {{ zone }}).",
+                    "actions": ["pump_off", "leak_snooze"]},
     "offline": {"enabled": True, "title": "{{ planner }}: controller offline",
                 "message": "{{ reason }} (since {{ since }}). Scheduled runs are skipped until it is back.", "actions": []},
     "online": {"enabled": False, "title": "{{ planner }}: controller back online",
@@ -114,6 +125,8 @@ _SK = {
     "flow_drift": ("{{ zone }}: pr\u00edtok kles\u00e1",
                    "{{ flow }} L/min v posledn\u00fdch behoch, {{ baseline }} L/min od {{ since }} ({{ change }} %). "
                    "Vy\u010disti filter a potom v \u0160tatistik\u00e1ch resetuj pr\u00edtok z\u00f3ny."),
+    "leak": ("{{ planner }}: te\u010die voda", "{{ flow }} L/min u\u017e {{ minutes }} min (od {{ since }}) a \u017eiadna z\u00f3na nepolieva."),
+    "valve_stuck": ("{{ planner }}: ventil sa nezavrel", "{{ flow }} L/min {{ minutes }} min po konci behu (posledn\u00e1 z\u00f3na: {{ zone }})."),
     "offline": ("{{ planner }}: ovl\u00e1da\u010d je offline",
                 "{{ reason }} (od {{ since }}). Napl\u00e1novan\u00e9 behy sa presko\u010dia, k\u00fdm sa nevr\u00e1ti."),
     "online": ("{{ planner }}: ovl\u00e1da\u010d je op\u00e4\u0165 online", "Offline od {{ since }}. Behy sa znova pl\u00e1nuj\u00fa."),
@@ -133,13 +146,13 @@ def defaults(lang: str = "en", emoji: bool = True) -> Dict[str, Dict[str, Any]]:
 # leading emoji per event (shown on every platform) and the Android status-bar icon / colour
 EMOJI = {"planned": "\U0001f4c5", "started": "\U0001f4a7", "zone_changed": "\U0001f6bf", "finished": "\u2705",
          "skipped": "\u23ed\ufe0f", "stopped": "\u26d4", "error": "\u26a0\ufe0f", "pump_off": "\U0001f6b0",
-         "dry_run": "\U0001f9ea", "suggestion": "\U0001f326\ufe0f", "weather": "\U0001f326\ufe0f", "flow_warning": "\U0001f6a8", "flow_drift": "\U0001f4c9", "offline": "\U0001f4f4", "online": "\U0001f4f6"}
+         "dry_run": "\U0001f9ea", "suggestion": "\U0001f326\ufe0f", "weather": "\U0001f326\ufe0f", "flow_warning": "\U0001f6a8", "flow_drift": "\U0001f4c9", "offline": "\U0001f4f4", "leak": "\U0001f6a8", "valve_stuck": "\U0001f6b1", "online": "\U0001f4f6"}
 ICON = {"planned": "mdi:calendar-clock", "started": "mdi:sprinkler-variant", "zone_changed": "mdi:sprinkler",
         "finished": "mdi:check-circle", "skipped": "mdi:skip-next-circle", "stopped": "mdi:stop-circle",
         "error": "mdi:alert-circle", "pump_off": "mdi:pump-off", "dry_run": "mdi:flask-outline",
         "suggestion": "mdi:weather-partly-rainy", "weather": "mdi:weather-partly-rainy", "flow_warning": "mdi:water-alert", "flow_drift": "mdi:trending-down",
-        "offline": "mdi:lan-disconnect", "online": "mdi:lan-connect"}
-COLOR = {"offline": "#e5484d", "error": "#e5484d", "flow_warning": "#e5484d", "pump_off": "#f5a524", "stopped": "#f5a524", "finished": "#2fbf71"}
+        "offline": "mdi:lan-disconnect", "leak": "mdi:pipe-leak", "valve_stuck": "mdi:pipe-valve", "online": "mdi:lan-connect"}
+COLOR = {"leak": "#e5484d", "valve_stuck": "#e5484d", "offline": "#e5484d", "error": "#e5484d", "flow_warning": "#e5484d", "pump_off": "#f5a524", "stopped": "#f5a524", "finished": "#2fbf71"}
 
 ANDROID_MAX_ACTIONS = 3
 FIELDS = ("enabled", "targets", "title", "message", "actions", "lead")

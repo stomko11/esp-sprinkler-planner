@@ -106,6 +106,10 @@
         "ui": {
           "name": "Interface",
           "description": "Interface settings (see README)."
+        },
+        "leak": {
+          "name": "Leak alarm",
+          "description": "Leak alarm settings (see README)."
         }
       }
     },
@@ -338,6 +342,20 @@
         "confirm": {
           "name": "Confirm",
           "description": "Must be on."
+        }
+      }
+    },
+    "leak_snooze": {
+      "name": "Snooze leak alarm",
+      "description": "You are using water: no leak alarm for this many minutes (default from the settings).",
+      "fields": {
+        "config_entry_id": {
+          "name": "Planner",
+          "description": "Only with more than one planner."
+        },
+        "minutes": {
+          "name": "Minutes",
+          "description": "How long."
         }
       }
     }
