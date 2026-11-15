@@ -105,6 +105,14 @@ def _choice(v, allowed: Iterable[str], where: str, default: str) -> str:
     return v
 
 
+def _int_range(v, lo: int, hi: int, where: str) -> int:
+    n = _num(v, where)
+    n = int(n) if n is not None else lo
+    if not lo <= n <= hi:
+        raise ConfigError(f"{where}: {lo} .. {hi}")
+    return n
+
+
 def zones_from(valves: List[Dict[str, Any]], zone_cfg: Dict[str, Dict[str, Any]]) -> List[Zone]:
     out = []
     for v in valves:
@@ -117,6 +125,8 @@ def zones_from(valves: List[Dict[str, Any]], zone_cfg: Dict[str, Dict[str, Any]]
             max_per_day=_num(c.get("max_per_day"), where + " max_per_day"),
             hard_max=_num(v.get("max_minutes"), where + " max"),
             weather=bool(c.get("weather", True)),
+            passes=_int_range(c.get("passes", 1), 1, 4, where + " passes"),
+            soak=_int_range(c.get("soak", 0), 0, 240, where + " soak"),
         ))
     return out
 
@@ -157,7 +167,8 @@ def slot_from_dict(d: Dict[str, Any], zone_ids: Iterable[str]) -> Slot:
         raise ConfigError(f"{where}: every_n_from must be YYYY-MM-DD") from err
     return Slot(sid, d.get("name") or sid, anchor_from(d.get("anchor") or {}, where), tuple(entries),
                 _days(d.get("days"), where), every, start_d,
-                bool(d.get("reverse", False)), bool(d.get("enabled", True)), bool(d.get("use_multiplier", True)))
+                bool(d.get("reverse", False)), bool(d.get("enabled", True)), bool(d.get("use_multiplier", True)),
+                _choice(d.get("soak_mode"), ("fill", "wait"), where + " soak_mode", "fill"))
 
 
 def settings_from_dict(d: Dict[str, Any], valve_overlap: int = 0, pump_delay: int = 0) -> Settings:
@@ -191,4 +202,5 @@ def run_to_dict(run: Run, names: Dict[str, str]) -> Dict[str, Any]:
         "slots": list(run.slot_ids), "merged": run.merged, "reverse": run.reverse,
         "zones": [{"zone": s.zone_id, "name": names.get(s.zone_id, s.zone_id), "minutes": s.minutes} for s in run.steps],
         "notes": list(run.notes),
+        "pass_no": run.pass_no, "passes": run.passes,
     }

@@ -207,6 +207,15 @@ The planner logs every rise of the counter itself and handles resets, so a daily
 reset at midnight still counts last evening's 40 mm for the morning run. When you pick a sensor it
 also reads the last 72 h from the recorder. The card warns when the picked sensor is a rate.
 
+### Weekly average, leak alarm, cycle & soak
+
+- **Weekly average:** Settings → Weather → Weekly average. Days back / ahead, bands
+  (°C → %), today's deviation per degree with a cap. Off = the per-degree rule as before.
+- **Leak alarm:** Settings → Meters (with a flow sensor). Minimum flow, minutes in a row, quiet
+  before / after runs, night window, valve-did-not-close check, snooze, pump off.
+- **Cycle & soak:** Settings → Zones → passes and soak time; the slot editor chooses whether other
+  zones run during the soak or the slot pauses.
+
 ### Quick run, skips
 
 **Quick run** on the Today tab: tick zones, set minutes, ESP order or reverse, run once.

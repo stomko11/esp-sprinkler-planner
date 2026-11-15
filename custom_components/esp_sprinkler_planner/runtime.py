@@ -169,6 +169,11 @@ class Runtime:
         self._changed()
         self.hass.bus.async_fire(EVENT, payload)
         _LOGGER.info("%s: %s %s", self.entry.title, kind, data.get("reason") or "")
+        rr = data.get("run") or {}
+        if (rr.get("passes") or 1) > 1:     # cycle & soak: one started / finished for the whole slot run
+            if (kind in ("planned", "started", "dry_run") and rr.get("pass_no", 1) != 1) or \
+               (kind == "finished" and rr.get("pass_no") != rr.get("passes")):
+                return
         if kind in notify_logic.EVENTS:
             extra = {k: v for k, v in data.items() if k not in ("run", "calls")}
             if kind in ("planned", "started", "skipped"):
@@ -1083,7 +1088,7 @@ class Runtime:
         changed = False
         for r in self.plan.runs:                     # a user skip whose time has come: count it once
             k = run_key(r)
-            if k in self.skip and r.start <= now:
+            if k in self.skip and r.start <= now and r.pass_no == r.passes:   # skipped run is over (all passes)
                 self.skip.remove(k)
                 self.skip_done.append(k)
                 stats_mod.add_skip(self.stats, r.day.isoformat(), {s.zone_id: s.minutes for s in r.steps})
@@ -1145,7 +1150,8 @@ class Runtime:
                 self.plan, self.decisions, self.wx_skip = self._compute()
             except model.ConfigError:
                 pass
-            fresh = next((r for r in (self.plan.runs if self.plan else []) if run_key(r) == key), None)
+            fresh = next((r for r in (self.plan.runs if self.plan else [])
+                          if run_key(r) == key and r.pass_no == run.pass_no), None)
             if fresh is None or fresh.start > dt_util.utcnow() + timedelta(seconds=30):
                 await self.async_replan()   # moved or gone after the new forecast
                 return
@@ -1442,6 +1448,7 @@ class Runtime:
         manual = dataclasses.replace(slot, anchor=planner.Anchor("start", "time", now.time().replace(microsecond=0)),
                                      days=None, every_n_days=None, enabled=True,
                                      zones=tuple(dataclasses.replace(z, days=None) for z in slot.zones))
+        zones = [dataclasses.replace(z, passes=1) for z in zones]
         plan = planner.plan(zones, [manual], settings, now.date(), 1, dt_util.get_default_time_zone())
         if not plan.runs:
             raise model.ConfigError(f"slot {slot_id!r} has no enabled zones")
@@ -1469,6 +1476,7 @@ class Runtime:
         now = dt_util.now() + timedelta(seconds=2)
         slot = planner.Slot("quick", "Quick run", planner.Anchor("start", "time", now.time().replace(microsecond=0)),
                             tuple(entries), reverse=bool(reverse), use_multiplier=False)
+        zones = [dataclasses.replace(z, passes=1) for z in zones]
         plan = planner.plan(zones, [slot], settings, now.date(), 1, dt_util.get_default_time_zone())
         if not plan.runs:
             raise model.ConfigError("nothing to run")

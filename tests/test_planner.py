@@ -309,3 +309,47 @@ class CurrentSetupScenario(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CycleSoak(unittest.TestCase):
+    Z = [P.Zone("drip", "Drip", 0), P.Zone("lawn", "Lawn", 1, passes=2, soak=30), P.Zone("west", "West", 2, passes=2, soak=30)]
+
+    def times(self, p):
+        return [(r.start.strftime("%H:%M"), r.end.strftime("%H:%M"), [(s.zone_id, s.minutes) for s in r.steps]) for r in p.runs]
+
+    def test_fill_uses_other_zones_as_soak(self):
+        sl = P.Slot("m", "m", P.Anchor(at=time(5, 0)), (P.SlotZone("drip", 60), P.SlotZone("lawn", 20), P.SlotZone("west", 20)))
+        p = P.plan(self.Z, [sl], PLAIN, MON, 1, TZ)
+        # pass 1: drip 60, lawn 10, west 10 (05:00-06:20); lawn ended 06:10 -> ready 06:40; west ended 06:20 -> 06:50
+        # pass 2 lawn starts so west (2nd) begins >= 06:50 and lawn >= 06:40: start 06:40, lawn -06:50, west -07:00
+        self.assertEqual(self.times(p), [("05:00", "06:20", [("drip", 60), ("lawn", 10), ("west", 10)]),
+                                          ("06:40", "07:00", [("lawn", 10), ("west", 10)])])
+        self.assertEqual([(r.pass_no, r.passes) for r in p.runs], [(1, 2), (2, 2)])
+
+    def test_wait_mode_waits_the_full_pause(self):
+        sl = P.Slot("m", "m", P.Anchor(at=time(5, 0)), (P.SlotZone("lawn", 20), P.SlotZone("west", 20)), soak_mode="wait")
+        p = P.plan(self.Z, [sl], PLAIN, MON, 1, TZ)
+        self.assertEqual(self.times(p), [("05:00", "05:20", [("lawn", 10), ("west", 10)]),
+                                          ("05:50", "06:10", [("lawn", 10), ("west", 10)])])
+
+    def test_finish_by_keeps_the_end(self):
+        sl = P.Slot("m", "m", P.Anchor("finish", "time", time(7, 0)), (P.SlotZone("lawn", 20), P.SlotZone("west", 20)), soak_mode="wait")
+        p = P.plan(self.Z, [sl], PLAIN, MON, 1, TZ)
+        self.assertEqual(p.runs[-1].end.strftime("%H:%M"), "07:00")
+        self.assertEqual(p.runs[0].start.strftime("%H:%M"), "05:50")
+
+    def test_reverse_order_kept(self):
+        sl = P.Slot("m", "m", P.Anchor(at=time(5, 0)), (P.SlotZone("drip", 10), P.SlotZone("lawn", 20)), reverse=True, soak_mode="wait")
+        p = P.plan(self.Z, [sl], PLAIN, MON, 1, TZ)
+        self.assertEqual([s.zone_id for s in p.runs[0].steps], ["lawn", "drip"])
+        self.assertEqual([s.zone_id for s in p.runs[1].steps], ["lawn"])
+
+    def test_no_split_unchanged(self):
+        sl = P.Slot("m", "m", P.Anchor(at=time(5, 0)), (P.SlotZone("drip", 10),))
+        p = P.plan(self.Z, [sl], PLAIN, MON, 1, TZ)
+        self.assertEqual(len(p.runs), 1)
+        self.assertEqual((p.runs[0].pass_no, p.runs[0].passes), (1, 1))
+
+    def test_minutes_split_exactly(self):
+        self.assertEqual(P._split(10, 3), [3.33, 3.33, 3.34])
+        self.assertEqual(sum(P._split(25, 2)), 25)

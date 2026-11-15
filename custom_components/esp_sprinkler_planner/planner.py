@@ -42,6 +42,8 @@ class Zone:
     max_per_day: Optional[float] = None
     hard_max: Optional[float] = None   # the ESP run_duration number max_value
     weather: bool = True               # False: the weather never changes or skips this zone (greenhouse, indoor)
+    passes: int = 1                    # cycle & soak: split the zone's minutes into this many passes
+    soak: int = 0                      # minutes the water soaks in between two passes of the zone
 
 
 @dataclass(frozen=True)
@@ -79,6 +81,7 @@ class Slot:
     reverse: bool = False              # run the zones in reverse ESP order
     enabled: bool = True
     use_multiplier: bool = True
+    soak_mode: str = "fill"            # cycle & soak: fill = other zones run while one soaks; wait = only pauses
 
 
 @dataclass(frozen=True)
@@ -116,6 +119,8 @@ class Run:
     target: datetime           # the anchored edge as planned (start or finish time)
     notes: List[str] = field(default_factory=list)
     reverse: bool = False      # run in reverse ESP order (sets the ESP reverse switch)
+    pass_no: int = 1           # cycle & soak: this run is pass N of `passes` of the same slot run
+    passes: int = 1
 
     @property
     def merged(self) -> bool:
@@ -410,14 +415,79 @@ def _apply_day_limits(runs: List[Run], zones: Dict[str, Zone], settings: Setting
 # ---------------------------------------------------------------- entry point
 
 
+# ---------------------------------------------------------------- cycle & soak
+
+def _split(minutes: float, n: int) -> List[float]:
+    """10 min in 3 passes -> [3.33, 3.33, 3.34] (rounded to 0.01, the total stays exact)."""
+    part = round(minutes / n, 2)
+    return [part] * (n - 1) + [round(minutes - part * (n - 1), 2)]
+
+
+def _expand_passes(run: Run, zones: Dict[str, Zone], settings: Settings, soak_mode: str) -> List[Run]:
+    """One run -> passes. Pass 1 waters every zone (its first share), later passes only the zones
+    split into more passes. Zones keep the ESP order of the run. A zone's next share starts at
+    least `soak` minutes after its previous share ended: with soak_mode 'fill' the other zones of
+    the pass count as soak time, with 'wait' the next pass waits the full pause after the last one."""
+    n = max([zones[s.zone_id].passes for s in run.steps if s.zone_id in zones] + [1])
+    if n <= 1:
+        return [run]
+    per = {}
+    for s in run.steps:
+        z = zones.get(s.zone_id)
+        k = max(1, min(z.passes if z else 1, n))
+        per[s.zone_id] = _split(s.minutes, k)
+    gapsec = settings.valve_gap - settings.valve_overlap
+    passes: List[Run] = []
+    t = run.start
+    last_end: Dict[str, datetime] = {}           # zone -> end of its previous share
+    for k in range(n):
+        steps = [Step(s.zone_id, per[s.zone_id][k], s.base_minutes, s.slot_id) for s in run.steps if k < len(per[s.zone_id])]
+        if not steps:
+            break
+        if k:
+            # earliest start so every zone in this pass has soaked long enough since its last share
+            offs, need = 0.0, t
+            pd = settings.pump_delay
+            for st in steps:
+                z = zones.get(st.zone_id)
+                soak = timedelta(minutes=z.soak if z else 0)
+                ready = last_end.get(st.zone_id, t) + soak
+                cand = ready - timedelta(seconds=pd + offs)
+                if cand > need:
+                    need = cand
+                offs += st.minutes * 60 + gapsec
+            if soak_mode == "wait":
+                need = max(need, passes[-1].end + timedelta(minutes=max((zones[s.zone_id].soak for s in steps if s.zone_id in zones), default=0)))
+            t = max(need, passes[-1].end)
+        start = t
+        p = Run(run.day, start, start + run_length(steps, settings), steps, list(run.slot_ids), "start", start,
+                list(run.notes) if k == 0 else [], run.reverse, k + 1, n)
+        offs = settings.pump_delay
+        for st in steps:
+            last_end[st.zone_id] = start + timedelta(seconds=offs + st.minutes * 60)
+            offs += st.minutes * 60 + gapsec
+        passes.append(p)
+        t = p.end
+    if run.anchor_mode == "finish":               # keep the planned end: move all passes back
+        shift = passes[-1].end - run.end
+        for p in passes:
+            p.start, p.end, p.target = p.start - shift, p.end - shift, p.start - shift
+    if len(passes) > 1:
+        passes[0].notes.append(f"cycle & soak: {len(passes)} passes, until {passes[-1].end.strftime('%H:%M')}")
+    return passes
+
+
 def plan(zones: Iterable[Zone], slots: Iterable[Slot], settings: Settings, first_day: date, days: int,
          tz: tzinfo, sun: Optional[SunTimes] = None, multiplier: Multiplier = 1.0) -> Plan:
     """Plan `days` days starting at `first_day`. Times in the result are in `tz`."""
     zone_map = {z.id: z for z in zones}
     conflicts: List[Conflict] = []
-    runs = _initial_runs(zone_map, list(slots), settings, first_day, days, tz, sun, multiplier, conflicts)
+    slots = list(slots)
+    runs = _initial_runs(zone_map, slots, settings, first_day, days, tz, sun, multiplier, conflicts)
     runs = _resolve(runs, settings, zone_map, conflicts)
     runs = _apply_day_limits(runs, zone_map, settings, conflicts)
+    mode_of = {sl.id: sl.soak_mode for sl in slots}
+    runs = [p for r in runs for p in _expand_passes(r, zone_map, settings, mode_of.get(r.slot_ids[0], "fill"))]
     for r in runs:
         r.start, r.end, r.target = r.start.astimezone(tz), r.end.astimezone(tz), r.target.astimezone(tz)
     return Plan(sorted(runs, key=lambda r: r.start), conflicts)

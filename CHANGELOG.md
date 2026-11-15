@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.9.0
+
+- **Weekly average** (Settings → Weather): the season level from the average daily maximum of
+  N measured days back and N forecast days ahead, mapped through bands you edit (e.g. below
+  15 °C → 50 %, above 32 °C → 150 %), plus an optional correction for today's deviation from the
+  average (capped). Replaces the per-degree rule while on; rain, wind and frost still apply. The
+  daily maximum is logged by the planner and read from the recorder (14 days) at start. A live
+  line shows what it gives right now.
+- **Leak alarm** (Settings → Meters, needs a flow sensor): water flowing while no zone waters,
+  above a minimum flow for N minutes in a row. Quiet N minutes before and after runs, optional
+  stricter night window, a "valve did not close" check after each run, "That's me" snooze and
+  an optional automatic pump off. Overview banner with the same buttons; `leak_snooze` service;
+  notifications `leak` and `valve_stuck`.
+- **Cycle & soak** (Settings → Zones): a zone's minutes split into 2-4 passes with a minimum soak
+  time between them. Per slot: other zones run while one soaks (default, almost no extra time) or
+  the whole slot pauses. ESP order / reverse stays; finish-by slots still end on time; weather and
+  skips apply to the whole slot run; one started / finished notification per slot run; manual runs
+  water in one go. Timelines show the passes, run lists "pass 1/2".
+
 ## 0.8.2
 
 - Overview: current weather only in the chips. The "Weather" heading no longer repeats the

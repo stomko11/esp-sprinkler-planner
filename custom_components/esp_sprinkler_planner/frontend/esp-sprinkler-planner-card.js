@@ -27,7 +27,9 @@ const SK = {
   "Raining now (binary or mm/h)": "Pr\u00e1ve pr\u0161\u00ed (bin\u00e1rny alebo mm/h)", "skip at gusts \u2265": "presko\u010di\u0165 pri n\u00e1razoch \u2265",
   "Live sensors": "Aktu\u00e1lne senzory", "Prices": "Ceny", "water per m\u00b3": "voda za m\u00b3", "energy per kWh": "energia za kWh",
   "Cost": "N\u00e1klady", "Last 12 months": "Posledn\u00fdch 12 mesiacov", "less": "menej", "more": "viac",
-  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Test mode (dry run)": "Sk\u00fa\u0161obn\u00fd re\u017eim (dry run)", "help_test_mode": "Pl\u00e1n, po\u010dasie, z\u00f3ny a upozornenia be\u017eia ako naostro (s ozna\u010den\u00edm \ud83e\uddea), ale ni\u010d sa nezapne - ani ESP, ani \u010derpadlo.", "Click to accept": "Kliknut\u00edm prijme\u0161", "Leak alarm": "Alarm \u00faniku",
+  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Test mode (dry run)": "Sk\u00fa\u0161obn\u00fd re\u017eim (dry run)", "help_test_mode": "Pl\u00e1n, po\u010dasie, z\u00f3ny a upozornenia be\u017eia ako naostro (s ozna\u010den\u00edm \ud83e\uddea), ale ni\u010d sa nezapne - ani ESP, ani \u010derpadlo.", "Click to accept": "Kliknut\u00edm prijme\u0161", "cycle & soak: passes": "cyklus a vsiaknutie: prechody", "soak at least": "vsiaknutie aspo\u0148",
+  "cycle & soak": "cyklus a vsiaknutie", "other zones run while one soaks": "k\u00fdm jedna vsakuje, be\u017eia ostatn\u00e9 z\u00f3ny", "pause the whole slot": "pauza cel\u00e9ho slotu",
+  "pass {0}/{1}": "prechod {0}/{1}", "help_soak": "Min\u00faty z\u00f3ny sa rozdelia na {0} prechody; medzi nimi voda aspo\u0148 {1} min vsakuje. Ru\u010dn\u00e9 spustenie polieva naraz.", "Leak alarm": "Alarm \u00faniku",
   "help_leak": "Upozorn\u00ed, ke\u010f voda te\u010die a \u017eiadna z\u00f3na nepolieva (prasknut\u00e1 hadica, ventil). Pred a po behu je ticho, aby \u0165a neru\u0161il, ke\u010f vodu pou\u017e\u00edva\u0161.",
   "counts as flowing from": "te\u010die od", "alarm after flowing for": "alarm po te\u010den\u00ed", "quiet before a run": "ticho pred behom", "quiet after a run": "ticho po behu",
   "valve did not close: check after": "ventil sa nezavrel: kontrola po", "\"That's me\" silences for": "\"To som ja\" ut\u00ed\u0161i na", "stricter at night": "v noci pr\u00edsnej\u0161ie",
@@ -158,6 +160,7 @@ const EN = {
   "Test mode (dry run)": "Test mode (dry run)", "help_test_mode": "Plan, weather, zones and notifications run as for real (marked \ud83e\uddea), but nothing is switched - neither the ESP nor the pump.",
   "help_avg": "Season level from the average daily maximum instead of the day's per-degree change. Rain, wind and frost still apply.",
   "help_leak": "Notifies when water flows and no zone is watering (burst hose, stuck valve). Quiet before and after runs, so using water yourself does not trigger it.",
+  "help_soak": "The zone's minutes are split into {0} passes with at least {1} min for the water to soak in between. Manual runs water in one go.",
   "help_start": "The run starts at this time.", "help_finish": "The run is planned backwards so that it ends at this time.",
   "help_offset_sun": "Offset moves it: -30 = 30 min before, +60 = 1 h after sunrise/sunset (which changes every day).",
   "help_offset_time": "Offset shifts the time by minutes (usually 0 for a fixed time).",
@@ -351,7 +354,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
   }
   _slider(path, value, min, max, step, unit) {
     const v = value ?? min;
-    return `<span class="sl"><input type="range" data-k="${path}" data-t="num" data-u="${esc(unit || "")}" min="${min}" max="${max}" step="${step}" value="${esc(v)}"><output>${esc(v)}${esc(unit || "")}</output></span>`;
+    return `<span class="sl"><input type="range" data-k="${path}" data-t="num" ${/\.passes$/.test(path) ? 'data-r="1"' : ""} data-u="${esc(unit || "")}" min="${min}" max="${max}" step="${step}" value="${esc(v)}"><output>${esc(v)}${esc(unit || "")}</output></span>`;
   }
   _offline() { const h = (this.data && this.data.health) || {}; return (h.missing || []).length || (h.unavailable || []).length ? h : null; }
   _offlineBanner() {
@@ -585,7 +588,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
 
   // one mark per day: the label when every run of the day ends the same, plus one dot per run
   _dayMark(day, plan, inert) {
-    const runs = (plan.runs || []).filter((r) => r.day === day);
+    const runs = (plan.runs || []).filter((r) => r.day === day && (r.pass_no || 1) === 1);
     if (!runs.length) return `<span class="dm emptyd"></span>`;
     if (runs.length === 1 && !inert) return this._runMark(runs[0], plan);
     const st = runs.map((r) => this._runState(r, plan));
@@ -630,7 +633,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
     const rows = (plan.runs || []).slice(0, 30).map((r) => {
       const dec = this._decision(r, plan);
       return `<li class="${r.end < this.data.now ? "past" : ""}">
-        <b>${fmtDay(r.day)} ${hm(r.start)}\u2013${hm(r.end)}</b> ${r.slots.map((x) => esc(this._slotName(x))).join(" + ")}
+        <b>${fmtDay(r.day)} ${hm(r.start)}\u2013${hm(r.end)}</b> ${r.slots.map((x) => esc(this._slotName(x))).join(" + ")}${(r.passes || 1) > 1 ? ` <span class="chip small">${t("pass {0}/{1}", r.pass_no, r.passes)}</span>` : ""}
         ${r.merged ? `<span class="chip small">${t("merged")}</span>` : ""}${r.reverse ? `<span class="chip small">${t("reverse")}</span>` : ""}
         <div class="muted">${r.zones.map((z) => `${this._mark(this._zone(z.zone))}${esc(z.name)} ${z.minutes}\u2032`).join("  ")}</div>
         ${r.notes.length ? `<div class="note">${r.notes.map(esc).join("<br>")}</div>` : ""}
@@ -874,9 +877,9 @@ class EspSprinklerPlannerCard extends HTMLElement {
         if (wx.has(k) && !answered) B.push(`<button class="ab" data-act="unskip" data-key="${esc(k)}"><ha-icon icon="mdi:play"></ha-icon>${t("Run anyway")}</button>`);
         if (!user.has(k) && !wx.has(k)) B.push(`<button class="ab" data-act="skiprun" data-key="${esc(k)}"><ha-icon icon="mdi:skip-next-circle-outline"></ha-icon>${t("Skip")}</button>`);
       }
-      const btns = B.join("");
+      const btns = (r.pass_no || 1) === 1 ? B.join("") : "";
       return `<div class="dprow ${past ? "past" : ""}">
-        <span class="dpt"><b>${hm(r.start)}\u2013${hm(r.end)}</b> ${r.slots.map((x) => esc(this._slotName(x))).join(" + ")} ${this._runMark(r, plan)}</span>
+        <span class="dpt"><b>${hm(r.start)}\u2013${hm(r.end)}</b> ${r.slots.map((x) => esc(this._slotName(x))).join(" + ")}${(r.passes || 1) > 1 ? ` <span class="chip small">${r.pass_no}/${r.passes}</span>` : ""} ${(r.pass_no || 1) === 1 ? this._runMark(r, plan) : ""}</span>
         <span class="nz">${r.zones.map((z) => `<span>${this._mark(this._zone(z.zone))}${z.minutes}\u2032</span>`).join("")}</span>
         ${dec && dec.reasons.length ? `<span class="muted small">${esc(dec.reasons.join(", "))}</span>` : ""}
         <span class="dpb">${btns}</span></div>`;
@@ -1077,6 +1080,8 @@ class EspSprinklerPlannerCard extends HTMLElement {
             <label><input type="checkbox" data-k="${k("use_multiplier")}" data-t="bool" ${s.use_multiplier !== false ? "checked" : ""}> ${t("adjust by weather")}</label>
           </div>
           <div class="help">${t("help_reverse")} ${t("help_weather")}</div>
+          ${(s.zones || []).some((z) => this._on(z) && ((this.draft.zones[z.zone] || {}).passes || 1) > 1) ? `<div class="row"><label>${t("cycle & soak")}
+            <select data-k="${k("soak_mode")}" data-r="1">${[["fill", t("other zones run while one soaks")], ["wait", t("pause the whole slot")]].map(([v, l]) => `<option value="${v}" ${(s.soak_mode || "fill") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label></div>` : ""}
           <table class="zt"><tr><th></th><th>${t("Zone")}</th><th>${t("Minutes")}</th><th>${t("Days")}</th></tr>
             ${zones.map((z) => { const e = zin.get(z.id); const idx = (s.zones || []).findIndex((x) => x.zone === z.id);
               return `<tr class="${z.enabled ? "" : "dis"} ${this._on(e) ? "" : "zoff"}"><td><input type="checkbox" data-zin="${i}|${esc(z.id)}" ${this._on(e) ? "checked" : ""}></td>
@@ -1116,7 +1121,10 @@ class EspSprinklerPlannerCard extends HTMLElement {
         <div class="row"><label>${t("icon")} <input class="icon" list="iconlist" data-k="${k("icon")}" data-r="1" value="${esc(zc.icon || "")}" placeholder="mdi:flower"></label>
           <span class="iconpick">${ICONS.slice(0, 16).map((i) => `<button class="ib ${zc.icon === i ? "on" : ""}" data-act="seticon" data-zone="${esc(z.id)}" data-icon="${i}" title="${i}"><ha-icon icon="${i}" style="color:${z.color}"></ha-icon></button>`).join("")}${zc.icon ? `<button class="x" data-act="seticon" data-zone="${esc(z.id)}" data-icon="">\u2715</button>` : ""}</span></div>
         <div class="row"><label>${t("max per run")} <input type="number" class="n" min="0" data-k="${k("max_per_run")}" data-t="num" value="${esc(zc.max_per_run ?? "")}"> min</label>
-          <label>${t("max per day")} <input type="number" class="n" min="0" data-k="${k("max_per_day")}" data-t="num" value="${esc(zc.max_per_day ?? "")}"> min</label></div>`, "sub");
+          <label>${t("max per day")} <input type="number" class="n" min="0" data-k="${k("max_per_day")}" data-t="num" value="${esc(zc.max_per_day ?? "")}"> min</label></div>
+        <div class="grid"><span class="fl">${t("cycle & soak: passes")}</span>${this._slider(k("passes"), zc.passes ?? 1, 1, 4, 1, "\u00d7")}
+          ${(zc.passes ?? 1) > 1 ? `<span class="fl">${t("soak at least")}</span>${this._slider(k("soak"), zc.soak ?? 30, 5, 120, 5, " min")}` : ""}</div>
+        ${(zc.passes ?? 1) > 1 ? `<div class="help">${t("help_soak", zc.passes, zc.soak ?? 30)}</div>` : ""}`, "sub");
     }).join("");
   }
 
@@ -1277,6 +1285,8 @@ class EspSprinklerPlannerCard extends HTMLElement {
       if (ty === "num") v = num(v);
       else if (ty === "int") v = v === "" ? null : parseInt(v, 10);
       this._setPath(t0.dataset.k, v);
+      const pm = /^zones\.([^.]+)\.passes$/.exec(t0.dataset.k);
+      if (pm && v > 1 && ((this.draft.zones[pm[1]] || {}).soak === undefined)) this.draft.zones[pm[1]].soak = 30;
       if (t0.dataset.k === "ui.title") { const h = this.shadowRoot.querySelector(".head .title"); if (h) h.textContent = this._title(); }
       this._markDirty(isChange && t0.dataset.r === "1");
       return;
