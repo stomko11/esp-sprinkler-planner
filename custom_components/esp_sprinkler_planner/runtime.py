@@ -64,6 +64,7 @@ class Runtime:
         self.skip_done: List[str] = []                    # user skips whose start has passed (shown dimmed)
         self.stats: Dict[str, Any] = {}
         self.flow_samples: Dict[str, List[float]] = {}
+        self.tmax_log: Dict[str, float] = {}             # local day -> highest temperature seen (deg C), 30 days
         self.rain_log: List[List[Any]] = []               # [iso time, mm] increments of the rain counter (72 h)
         self._rain_last: Optional[float] = None           # last reading of the rain counter, mm
         self._rain_entity: Optional[str] = None
@@ -144,7 +145,7 @@ class Runtime:
                                      "active": self.active, "history": self.history, "last_run": self.last_run,
                                      "stats": self.stats, "flow_samples": self.flow_samples,
                                      "flow_base": self.flow_base, "base_samples": self._base_samples,
-                                     "rain_log": self.rain_log, "rain_last": self._rain_last,
+                                     "rain_log": self.rain_log, "rain_last": self._rain_last, "tmax_log": self.tmax_log,
                                      "rain_entity": self._rain_entity,
                                      "suggestions": self.suggestions, "skip_done": self.skip_done})
 
@@ -591,6 +592,64 @@ class Runtime:
                 self._rain_last = self._rain_mm(st) if st is not None else None
         await self._save()
 
+    # ------------------------------------------------------------------ daily maximum log (weekly average)
+    def _temp_source(self) -> Optional[str]:
+        cfg = self.weather_cfg
+        return cfg.get("temp_sensor") or cfg.get("entity") if cfg["mode"] != "off" else None
+
+    def _temp_of(self, st) -> Optional[float]:
+        if st is None:
+            return None
+        try:
+            # recorder history states have no .domain: take it from the entity id
+            if str(getattr(st, "entity_id", "")).startswith("weather."):
+                return wx_mod.to_c(st.attributes.get("temperature"), st.attributes.get("temperature_unit"))
+            return wx_mod.to_c(float(st.state), st.attributes.get("unit_of_measurement"))
+        except (TypeError, ValueError):
+            return None
+
+    def _log_tmax(self, when, value: Optional[float]) -> bool:
+        if value is None:
+            return False
+        day = dt_util.as_local(when).date().isoformat()
+        if self.tmax_log.get(day) is None or value > self.tmax_log[day]:
+            self.tmax_log[day] = round(value, 1)
+            cut = (dt_util.now().date() - timedelta(days=30)).isoformat()
+            for k in [k for k in self.tmax_log if k < cut]:
+                del self.tmax_log[k]
+            return True
+        return False
+
+    @callback
+    def _on_temp(self, event: Event) -> None:
+        new = event.data.get("new_state")
+        if new is not None and self._log_tmax(new.last_changed, self._temp_of(new)):
+            self.hass.async_create_task(self._save())
+
+    async def _seed_tmax(self) -> None:
+        """Fill missing days of the daily-max log from the recorder (14 days)."""
+        ent = self._temp_source()
+        if not ent:
+            return
+        try:
+            from homeassistant.components.recorder import get_instance
+            from homeassistant.components.recorder.history import state_changes_during_period
+            start = dt_util.utcnow() - timedelta(days=14)
+            hist = await get_instance(self.hass).async_add_executor_job(
+                state_changes_during_period, self.hass, start, None, ent, False, False, None, True)
+        except Exception as err:  # noqa: BLE001 - recorder off: the log fills from now on
+            _LOGGER.debug("%s: no temperature history for %s: %s", self.entry.title, ent, err)
+            return
+        try:
+            for st in hist.get(ent, []):
+                self._log_tmax(st.last_changed, self._temp_of(st))
+        except Exception as err:  # noqa: BLE001 - a bad history row must never stop the planner
+            _LOGGER.warning("%s: temperature history of %s not used: %s", self.entry.title, ent, err)
+        st = self.hass.states.get(ent)
+        if st is not None:
+            self._log_tmax(st.last_changed, self._temp_of(st))
+        await self._save()
+
     def current_conditions(self, cfg=None) -> Dict[str, Any]:
         """Live sensor values (deg C, %, km/h, mm, raining) for the card and the start check."""
         cfg = cfg or self.weather_cfg
@@ -650,7 +709,8 @@ class Runtime:
             kept = [names.get(st.zone_id, st.zone_id) for st in r.steps if st not in follows]
             d = wx_mod.decide(cfg, dt_util.as_utc(r.start), now, self.wx.get("hourly"), self.wx.get("daily"),
                               self.wx.get("fallen"), self.wx.get("temp"), self.lang,
-                              self.wx.get("current")).as_dict()
+                              self.wx.get("current"), self.tmax_log,
+                              dt_util.as_local(r.start).date()).as_dict()
             if cfg["mode"] == "suggest":
                 sug = self.suggestions.get(key)
                 if sug and sug.get("status") in ("accepted", "dismissed") and cfg["answers"] == "follow" \
@@ -753,6 +813,8 @@ class Runtime:
             self._dyn_unsubs.append(async_track_state_change_event(self.hass, watch, self._on_weather_change))
         if cfg["mode"] != "off" and cfg.get("rain_sensor"):
             self._dyn_unsubs.append(async_track_state_change_event(self.hass, [cfg["rain_sensor"]], self._on_rain))
+        if self._temp_source():
+            self._dyn_unsubs.append(async_track_state_change_event(self.hass, [self._temp_source()], self._on_temp))
 
     @callback
     def _on_weather_change(self, _event: Event) -> None:
@@ -833,6 +895,7 @@ class Runtime:
         self.flow_samples = data.get("flow_samples") or {}
         self.flow_base = data.get("flow_base") or {}
         self.rain_log = data.get("rain_log") or []
+        self.tmax_log = data.get("tmax_log") or {}
         self._rain_last = data.get("rain_last")
         self._rain_entity = data.get("rain_entity")
         self._base_samples = data.get("base_samples") or {}
@@ -874,6 +937,7 @@ class Runtime:
         self._unsubs.append(async_track_time_interval(self.hass, self._periodic, timedelta(minutes=15)))
         self._subscribe_dynamic()
         await self._setup_rain()
+        await self._seed_tmax()
         await self._resume()
         await self.refresh_weather()
         await self.async_replan()
@@ -1265,6 +1329,7 @@ class Runtime:
         if resub:
             self._subscribe_dynamic()
             await self._setup_rain()
+            await self._seed_tmax()
             await self.refresh_weather()
         await self.async_replan()
         return result

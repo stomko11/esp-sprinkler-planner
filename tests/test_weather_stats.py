@@ -242,3 +242,44 @@ class RainTrackingTest(unittest.TestCase):
         self.assertEqual(W.merged({})["rain_window"], 24)
         with self.assertRaises(W.WeatherConfigError):
             W.merged({"rain_window": 0})
+
+
+class WeeklyAverageTest(unittest.TestCase):
+    def test_bands(self):
+        b = W.bands_from([[22, 80], [15, 50], [28, 100], [32, 120], [None, 150]])
+        self.assertEqual([W.band_pct(b, t) for t in (10, 15, 21.9, 25, 30, 32, 40)], [50, 80, 80, 100, 120, 150, 150])
+        self.assertEqual(W.bands_from([[20, 70]])[-1], [None, 70])          # no open band: last % above
+        for bad in ([], [[20, 70], [20, 80]], [[None, 1], [None, 2]], [[20, 400]], [["x", 1]]):
+            with self.assertRaises(W.WeatherConfigError):
+                W.bands_from(bad)
+
+    def test_window_average(self):
+        day = date(2026, 7, 10)
+        measured = {"2026-07-06": 26, "2026-07-07": 28, "2026-07-08": 30, "2026-07-09": 32}
+        forecast = {"2026-07-10": 34, "2026-07-11": 33, "2026-07-12": 31}
+        self.assertEqual(W.window_average(day, measured, forecast, 4, 3), (30.6, 7))
+        self.assertEqual(W.window_average(day, measured, forecast, 4, 0), (29.0, 4))   # measured only
+        self.assertEqual(W.window_average(day, {}, {}, 4, 3), (None, 0))
+
+    def test_decide_with_average_and_daily_correction(self):
+        c = cfg(avg_mode="on", skip_cold=-10)
+        measured = {(START.date() - timedelta(days=i)).isoformat(): 30.0 for i in range(1, 5)}
+        daily = [{"t": START.replace(hour=12) + timedelta(days=i), "temp": 30.0 + (4 if i == 0 else 0), "low": 20,
+                  "rain": 0, "prob": 0, "wind": 5} for i in range(3)]
+        d = W.decide(c, START, NOW, [], daily, measured=measured)
+        # avg of 4 x 30 + 34, 30, 30 = 30.6 -> band 28-32 = 120 %; today 34 is +3.4 deg x 3 % = +10 % -> 132 % -> 130 (5 % steps)
+        self.assertEqual(d.avg, 30.6)
+        self.assertEqual(d.factor, 1.3)
+        self.assertTrue(any(r.startswith("week avg 31") for r in d.reasons), d.reasons)
+        self.assertTrue(any(r.startswith("today 34") for r in d.reasons), d.reasons)
+
+    def test_average_off_and_no_data(self):
+        self.assertIsNone(W.decide(cfg(), START, NOW, hourly(temp=27)).avg)                 # off: per-degree as before
+        d = W.decide(cfg(avg_mode="on", avg_past=4, avg_future=0), START, NOW, hourly(temp=27), measured={})
+        self.assertIsNone(d.avg)                                                            # no data yet
+        self.assertEqual(d.factor, 1.2)                                                     # falls back to the day's factor
+
+    def test_rain_still_wins(self):
+        measured = {(START.date() - timedelta(days=i)).isoformat(): 34.0 for i in range(1, 5)}
+        d = W.decide(cfg(avg_mode="on"), START, NOW, hourly(rain=6, at_hour=9, temp=34), measured=measured)
+        self.assertEqual(d.action, "skip")

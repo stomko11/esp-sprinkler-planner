@@ -27,7 +27,13 @@ const SK = {
   "Raining now (binary or mm/h)": "Pr\u00e1ve pr\u0161\u00ed (bin\u00e1rny alebo mm/h)", "skip at gusts \u2265": "presko\u010di\u0165 pri n\u00e1razoch \u2265",
   "Live sensors": "Aktu\u00e1lne senzory", "Prices": "Ceny", "water per m\u00b3": "voda za m\u00b3", "energy per kWh": "energia za kWh",
   "Cost": "N\u00e1klady", "Last 12 months": "Posledn\u00fdch 12 mesiacov", "less": "menej", "more": "viac",
-  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Test mode (dry run)": "Sk\u00fa\u0161obn\u00fd re\u017eim (dry run)", "help_test_mode": "Pl\u00e1n, po\u010dasie, z\u00f3ny a upozornenia be\u017eia ako naostro (s ozna\u010den\u00edm \ud83e\uddea), ale ni\u010d sa nezapne - ani ESP, ani \u010derpadlo.", "Click to accept": "Kliknut\u00edm prijme\u0161", "Test": "Sk\u00fa\u0161ka", "Stopping\u2026": "Zastavujem\u2026", "Finishing\u2026": "Kon\u010d\u00ed\u2026",
+  "Zone colours in use": "Pou\u017eit\u00e9 farby z\u00f3n", "Test mode (dry run)": "Sk\u00fa\u0161obn\u00fd re\u017eim (dry run)", "help_test_mode": "Pl\u00e1n, po\u010dasie, z\u00f3ny a upozornenia be\u017eia ako naostro (s ozna\u010den\u00edm \ud83e\uddea), ale ni\u010d sa nezapne - ani ESP, ani \u010derpadlo.", "Click to accept": "Kliknut\u00edm prijme\u0161", "Weekly average": "T\u00fd\u017edenn\u00fd priemer",
+  "help_avg": "\u00darove\u0148 sez\u00f3ny z priemernej dennej maxim\u00e1lnej teploty namiesto zmeny na stupe\u0148 v dan\u00fd de\u0148. D\u00e1\u017e\u010f, vietor a mr\u00e1z platia na\u010falej.",
+  "measured days back": "nameran\u00e9 dni dozadu", "forecast days ahead (incl. today)": "dni predpovede dopredu (vr\u00e1tane dne\u0161ka)",
+  "today's deviation, per degree": "odch\u00fdlka dne\u0161ka, na stupe\u0148", "at most \u00b1": "najviac \u00b1", "average daily max": "priemern\u00e9 denn\u00e9 maximum",
+  "minutes": "min\u00faty", "from": "od", "up": "vy\u0161\u0161ie", "below": "pod", "Add band": "Prida\u0165 p\u00e1smo",
+  "No temperature data yet - the log fills from today.": "Zatia\u013e \u017eiadne teploty - z\u00e1znam sa pln\u00ed od dnes.",
+  "Now: average {0} \u00b0C over {1} days \u2192 {2} %": "Teraz: priemer {0} \u00b0C za {1} dn\u00ed \u2192 {2} %", "{0} measured days in the log.": "{0} nameran\u00fdch dn\u00ed v z\u00e1zname.", "Test": "Sk\u00fa\u0161ka", "Stopping\u2026": "Zastavujem\u2026", "Finishing\u2026": "Kon\u010d\u00ed\u2026",
   "Switching zone\u2026": "Prep\u00edna z\u00f3nu\u2026", "Start watering now?": "Spusti\u0165 polievanie teraz?", "Start watering for {0} now?": "Spusti\u0165 polievanie na {0} teraz?", "By slot": "Pod\u013ea slotu", "By zone": "Pod\u013ea z\u00f3ny", "Slot": "Slot", "in no slot": "v \u017eiadnom slote",
   "Each zone: in which slots, how long, on which days.": "Ka\u017ed\u00e1 z\u00f3na: v ktor\u00fdch slotoch, ako dlho, v ktor\u00e9 dni.", "Each slot: when, and which zones.": "Ka\u017ed\u00fd slot: kedy a ktor\u00e9 z\u00f3ny.", "Days": "Dni", "slot days": "dni slotu", "Back to the slot's days": "Sp\u00e4\u0165 na dni slotu",
   "Give this zone its own days": "Nastavi\u0165 tejto z\u00f3ne vlastn\u00e9 dni", "The slot has this day off; this zone runs anyway.": "Slot m\u00e1 tento de\u0148 vo\u013eno; t\u00e1to z\u00f3na aj tak be\u017e\u00ed.",
@@ -143,6 +149,7 @@ const EN = {
   "help_zone_days": "Days per zone: \"slot days\" follows the weekdays above. Own days replace them for that zone - it can also run on a day the slot has off (dashed). \u21ba goes back to the slot's days.",
   "help_zone_days_n": "Days per zone: own days narrow this every-N-days slot for that zone (it runs only on the N-th days that fall on those weekdays). \u21ba goes back to the slot's days.",
   "Test mode (dry run)": "Test mode (dry run)", "help_test_mode": "Plan, weather, zones and notifications run as for real (marked \ud83e\uddea), but nothing is switched - neither the ESP nor the pump.",
+  "help_avg": "Season level from the average daily maximum instead of the day's per-degree change. Rain, wind and frost still apply.",
   "help_start": "The run starts at this time.", "help_finish": "The run is planned backwards so that it ends at this time.",
   "help_offset_sun": "Offset moves it: -30 = 30 min before, +60 = 1 h after sunrise/sunset (which changes every day).",
   "help_offset_time": "Offset shifts the time by minutes (usually 0 for a fixed time).",
@@ -359,6 +366,47 @@ class EspSprinklerPlannerCard extends HTMLElement {
     if (/\/(h|hr|min)$/.test(u)) why = t("rain_warn_rate");
     return why ? `<div class="hintbox warnbox"><ha-icon icon="mdi:alert-outline"></ha-icon><div>${why}</div></div>` : "";
   }
+  _avgSection(w, wk) {
+    const on = w.avg_mode === "on";
+    const bands = (w.avg_bands && w.avg_bands.length ? w.avg_bands : [[15, 50], [22, 80], [28, 100], [32, 120], [null, 150]]);
+    const sl = (f, dflt, mn, mx, st, u) => this._slider(wk(f), w[f] ?? dflt, mn, mx, st, u);
+    // live result for today, computed here the same way as the planner does
+    const log = this.data.tmax_log || {}; const today = dayOf(this.data.now);
+    const fc = {}; ((this.data.weather_now || {}).days || []).forEach((x) => { if (x.tmax !== null && x.tmax !== undefined) fc[x.day] = x.tmax; });
+    const vals = [];
+    for (let i = 1; i <= (w.avg_past ?? 4); i++) { const k = addDays(today, -i); if (log[k] !== undefined) vals.push(log[k]); }
+    for (let i = 0; i < (w.avg_future ?? 3); i++) { const k = addDays(today, i); const v = fc[k] ?? log[k]; if (v !== undefined) vals.push(v); }
+    const avg = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    const pct = avg === null ? null : (bands.find((b) => b[0] === null || b[0] === "" || avg < +b[0]) || bands[bands.length - 1])[1];
+    const days = Object.keys(log).filter((k) => k < today).length;
+    return `<div class="avgbox">
+      <div class="row"><label><input type="checkbox" class="tog" data-avg="mode" ${on ? "checked" : ""}> <b>${t("Weekly average")}</b></label>
+        <span class="muted small">${t("help_avg")}</span></div>
+      ${on ? `<div class="grid">
+          <span class="fl">${t("measured days back")}</span>${sl("avg_past", 4, 0, 14, 1, "")}
+          <span class="fl">${t("forecast days ahead (incl. today)")}</span>${sl("avg_future", 3, 0, 7, 1, "")}
+          <span class="fl">${t("today's deviation, per degree")}</span>${sl("avg_daily", 3, 0, 10, 0.5, " %")}
+          <span class="fl">${t("at most \u00b1")}</span>${sl("avg_daily_cap", 20, 0, 50, 5, " %")}
+        </div>
+        <table class="zt bands"><tr><th>${t("average daily max")}</th><th>${t("minutes")}</th><th></th></tr>
+          ${bands.map((b, i) => `<tr><td>${b[0] === null || b[0] === "" ? `${t("from")} ${esc(bands[i - 1] ? bands[i - 1][0] : "")} \u00b0C ${t("up")}`
+              : `${i ? `${esc(bands[i - 1][0])} \u2013 ` : `${t("below")} `}<input type="number" class="n" data-band="${i}|0" value="${esc(b[0])}" step="1"> \u00b0C`}</td>
+            <td><input type="number" class="n" data-band="${i}|1" value="${esc(b[1])}" step="5" min="0" max="300"> %</td>
+            <td>${b[0] === null || b[0] === "" || bands.length <= 2 ? "" : `<button class="xr" data-act="banddel" data-i="${i}" title="${esc(t("Remove"))}"><ha-icon icon="mdi:close"></ha-icon></button>`}</td></tr>`).join("")}
+        </table>
+        <div class="row"><button class="ab" data-act="bandadd"><ha-icon icon="mdi:plus"></ha-icon>${t("Add band")}</button><span class="grow"></span>
+          <span class="avgnow">${avg === null ? t("No temperature data yet - the log fills from today.") : t("Now: average {0} \u00b0C over {1} days \u2192 {2} %", r1(avg), vals.length, pct)}</span></div>
+        <div class="muted small">${t("{0} measured days in the log.", days)}</div>` : ""}
+    </div>`;
+  }
+
+  _setBands(fn) {
+    const w = this.draft.weather = this.draft.weather || {};
+    const cur = (w.avg_bands && w.avg_bands.length ? w.avg_bands : ((this.data.weather_full || {}).avg_bands || [[15, 50], [22, 80], [28, 100], [32, 120], [null, 150]]));
+    w.avg_bands = fn(cur.map((b) => b.slice()));
+    this._markDirty(true);
+  }
+
   _cur() { return ((this.data && this.data.weather_now) || {}).currency || "EUR"; }
   _cost(x) {
     const m = (this.data && this.data.meters) || {};
@@ -1107,14 +1155,15 @@ class EspSprinklerPlannerCard extends HTMLElement {
           <span class="fl">${t("skip at wind \u2265")}</span>${sl("skip_wind", 40, 0, 80, 5, " km/h")}
           <span class="fl">${t("skip at gusts \u2265")}</span>${sl("skip_gust", 60, 0, 120, 5, " km/h")}
           <span class="fl">${t("skip below")} ${t("\u00b0C (frost)")}</span>${sl("skip_cold", 4, -5, 15, 1, " \u00b0C")}
-          <span class="fl">${t("100 % at a daily max of")}</span>${sl("base_temp", 22, 10, 35, 1, " \u00b0C")}
-          <span class="fl">${t("change per degree")}</span>${sl("per_degree", 4, 0, 10, 0.5, " %")}
+          ${w.avg_mode === "on" ? "" : `<span class="fl">${t("100 % at a daily max of")}</span>${sl("base_temp", 22, 10, 35, 1, " \u00b0C")}
+          <span class="fl">${t("change per degree")}</span>${sl("per_degree", 4, 0, 10, 0.5, " %")}`}
           <span class="fl">${t("at least")}</span>${sl("min_factor", 50, 0, 100, 5, " %")}
           <span class="fl">${t("at most")}</span>${sl("max_factor", 160, 100, 250, 5, " %")}
           ${mode === "suggest" ? `<span class="fl">${t("suggest for runs within")}</span>${sl("horizon", 24, 1, 72, 1, " h")}
           <span class="fl">${t("When the forecast changes after I answered")}</span><select data-k="${wk("answers")}" data-r="1">${[["keep", t("keep my answer as it was")], ["follow", t("follow the new forecast, ask again if it changes")]].map(([v, l]) => `<option value="${v}" ${(w.answers || "keep") === v ? "selected" : ""}>${l}</option>`).join("")}</select>` : ""}
         </div>
         <div class="row"><label><input type="checkbox" class="tog" data-k="${wk("scale_rain")}" data-t="bool" ${w.scale_rain !== false ? "checked" : ""}> ${t("less rain reduces the minutes")}</label></div>
+        ${this._avgSection(w, wk)}
         <div class="muted small">${t("Zones with follow weather off are never changed.")}</div>` : ""}`, false)}
       ${sec("s_pump", "mdi:pump", t("Pump"), p.entity ? esc(this._fname(p.entity)) : "\u2013", `
         <div class="row">${this._picker("pump.entity", p.entity, (e) => /^(switch|input_boolean|light|fan)\./.test(e), "pumplist")}</div>
@@ -1210,6 +1259,17 @@ class EspSprinklerPlannerCard extends HTMLElement {
       n.events[ev].targets = t0.checked ? [...new Set([...cur, svc])] : cur.filter((x) => x !== svc);
       this._markDirty(true); return;
     }
+    if (t0.dataset.avg) {
+      if (!isChange) return;
+      this.draft.weather = { ...(this.data.weather_full || {}), ...(this.draft.weather || {}), avg_mode: t0.checked ? "on" : "off" };
+      this._markDirty(true); return;
+    }
+    if (t0.dataset.band) {
+      if (!isChange) return;
+      const [i, col] = t0.dataset.band.split("|").map(Number); const v = num(t0.value);
+      if (v === null) return;
+      this._setBands((b) => { b[i][col] = v; return b; }); return;
+    }
     if (t0.dataset.zmin) {
       if (!isChange) return;                 // once, when the value is committed (not per keystroke)
       const [i, zid] = t0.dataset.zmin.split("|"); const s = this.draft.slots[+i]; s.zones = s.zones || [];
@@ -1294,6 +1354,11 @@ class EspSprinklerPlannerCard extends HTMLElement {
         if (!confirm(t("Delete ALL statistics (watering time, water, energy, skips, flow)? This cannot be undone."))) return;
         await svc("clear_stats", { confirm: true }); setTimeout(() => { this._stats = null; this._heat = null; this._load(); }, 600);
       } else if (act === "sview") { this._sv = tg.dataset.v; localStorage.setItem("esp_sprinkler_sview", this._sv); this._render();
+      } else if (act === "bandadd") {
+        this._setBands((b) => { const lim = b.filter((x) => x[0] !== null && x[0] !== ""); const last = lim.length ? +lim[lim.length - 1][0] : 20;
+          b.splice(lim.length, 0, [last + 4, b[b.length - 1][1]]); return b; });
+      } else if (act === "banddel") {
+        this._setBands((b) => { b.splice(+tg.dataset.i, 1); return b; });
       } else if (act === "zdaysnew") {
         const s0 = this.draft.slots[+tg.dataset.i]; s0.zones = s0.zones || [];
         s0.zones.push({ zone: tg.dataset.zone, minutes: 10, enabled: false, days: s0.every_n_days ? [0, 1, 2, 3, 4, 5, 6] : (s0.days || [0, 1, 2, 3, 4, 5, 6]).slice() });
@@ -1537,6 +1602,8 @@ button.sdays { padding:3px 10px; border-radius:12px; font-size:12px; }
 .svc select.plat { min-height:0; height:22px; padding:0 18px 0 6px; font-size:11px; border-radius:11px; background-position:right 4px center; background-size:12px; }
 .pico { --mdc-icon-size:15px; } .pico.android { color:#3ddc84; } .pico.ios { color:var(--primary-text-color,#fff); } .pico.other { color:var(--secondary-text-color,#888); }
 .warnc { color:#c47a00; } td .bad, td .bad b { color:#e5484d; }
+.avgbox { border-top:1px solid var(--divider-color,#eee); margin-top:8px; padding-top:6px; }
+.zt.bands { width:auto; } .zt.bands td { padding:3px 8px 3px 0; } .avgnow { font-weight:600; }
 .hintbox.warnbox { background:#c47a0022; } .hintbox.warnbox ha-icon { color:#c47a00; }
 .hintbox { display:flex; gap:8px; align-items:flex-start; font-size:12px; background:color-mix(in srgb, var(--primary-color,#03a9f4) 12%, transparent); border-radius:8px; padding:6px 10px; margin:4px 0 8px; }
 .hintbox ha-icon { --mdc-icon-size:18px; color:var(--primary-color,#03a9f4); flex:none; }

@@ -42,8 +42,16 @@ DEFAULTS: Dict[str, Any] = {
     "skip_wind": 40.0, "skip_cold": 4.0, "base_temp": 22.0, "per_degree": 4.0,
     "min_factor": 50.0, "max_factor": 160.0, "horizon": 24,
     "answers": "keep",   # keep: an accepted / dismissed suggestion is final; follow: it follows forecast changes
+    # weekly average: the level of the season from the average daily maximum, in bands
+    "avg_mode": "off",   # off | on  (on replaces the per-degree factor of the day)
+    "avg_past": 4,       # days measured (today not included)
+    "avg_future": 3,     # days of forecast (today counts as the first)
+    "avg_bands": [[15, 50], [22, 80], [28, 100], [32, 120], [None, 150]],   # [below deg C, %]; last: above
+    "avg_daily": 3.0,    # % per degree the day's max is above / below the average (0 = off)
+    "avg_daily_cap": 20.0,  # % limit of that daily correction
 }
 ANSWERS = ("keep", "follow")
+AVG_NUMBERS = {"avg_past": (0, 14), "avg_future": (0, 7), "avg_daily": (0, 20), "avg_daily_cap": (0, 100)}
 NUMBERS = {"rain_window": (1, 72), "skip_gust": (0, 250), "skip_rain": (0, 200), "window": (0, 72), "min_probability": (0, 100), "skip_wind": (0, 200),
            "skip_cold": (-30, 30), "base_temp": (-10, 45), "per_degree": (0, 25), "min_factor": (0, 100),
            "max_factor": (100, 300), "horizon": (1, 168)}
@@ -67,6 +75,18 @@ def merged(cfg: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         raise WeatherConfigError(f"weather.mode: one of {', '.join(MODES)}")
     if out["answers"] not in ANSWERS:
         raise WeatherConfigError(f"weather.answers: one of {', '.join(ANSWERS)}")
+    if out["avg_mode"] not in ("off", "on"):
+        raise WeatherConfigError("weather.avg_mode: off or on")
+    for k, (lo, hi) in AVG_NUMBERS.items():
+        try:
+            out[k] = float(out[k])
+        except (TypeError, ValueError) as err:
+            raise WeatherConfigError(f"weather.{k}: not a number") from err
+        if not lo <= out[k] <= hi:
+            raise WeatherConfigError(f"weather.{k}: between {lo} and {hi}")
+    if out["avg_past"] + out["avg_future"] < 1:
+        raise WeatherConfigError("weather: the weekly average needs at least one day")
+    out["avg_bands"] = bands_from(out["avg_bands"])
     for k in SENSORS:
         v = out[k]
         if v is not None and (not isinstance(v, str) or "." not in v):
@@ -86,6 +106,51 @@ def merged(cfg: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         raise WeatherConfigError("weather: min_factor is above max_factor")
     out["scale_rain"] = bool(out["scale_rain"])
     return out
+
+
+def bands_from(raw) -> List[List[Optional[float]]]:
+    """[[below, pct], ..., [None, pct]] sorted; the last band (None) covers everything above."""
+    try:
+        rows = [[None if b in (None, "") else float(b), float(p)] for b, p in raw]
+    except (TypeError, ValueError) as err:
+        raise WeatherConfigError("weather.avg_bands: pairs of [below deg C, percent]") from err
+    if not rows:
+        raise WeatherConfigError("weather.avg_bands: at least one band")
+    limits = [r for r in rows if r[0] is not None]
+    top = [r for r in rows if r[0] is None]
+    if len(top) > 1:
+        raise WeatherConfigError("weather.avg_bands: only one open band (above the last limit)")
+    limits.sort(key=lambda r: r[0])
+    if len({r[0] for r in limits}) != len(limits):
+        raise WeatherConfigError("weather.avg_bands: two bands with the same limit")
+    for _b, pct in rows:
+        if not 0 <= pct <= 300:
+            raise WeatherConfigError("weather.avg_bands: percent between 0 and 300")
+    return limits + (top or [[None, limits[-1][1]]])
+
+
+def band_pct(bands, avg: float) -> float:
+    for below, pct in bands:
+        if below is None or avg < below:
+            return pct
+    return bands[-1][1]
+
+
+def window_average(day: date, measured: Dict[str, float], forecast: Dict[str, float],
+                   past: int, future: int) -> Tuple[Optional[float], int]:
+    """Average daily max over `past` measured days before `day` and `future` days from `day` on
+    (forecast, or measured when the day is already over). -> (average, number of days used)."""
+    vals = []
+    for i in range(1, int(past) + 1):
+        k = (day - timedelta(days=i)).isoformat()
+        if k in measured:
+            vals.append(measured[k])
+    for i in range(int(future)):
+        k = (day + timedelta(days=i)).isoformat()
+        v = forecast.get(k, measured.get(k))
+        if v is not None:
+            vals.append(v)
+    return (round(sum(vals) / len(vals), 1), len(vals)) if vals else (None, 0)
 
 
 # ------------------------------------------------------------------ units
@@ -168,13 +233,15 @@ class Decision:
     factor: float = 1.0
     reasons: List[str] = field(default_factory=list)
     rain: float = 0.0                   # mm counted (fallen + expected)
+    avg: Optional[float] = None         # weekly average used (deg C)
     temp: Optional[float] = None        # daily maximum used for the factor
     wind: Optional[float] = None
 
     def as_dict(self) -> Dict[str, Any]:
         return {"action": self.action, "factor": self.factor, "reasons": list(self.reasons),
                 "rain": round(self.rain, 1), "temp": None if self.temp is None else round(self.temp, 1),
-                "wind": None if self.wind is None else round(self.wind, 1)}
+                "wind": None if self.wind is None else round(self.wind, 1),
+                "avg": None if self.avg is None else round(self.avg, 1)}
 
 
 def _counted(item, cfg) -> float:
@@ -231,17 +298,20 @@ def _clamp(cfg, f: float) -> float:
 TEXT = {
     "en": {"fell": "{0} mm rain fell", "expected": "{0} mm rain expected", "skip_rain": "at least {0} mm -> skip",
            "wind": "wind {0} km/h -> skip", "frost": "{0} \u00b0C at the start -> skip (frost)", "max": "max {0} \u00b0C",
-           "pct": "{0} % of the minutes", "gust": "gusts {0} km/h -> skip", "raining": "raining now -> skip"},
+           "pct": "{0} % of the minutes", "avg": "week avg {0} \u00b0C \u2192 {1} %",
+           "today": "today {0} \u00b0C {1} %", "gust": "gusts {0} km/h -> skip", "raining": "raining now -> skip"},
     "sk": {"fell": "spadlo {0} mm", "expected": "o\u010dak\u00e1va sa {0} mm", "skip_rain": "aspo\u0148 {0} mm -> presko\u010di\u0165",
            "wind": "vietor {0} km/h -> presko\u010di\u0165", "frost": "{0} \u00b0C na za\u010diatku -> presko\u010di\u0165 (mr\u00e1z)",
-           "max": "max {0} \u00b0C", "pct": "{0} % min\u00fat", "gust": "n\u00e1razy {0} km/h -> presko\u010di\u0165",
+           "max": "max {0} \u00b0C", "pct": "{0} % min\u00fat", "avg": "t\u00fd\u017edenn\u00fd priemer {0} \u00b0C \u2192 {1} %",
+           "today": "dnes {0} \u00b0C {1} %", "gust": "n\u00e1razy {0} km/h -> presko\u010di\u0165",
            "raining": "pr\u00e1ve pr\u0161\u00ed -> presko\u010di\u0165"},
 }
 
 
 def decide(cfg: Dict[str, Any], start: datetime, now: datetime, hourly=None, daily=None,
            fallen: Optional[float] = None, current_temp: Optional[float] = None, lang: str = "en",
-           current: Optional[Dict[str, Any]] = None) -> Decision:
+           current: Optional[Dict[str, Any]] = None, measured: Optional[Dict[str, float]] = None,
+           local_day: Optional[date] = None) -> Decision:
     """Decision for a run starting at start. cfg = merged(). Times timezone-aware."""
     tx = TEXT.get(lang, TEXT["en"])
     d = Decision()
@@ -287,9 +357,30 @@ def decide(cfg: Dict[str, Any], start: datetime, now: datetime, hourly=None, dai
     d.temp = day_max(hourly, daily, start.date())
     if d.temp is None and current_temp is not None and soon:
         d.temp = current_temp
-    f = temp_factor(cfg, d.temp)
-    if d.temp is not None and cfg["per_degree"]:
-        d.reasons.append(tx["max"].format(_deg(d.temp)))
+    if cfg["avg_mode"] == "on":
+        day = local_day or start.date()
+        fc = {x["t"].date().isoformat(): x["temp"] for x in daily or [] if x.get("temp") is not None}
+        for h in hourly or []:                      # days only in the hourly forecast
+            k = h["t"].date().isoformat()
+            if h.get("temp") is not None and k not in fc:
+                fc[k] = max(x["temp"] for x in hourly if x["t"].date().isoformat() == k and x.get("temp") is not None)
+        avg, n = window_average(day, measured or {}, fc, cfg["avg_past"], cfg["avg_future"])
+        if avg is None:
+            f = temp_factor(cfg, d.temp)            # no data yet: the day's own factor
+        else:
+            d.avg = avg
+            base = band_pct(cfg["avg_bands"], avg)
+            f = base / 100.0
+            d.reasons.append(tx["avg"].format(_deg(avg), round(base)))
+            if cfg["avg_daily"] and d.temp is not None:
+                corr = max(-cfg["avg_daily_cap"], min(cfg["avg_daily_cap"], (d.temp - avg) * cfg["avg_daily"]))
+                if abs(corr) >= 1:
+                    f *= 1 + corr / 100.0
+                    d.reasons.append(tx["today"].format(_deg(d.temp), f"{'+' if corr > 0 else '\u2212'}{abs(round(corr))}"))
+    else:
+        f = temp_factor(cfg, d.temp)
+        if d.temp is not None and cfg["per_degree"]:
+            d.reasons.append(tx["max"].format(_deg(d.temp)))
     if cfg["scale_rain"] and cfg["skip_rain"] and d.rain:
         f *= max(0.0, 1.0 - d.rain / cfg["skip_rain"])
     d.factor = _clamp(cfg, f)
