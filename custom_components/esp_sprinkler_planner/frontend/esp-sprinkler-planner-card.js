@@ -750,7 +750,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
         return `<div class="fcd ${x.day === today ? "today" : ""} ${this._fday === x.day ? "sel" : ""}" data-act="fday" data-day="${x.day}" title="${esc(fmtDay(x.day))}"><span>${DAYS()[wd(x.day)]}</span>
           <ha-icon icon="mdi:weather-${WX_ICON[x.cond] || "cloudy"}"></ha-icon>
           <b>${x.tmax !== null && x.tmax !== undefined ? Math.round(x.tmax) + "\u00b0" : "\u2013"}</b><em>${x.tmin !== null && x.tmin !== undefined ? Math.round(x.tmin) + "\u00b0" : ""}</em>
-          <span class="rain">${x.rain ? r1(x.rain) + " mm" : " "}</span>
+          <span class="rain">${x.rain ? r1(x.rain) + " mm" : "&nbsp;"}</span>
           ${this._dayMark(x.day, plan, true)}</div>`;
       }).join("")}</div>`;
   }
@@ -1583,7 +1583,8 @@ details.ztoday > summary { list-style:none; cursor:pointer; } details.ztoday > s
 .fc { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
 .fcd { display:flex; flex-direction:column; align-items:center; gap:1px; padding:5px 2px; border-radius:8px; background:var(--secondary-background-color,#f4f4f4); font-size:12px; }
 .fcd.today { box-shadow:0 0 0 1px var(--primary-color,#03a9f4); } .fcd ha-icon { --mdc-icon-size:22px; } .fcd em { font-style:normal; color:var(--secondary-text-color,#888); font-size:11px; }
-.fcd .rain { font-size:11px; min-height:14px; } .fx { font-size:11px; font-weight:700; color:var(--secondary-text-color,#888); } .fx.adj { color:#c47a00; } .fx.skip { color:#e5484d; }
+.fcd .rain { font-size:11px; min-height:15px; line-height:15px; }
+.fcd > .dm { margin-top:auto; } .fcd em { min-height:14px; } .fx { font-size:11px; font-weight:700; color:var(--secondary-text-color,#888); } .fx.adj { color:#c47a00; } .fx.skip { color:#e5484d; }
 .stiles { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; }
 .stt { background:var(--secondary-background-color,#f4f4f4); border-radius:10px; padding:6px 10px; } .stt .lbl { margin:2px 0; } .sv { font-size:19px; font-weight:600; }
 .abar { display:flex; flex-wrap:nowrap; gap:8px; align-items:center; margin:10px 0; overflow-x:auto; scrollbar-width:none; }

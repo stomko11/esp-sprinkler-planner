@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.1
+
+- Forecast on the Overview: the day marks line up on every day, also on days without rain.
+
 ## 0.8.0
 
 - **Setup finds the zones on its own and confirms them in one step:** after the controller step a
