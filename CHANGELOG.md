@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.4
+
+- Minutes fields step by whole minutes with the arrows (decimals can still be typed).
+- Slot zone rows stay on one line with long names and own days; long slot names in the
+  Overview "Run slot" selector are shortened instead of widening the bar.
+
 ## 0.7.3
 
 - The pump power and water flow chips on the Overview are hidden while idle (flow below

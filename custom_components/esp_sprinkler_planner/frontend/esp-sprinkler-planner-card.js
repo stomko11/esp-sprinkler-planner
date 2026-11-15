@@ -698,7 +698,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
       <div class="lbl">${t("Quick run")}</div>
       <div class="muted small">${t("Pick zones and minutes, then run once.")}</div>
       <div class="qgrid">${zones.map((z) => `<label class="qz ${q.sel[z.id] ? "on" : ""}"><input type="checkbox" data-qz="${esc(z.id)}" ${q.sel[z.id] ? "checked" : ""}>${this._mark(z)}${esc(z.name)}
-        <input type="number" class="n" min="0.5" step="0.5" data-qm="${esc(z.id)}" value="${esc(q.min[z.id] ?? 5)}"> min</label>`).join("")}</div>
+        <input type="number" class="n" min="1" step="1" data-qm="${esc(z.id)}" value="${esc(q.min[z.id] ?? 5)}"> min</label>`).join("")}</div>
       <div class="row"><label><input type="checkbox" data-qrev ${q.reverse ? "checked" : ""}> ${t("reverse ESP order")}</label>
         <span class="grow"></span><span class="muted">${fmtMin(zones.filter((z) => q.sel[z.id]).reduce((a, z) => a + (+q.min[z.id] || 5), 0))}</span>
         <button data-act="qrcancel">${t("Cancel")}</button><button class="primary" data-act="qrrun">${t("Run")}</button></div>
@@ -896,7 +896,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
   _minutesCell(i, zid, e, idx, extra) {
     // editable also when the zone is off in this slot: the value is kept for when it is switched on
     const v = e ? e.minutes : "";
-    return `<input type="number" class="n ${this._on(e) ? "" : "offv"}" min="0.1" step="0.5" ${e ? `data-k="slots.${i}.zones.${idx}.minutes"` : `data-zmin="${i}|${esc(zid)}"`} data-t="num" value="${esc(v ?? "")}" placeholder="10">${extra || ""}`;
+    return `<input type="number" class="n ${this._on(e) ? "" : "offv"}" min="1" step="1" ${e ? `data-k="slots.${i}.zones.${idx}.minutes"` : `data-zmin="${i}|${esc(zid)}"`} data-t="num" value="${esc(v ?? "")}" placeholder="10">${extra || ""}`;
   }
 
   _daysCell(sl, i, e, idx) {
@@ -1518,7 +1518,11 @@ button.sdays { padding:3px 10px; border-radius:12px; font-size:12px; }
 .hintbox.warnbox { background:#c47a0022; } .hintbox.warnbox ha-icon { color:#c47a00; }
 .hintbox { display:flex; gap:8px; align-items:flex-start; font-size:12px; background:color-mix(in srgb, var(--primary-color,#03a9f4) 12%, transparent); border-radius:8px; padding:6px 10px; margin:4px 0 8px; }
 .hintbox ha-icon { --mdc-icon-size:18px; color:var(--primary-color,#03a9f4); flex:none; }
-.zt { border-collapse:collapse; width:100%; margin:6px 0; } .zt td, .zt th { padding:3px 4px; text-align:left; border-bottom:1px solid var(--divider-color,#eee); font-weight:normal; } .zt th { font-size:11px; color:var(--secondary-text-color,#888); }
+.zt { border-collapse:collapse; width:100%; margin:6px 0; } .zt td, .zt th { padding:3px 4px; text-align:left; border-bottom:1px solid var(--divider-color,#eee); font-weight:normal; }
+.zt td { white-space:nowrap; vertical-align:middle; } .zt td:nth-child(2) { max-width:180px; overflow:hidden; text-overflow:ellipsis; }
+.zt .days { flex-wrap:nowrap; } .zt td .muted { white-space:nowrap; }
+.ag select { max-width:170px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+select { max-width:100%; text-overflow:ellipsis; } .zt th { font-size:11px; color:var(--secondary-text-color,#888); }
 .zt td:first-child { white-space:nowrap; } .zt.st td { vertical-align:top; }
 .mbar { height:4px; background:var(--divider-color,#ddd); border-radius:2px; margin-top:3px; width:110px; } .mbar i { display:block; height:100%; border-radius:2px; }
 .zbox { border:1px solid var(--divider-color,#ddd); border-radius:10px; padding:4px 10px; margin:6px 0; }
