@@ -388,12 +388,15 @@ class EspSprinklerPlannerCard extends HTMLElement {
           <span class="fl">${t("today's deviation, per degree")}</span>${sl("avg_daily", 3, 0, 10, 0.5, " %")}
           <span class="fl">${t("at most \u00b1")}</span>${sl("avg_daily_cap", 20, 0, 50, 5, " %")}
         </div>
-        <table class="zt bands"><tr><th>${t("average daily max")}</th><th>${t("minutes")}</th><th></th></tr>
-          ${bands.map((b, i) => `<tr><td>${b[0] === null || b[0] === "" ? `${t("from")} ${esc(bands[i - 1] ? bands[i - 1][0] : "")} \u00b0C ${t("up")}`
-              : `${i ? `${esc(bands[i - 1][0])} \u2013 ` : `${t("below")} `}<input type="number" class="n" data-band="${i}|0" value="${esc(b[0])}" step="1"> \u00b0C`}</td>
-            <td><input type="number" class="n" data-band="${i}|1" value="${esc(b[1])}" step="5" min="0" max="300"> %</td>
-            <td>${b[0] === null || b[0] === "" || bands.length <= 2 ? "" : `<button class="xr" data-act="banddel" data-i="${i}" title="${esc(t("Remove"))}"><ha-icon icon="mdi:close"></ha-icon></button>`}</td></tr>`).join("")}
-        </table>
+        <div class="bandgrid">
+          <span class="bh">${t("average daily max")}</span><span class="bh">${t("minutes")}</span><span></span>
+          ${bands.map((b, i) => { const open = b[0] === null || b[0] === ""; const prev = i ? bands[i - 1][0] : null;
+            const cur = avg !== null && (bands.find((x) => x[0] === null || x[0] === "" || avg < +x[0]) || bands[bands.length - 1]) === b;
+            return `<span class="brange ${cur ? "cur" : ""}">${open ? `${t("from")} <b>${esc(prev)} \u00b0C</b> ${t("up")}`
+                : `${i ? `<b>${esc(prev)}</b> \u2013 ` : `${t("below")} `}<input type="number" class="n bl" data-band="${i}|0" value="${esc(b[0])}" step="1"> \u00b0C`}</span>
+              <span class="sl bpct"><input type="range" data-band="${i}|1" min="0" max="250" step="5" value="${esc(b[1])}"><output>${esc(b[1])} %</output></span>
+              <span>${open || bands.length <= 2 ? "" : `<button class="xr" data-act="banddel" data-i="${i}" title="${esc(t("Remove"))}"><ha-icon icon="mdi:close"></ha-icon></button>`}</span>`; }).join("")}
+        </div>
         <div class="row"><button class="ab" data-act="bandadd"><ha-icon icon="mdi:plus"></ha-icon>${t("Add band")}</button><span class="grow"></span>
           <span class="avgnow">${avg === null ? t("No temperature data yet - the log fills from today.") : t("Now: average {0} \u00b0C over {1} days \u2192 {2} %", r1(avg), vals.length, pct)}</span></div>
         <div class="muted small">${t("{0} measured days in the log.", days)}</div>` : ""}
@@ -1265,6 +1268,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
       this._markDirty(true); return;
     }
     if (t0.dataset.band) {
+      if (t0.type === "range" && t0.nextElementSibling) t0.nextElementSibling.textContent = t0.value + " %";
       if (!isChange) return;
       const [i, col] = t0.dataset.band.split("|").map(Number); const v = num(t0.value);
       if (v === null) return;
@@ -1603,7 +1607,11 @@ button.sdays { padding:3px 10px; border-radius:12px; font-size:12px; }
 .pico { --mdc-icon-size:15px; } .pico.android { color:#3ddc84; } .pico.ios { color:var(--primary-text-color,#fff); } .pico.other { color:var(--secondary-text-color,#888); }
 .warnc { color:#c47a00; } td .bad, td .bad b { color:#e5484d; }
 .avgbox { border-top:1px solid var(--divider-color,#eee); margin-top:8px; padding-top:6px; }
-.zt.bands { width:auto; } .zt.bands td { padding:3px 8px 3px 0; } .avgnow { font-weight:600; }
+.avgnow { font-weight:600; }
+.bandgrid { display:grid; grid-template-columns:minmax(140px, max-content) 1fr 30px; gap:6px 14px; align-items:center; margin:10px 0 4px; }
+.bandgrid .bh { font-size:11px; color:var(--secondary-text-color,#888); text-transform:uppercase; letter-spacing:.04em; }
+.brange { white-space:nowrap; padding:2px 6px; border-radius:6px; } .brange.cur { background:color-mix(in srgb, var(--primary-color,#03a9f4) 18%, transparent); }
+.brange input.bl { width:58px; } .bpct { width:100%; } .bpct input[type=range] { flex:1; width:auto; min-width:80px; } .bpct output { min-width:52px; text-align:right; }
 .hintbox.warnbox { background:#c47a0022; } .hintbox.warnbox ha-icon { color:#c47a00; }
 .hintbox { display:flex; gap:8px; align-items:flex-start; font-size:12px; background:color-mix(in srgb, var(--primary-color,#03a9f4) 12%, transparent); border-radius:8px; padding:6px 10px; margin:4px 0 8px; }
 .hintbox ha-icon { --mdc-icon-size:18px; color:var(--primary-color,#03a9f4); flex:none; }
