@@ -66,6 +66,20 @@ class Proposal:
     unassigned: List[str] = field(default_factory=list)   # switches / numbers nothing claimed
 
 
+def new_valves(saved: Sequence[ValveProposal], found: Sequence[ValveProposal]) -> List[ValveProposal]:
+    """Valves found on the device that a saved mapping does not have yet (matched by any of their
+    entities). Only complete ones (enable switch + duration number) are returned."""
+    have = {e for v in saved for e in (v.duration, v.enable_switch, v.valve_switch) if e}
+    out = []
+    for v in found:
+        if not (v.enable_switch and v.duration):
+            continue
+        if any(e in have for e in (v.duration, v.enable_switch, v.valve_switch) if e):
+            continue
+        out.append(v)
+    return out
+
+
 _WORD = re.compile(r"[a-z0-9]+")
 
 

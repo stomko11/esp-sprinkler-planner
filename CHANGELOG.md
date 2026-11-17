@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.10.1 (on the test HA, not released yet)
+
+- **Reconfigure** now offers zones that were added on the ESP since (shown as "New on the device") and
+  keeps each existing zone's id by its entities, not by its position in the list. Before, a new valve
+  could only be added by re-pointing an existing zone, which moved that zone's settings and history.
+  Saved zones also take their current position from the ESP. The list text no longer shows a literal `\n\n`.
+- **Action bar:** wraps instead of scrolling sideways (no clash with the HA swipe gesture). On narrow
+  cards Quick run and Pause show only their icon; Skip shows the slot it skips.
+- **Pause box:** Cancel and Pause stay on one line on a phone; "1 day" singular.
+- **Skipped box:** new setting Settings > Planner > Skipped box: smart (default), always, never. With
+  automatic weather, smart lists only the runs you skipped yourself.
+- **Stats:** the per-zone table follows the Time / Water / Energy switch and has one extra column instead
+  of up to six, so it fits a phone.
+- The weather strip no longer makes the card scroll sideways on narrow phones.
+
 ## 0.10.0
 
 - **Blockers** (Settings → Blockers): "when <entity> is on / off / is / is not / above / below",

@@ -14,7 +14,7 @@ from homeassistant.helpers import selector
 
 from .const import (CONF_CONTROLLER, CONF_DEVICE, CONF_VALVE_OVERLAP, CONF_VALVES, CONTROLLER_KEYS, DEFAULT_WATCHDOG,
                     DOMAIN, OPT_RESTORE, OPT_WATCHDOG)
-from .discovery import Entity, ValveProposal, propose
+from .discovery import Entity, ValveProposal, new_valves, propose
 
 
 def _device_entities(hass, device_id: str) -> List[Entity]:
@@ -90,11 +90,20 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         dev = dr.async_get(self.hass).async_get(device_id)
         self._proposal = propose(ents, (dev.name_by_user or dev.name) if dev else "")
         self._proposal.controller = dict(entry.data.get(CONF_CONTROLLER) or {})
-        self._proposal.valves = [ValveProposal(v.get("name") or v["id"], v.get("valve_switch"), v.get("enable_switch"),
-                                               v.get("duration"), v.get("max_minutes"), int(v.get("order", i)))
-                                 for i, v in enumerate(entry.data.get(CONF_VALVES) or [])]
-        self._ids = [v["id"] for v in entry.data.get(CONF_VALVES) or []]
-        self._enabled = [v.get("enabled", True) for v in entry.data.get(CONF_VALVES) or []]
+        saved = list(entry.data.get(CONF_VALVES) or [])
+        found = self._proposal.valves
+        pos = {f.duration: f.order for f in found if f.duration}     # position on the ESP now
+        rows = [(ValveProposal(v.get("name") or v["id"], v.get("valve_switch"), v.get("enable_switch"),
+                               v.get("duration"), v.get("max_minutes"), pos.get(v.get("duration"), int(v.get("order", i)))),
+                 v["id"], v.get("enabled", True)) for i, v in enumerate(saved)]
+        fresh = new_valves([r[0] for r in rows], found)
+        rows += [(v, None, True) for v in fresh]      # valves added on the ESP since: offered as new zones
+        rows.sort(key=lambda r: r[0].order)           # stable: a saved zone stays ahead of a new one with the same position
+        self._proposal.valves = [r[0] for r in rows]
+        self._ids = [r[1] for r in rows]              # per proposal: the zone id it keeps, None = new zone
+        self._all_ids = [v["id"] for v in saved]
+        self._enabled = [r[2] for r in rows]
+        self._new_names = [r[0].name for r in rows if r[1] is None]
         self._data = {k: entry.data[k] for k in entry.data}
         return await self.async_step_controller()
 
@@ -151,8 +160,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Required("check_each", default=len(complete) < len(props)): bool,
             vol.Required("add_more", default=False): bool,
         })
+        new = getattr(self, "_new_names", []) if self._reconf else []
         return self.async_show_form(step_id="zones", data_schema=schema, description_placeholders={
-            "count": str(len(complete)), "zones": "\n".join(lines)})
+            "count": str(len(complete)), "zones": "\n".join(lines),
+            "new": ("**New on the device:** " + ", ".join(new) + "\n\n") if new else ""})
 
     async def async_step_valve(self, user_input=None):
         props = self._proposal.valves
@@ -205,9 +216,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def _zone_id(self) -> str:
         """Reconfigure: the valve keeps its zone id; a new valve gets the next free one."""
-        if self._reconf and self._idx < len(getattr(self, "_ids", [])):
+        if self._reconf and self._idx < len(getattr(self, "_ids", [])) and self._ids[self._idx]:
             return self._ids[self._idx]
-        taken = {v["id"] for v in self._valves} | set(getattr(self, "_ids", []))
+        taken = {v["id"] for v in self._valves} | set(getattr(self, "_all_ids", []))
         n = 1
         while f"zone_{n}" in taken:
             n += 1

@@ -1684,7 +1684,11 @@ class Runtime:
             title = str(ui.get("title") or "").strip()
             if len(title) > 60:
                 raise model.ConfigError("ui.title: at most 60 characters")
-            new["ui"] = {"language": lang, **({"title": title} if title else {})}
+            box = ui.get("skipped_box") or "smart"
+            if box not in ("smart", "always", "never"):
+                raise model.ConfigError("ui.skipped_box: smart, always, never")
+            new["ui"] = {"language": lang, **({"title": title} if title else {}),
+                         **({"skipped_box": box} if box != "smart" else {})}
         if notifications is not None:
             try:
                 notify_logic.merged(notifications)

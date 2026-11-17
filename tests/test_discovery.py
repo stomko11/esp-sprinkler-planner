@@ -115,3 +115,26 @@ class MoreLanguagesTest(unittest.TestCase):
                             ("number.m", "Irrigation Multiplier")])
         self.assertEqual(len(p.valves), 1)
         self.assertEqual(p.controller["multiplier"], "number.m")
+
+
+class NewValvesTest(unittest.TestCase):
+    def V(self, n, order):
+        return D.ValveProposal(n, f"switch.{n}", f"switch.en_{n}", f"number.{n}_duration", 60, order)
+
+    def test_only_valves_not_in_the_saved_mapping_are_new(self):
+        saved = [self.V("a", 0), self.V("b", 1), self.V("west", 4)]
+        found = [self.V("a", 0), self.V("b", 1), self.V("south2", 4), self.V("west", 5)]
+        self.assertEqual([v.name for v in D.new_valves(saved, found)], ["south2"])
+
+    def test_nothing_new(self):
+        saved = [self.V("a", 0)]
+        self.assertEqual(D.new_valves(saved, [self.V("a", 0)]), [])
+
+    def test_incomplete_valve_is_not_offered(self):
+        half = D.ValveProposal("x", "switch.x", None, None, None, 2)
+        self.assertEqual(D.new_valves([self.V("a", 0)], [half]), [])
+
+    def test_matched_by_any_entity(self):
+        saved = [D.ValveProposal("a", "switch.a", "switch.en_a", "number.a_duration", 60, 0)]
+        renamed = D.ValveProposal("A renamed", "switch.a", "switch.en_a2", "number.a2_duration", 60, 0)
+        self.assertEqual(D.new_valves(saved, [renamed]), [])
