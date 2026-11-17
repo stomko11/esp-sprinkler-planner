@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.10.2 (on the test HA, not released yet)
+## 0.10.2
 
 - **Backup now holds the history and the switches:** statistics, watered minutes, last runs, learned flow,
   the log, temperature / rain logs and the Planner / Test mode switches are exported and restored.
