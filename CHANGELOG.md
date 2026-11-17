@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.10.1 (on the test HA, not released yet)
+## 0.10.1
 
 - **Reconfigure** now offers zones that were added on the ESP since (shown as "New on the device") and
   keeps each existing zone's id by its entities, not by its position in the list. Before, a new valve
