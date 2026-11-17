@@ -14,6 +14,10 @@
 - **Stats:** the per-zone table follows the Time / Water / Energy switch and has one extra column instead
   of up to six, so it fits a phone.
 - The weather strip no longer makes the card scroll sideways on narrow phones.
+- **Backup and restore:** Settings > Backup > Export settings saves all settings and the valve mapping to
+  a JSON file. When the planner is added again, the first step takes that file: zones get their saved ids
+  back (matched by ESP entities, then by name), so slots, days and minutes come back too. Anything that
+  points at a zone that is gone is left out and listed in a notification.
 
 ## 0.10.0
 

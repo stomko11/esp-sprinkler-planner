@@ -13,7 +13,9 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import selector
 
 from .const import (CONF_CONTROLLER, CONF_DEVICE, CONF_VALVE_OVERLAP, CONF_VALVES, CONTROLLER_KEYS, DEFAULT_WATCHDOG,
-                    DOMAIN, OPT_RESTORE, OPT_WATCHDOG)
+                    DOMAIN, OPT_IMPORT, OPT_IMPORT_NOTES, OPT_RESTORE, OPT_WATCHDOG)
+from . import backup as backup_mod
+from . import model
 from .discovery import Entity, ValveProposal, new_valves, propose
 
 
@@ -37,6 +39,9 @@ def _suggested(value):
     return {"suggested_value": value} if value else None
 
 
+CONF_BACKUP = "backup"
+
+
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
@@ -48,6 +53,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._idx = 0
         self._extra = False
         self._valves: List[Dict[str, Any]] = []
+        self._backup: Optional[Dict[str, Any]] = None   # settings backup chosen in the first step
         self._reconf = None          # config entry being reconfigured
 
     @staticmethod
@@ -61,12 +67,21 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             device_id = user_input[CONF_DEVICE]
             await self.async_set_unique_id(device_id)
             self._abort_if_unique_id_configured()
+            self._backup = None
+            if user_input.get(CONF_BACKUP):
+                try:
+                    self._backup = await self._read_backup(user_input[CONF_BACKUP])
+                except backup_mod.BackupError as err:
+                    errors[CONF_BACKUP] = "invalid_backup"
+                    self._backup_error = str(err)
             dev = dr.async_get(self.hass).async_get(device_id)
             dname = (dev.name_by_user or dev.name) if dev else ""
             ents = _device_entities(self.hass, device_id)
             self._switches = [e.entity_id for e in ents if e.domain == "switch"]
             self._numbers = [e.entity_id for e in ents if e.domain == "number"]
-            if not self._switches:
+            if errors:
+                pass
+            elif not self._switches:
                 errors["base"] = "no_switches"
             else:
                 self._proposal = propose(ents, dname or "")
@@ -75,8 +90,22 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         schema = vol.Schema({
             vol.Required(CONF_DEVICE): selector.DeviceSelector({"filter": {"integration": "esphome"}}),
             vol.Optional(CONF_NAME): str,
+            vol.Optional(CONF_BACKUP): selector.FileSelector(selector.FileSelectorConfig(accept=".json,application/json")),
         })
-        return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
+        return self.async_show_form(step_id="user", data_schema=schema, errors=errors, description_placeholders={
+            "backup_error": getattr(self, "_backup_error", "") if errors.get(CONF_BACKUP) else ""})
+
+    async def _read_backup(self, file_id: str) -> Dict[str, Any]:
+        from homeassistant.components.file_upload import process_uploaded_file
+
+        def read() -> str:
+            with process_uploaded_file(self.hass, file_id) as path:
+                return path.read_text(encoding="utf-8", errors="replace")
+        try:
+            text = await self.hass.async_add_executor_job(read)
+        except (OSError, ValueError) as err:
+            raise backup_mod.BackupError("the file could not be read") from err
+        return backup_mod.parse(text)
 
     async def async_step_reconfigure(self, user_input=None):
         """Change the mapping of an existing planner: same steps, pre-filled with the current values.
@@ -124,7 +153,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             else:
                 fields[vol.Optional(key, description=_suggested(proposed))] = sel
         overlap = int((self._reconf.options.get(CONF_VALVE_OVERLAP, self._reconf.data.get(CONF_VALVE_OVERLAP, 0))
-                       if self._reconf else 0) or 0)
+                       if self._reconf else ((self._backup or {}).get("entry") or {}).get("valve_overlap", 0)) or 0)
         fields[vol.Optional(CONF_VALVE_OVERLAP, default=overlap)] = selector.NumberSelector(
             {"min": 0, "max": 600, "step": 1, "unit_of_measurement": "s", "mode": "box"})
         return self.async_show_form(step_id="controller", data_schema=vol.Schema(fields))
@@ -141,7 +170,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     continue
                 self._idx = i
                 self._valves.append({
-                    "id": self._zone_id(), "name": v.name, "order": v.order,
+                    "id": self._zone_id({"name": v.name, "duration": v.duration, "enable_switch": v.enable_switch,
+                                         "valve_switch": v.valve_switch}), "name": v.name, "order": v.order,
                     "enabled": self._enabled[i] if self._reconf and i < len(self._enabled) else True,
                     "valve_switch": v.valve_switch, "enable_switch": v.enable_switch, "duration": v.duration,
                     "max_minutes": v.max_minutes,
@@ -182,7 +212,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         st = self.hass.states.get(user_input["duration"])
                         max_m = st.attributes.get("max") if st else None
                     self._valves.append({
-                        "id": self._zone_id(),
+                        "id": self._zone_id({"name": user_input.get("name") or (cur.name if cur else ""),
+                                             "duration": user_input.get("duration"),
+                                             "enable_switch": user_input.get("enable_switch"),
+                                             "valve_switch": user_input.get("valve_switch")}),
                         "name": user_input.get("name") or (cur.name if cur else f"Zone {len(self._valves) + 1}"),
                         "order": int(user_input.get("order", len(self._valves))),
                         "enabled": bool(user_input.get("enabled", True)),
@@ -214,11 +247,17 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(step_id="valve", data_schema=schema, errors=errors, description_placeholders={
             "index": str(n), "total": str(max(len(props), n)), "detected": cur.name if cur else "-"})
 
-    def _zone_id(self) -> str:
-        """Reconfigure: the valve keeps its zone id; a new valve gets the next free one."""
+    def _zone_id(self, cand: Optional[Dict[str, Any]] = None) -> str:
+        """Reconfigure: the valve keeps its zone id; a new valve gets the next free one.
+        Added from a backup: a valve that is in the backup gets its saved id back."""
         if self._reconf and self._idx < len(getattr(self, "_ids", [])) and self._ids[self._idx]:
             return self._ids[self._idx]
-        taken = {v["id"] for v in self._valves} | set(getattr(self, "_all_ids", []))
+        saved = (self._backup or {}).get("valves") or []
+        if saved and cand:
+            m = backup_mod.match_valve(cand, saved, [v["id"] for v in self._valves])
+            if m:
+                return m["id"]
+        taken = {v["id"] for v in self._valves} | set(getattr(self, "_all_ids", [])) | {v["id"] for v in saved}
         n = 1
         while f"zone_{n}" in taken:
             n += 1
@@ -232,8 +271,24 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             opts = {**self._reconf.options, CONF_VALVE_OVERLAP: self._data.get(CONF_VALVE_OVERLAP, 0)}
             self.hass.config_entries.async_update_entry(self._reconf, options=opts)
             return self.async_update_reload_and_abort(self._reconf, data=self._data, reason="reconfigured")
-        return self.async_create_entry(title=self._data[CONF_NAME], data=self._data,
-                                       options={OPT_RESTORE: True, OPT_WATCHDOG: DEFAULT_WATCHDOG})
+        options: Dict[str, Any] = {OPT_RESTORE: True, OPT_WATCHDOG: DEFAULT_WATCHDOG}
+        if self._backup:
+            wd = (self._backup.get("entry") or {}).get("watchdog_margin")
+            if isinstance(wd, (int, float)) and 0 < wd <= 600:
+                options[OPT_WATCHDOG] = wd
+            saved = {v["id"]: v for v in self._backup["valves"]}
+            for v in self._data[CONF_VALVES]:
+                if v["id"] in saved:
+                    v["enabled"] = saved[v["id"]].get("enabled", True)
+            cfg, notes = backup_mod.prepare(self._backup, [v["id"] for v in self._data[CONF_VALVES]])
+            try:
+                model.parse(cfg, self._data[CONF_VALVES], int(self._data.get(CONF_VALVE_OVERLAP) or 0))
+                options[OPT_IMPORT] = cfg
+            except model.ConfigError as err:
+                notes = [f"The settings in the backup could not be used and were not restored: {err}"]
+            if notes:
+                options[OPT_IMPORT_NOTES] = notes
+        return self.async_create_entry(title=self._data[CONF_NAME], data=self._data, options=options)
 
 
 class OptionsFlow(config_entries.OptionsFlow):

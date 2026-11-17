@@ -32,7 +32,7 @@ const SK = {
   "Scheduled runs are skipped; manual runs still work.": "Napl\u00e1novan\u00e9 behy sa presko\u010dia; ru\u010dn\u00e9 spustenie funguje.", "paused": "pozastaven\u00e9",
   "waiting for your answer": "\u010dak\u00e1 na tvoju odpove\u010f", "waiting for a blocker": "\u010dak\u00e1, k\u00fdm sa blokovanie skon\u010d\u00ed", "no answer by {0}: {1}": "bez odpovede do {0}: {1}",
   "until {0}, then {1}": "do {0}, potom {1}", "Wait 30 min": "Po\u010dka\u0165 30 min", "skip": "presko\u010di\u0165", "run": "spusti\u0165", "wait": "po\u010dka\u0165",
-  "Blockers": "Blokovanie", "average power while running": "priemern\u00fd v\u00fdkon po\u010das behu", "triggered by": "spustil", "Skipped box": "Box Presko\u010den\u00e9", "smart": "automaticky", "always": "v\u017edy", "never": "nikdy", "help_skipped_box": "smart: pri automatickom po\u010das\u00ed sa v boxe zobrazia len ru\u010dne presko\u010den\u00e9 behy (po\u010dasie je v pl\u00e1ne a v Logu); always: v\u017edy v\u0161etko; never: skryt\u00e9.", "{0} rules": "{0} pravidiel", "1 rule": "1 pravidlo", "{0} rules (2-4)": "{0} pravidl\u00e1", "New blocker": "Nov\u00e9 blokovanie", "is on": "je zapnut\u00e9", "is off": "je vypnut\u00e9", "is": "je", "is not": "nie je",
+  "Blockers": "Blokovanie", "Backup": "Z\u00e1loha", "export": "export", "Export settings": "Exportova\u0165 nastavenia", "Export failed": "Export zlyhal", "help_backup": "Ulo\u017e\u00ed v\u0161etky nastavenia (z\u00f3ny, sloty, po\u010dasie, notifik\u00e1cie, blokovania a ostatn\u00e9) do s\u00faboru. Ak pl\u00e1nova\u010d odstr\u00e1ni\u0161 a prid\u00e1\u0161 znova, v prvom kroku vyber tento s\u00fabor a v\u0161etko sa vr\u00e1ti; z\u00f3ny sa p\u00e1ruj\u00fa pod\u013ea ESP entit. \u0160tatistiky a log nie s\u00fa v z\u00e1lohe. S\u00fabor obsahuje tvoje notifika\u010dn\u00e9 cie\u013ee, dr\u017e ho v tajnosti.", "average power while running": "priemern\u00fd v\u00fdkon po\u010das behu", "triggered by": "spustil", "Skipped box": "Box Presko\u010den\u00e9", "smart": "automaticky", "always": "v\u017edy", "never": "nikdy", "help_skipped_box": "smart: pri automatickom po\u010das\u00ed sa v boxe zobrazia len ru\u010dne presko\u010den\u00e9 behy (po\u010dasie je v pl\u00e1ne a v Logu); always: v\u017edy v\u0161etko; never: skryt\u00e9.", "{0} rules": "{0} pravidiel", "1 rule": "1 pravidlo", "{0} rules (2-4)": "{0} pravidl\u00e1", "New blocker": "Nov\u00e9 blokovanie", "is on": "je zapnut\u00e9", "is off": "je vypnut\u00e9", "is": "je", "is not": "nie je",
   "above": "nad", "below": "pod", "act_skip": "presko\u010di\u0165", "act_wait": "po\u010dka\u0165", "act_ask": "op\u00fdta\u0165 sa", "Delete": "Zmaza\u0165", "e.g. Mower on the lawn": "napr. Kosa\u010dka na tr\u00e1ve",
   "When": "Ke\u010f", "any entity: mower, switch, sensor\u2026": "\u013eubovo\u013en\u00e1 entita: kosa\u010dka, vyp\u00edna\u010d, senzor\u2026", "now": "teraz", "blocking": "blokuje", "Applies to": "Plat\u00ed pre",
   "every run": "ka\u017ed\u00fd beh", "chosen slots": "vybran\u00e9 sloty", "chosen zones": "vybran\u00e9 z\u00f3ny", "Then": "Potom", "skip the run": "presko\u010di\u0165 beh",
@@ -174,6 +174,7 @@ const EN = {
   "rain_warn_total": "This looks like a growing total (weekly / monthly / yearly / all-time). Its value would always exceed the limit and skip every run - pick event rain, rain in the last 24 h or daily rain.",
   "help_zone_days": "Days per zone: \"slot days\" follows the weekdays above. Own days replace them for that zone - it can also run on a day the slot has off (dashed). \u21ba goes back to the slot's days.",
   "help_zone_days_n": "Days per zone: own days narrow this every-N-days slot for that zone (it runs only on the N-th days that fall on those weekdays). \u21ba goes back to the slot's days.",
+  "help_backup": "Saves all settings (zones, slots, weather, notifications, blockers and the rest) to a file. If you remove the planner and add it again, choose this file in the first step and everything comes back; zones are matched by their ESP entities. Statistics and the log are not included. The file contains your notification targets, keep it private.",
   "help_skipped_box": "smart: with automatic weather only the runs you skipped by hand are listed here (weather skips are in the plan and the Log); always: everything; never: hidden.",
   "Test mode (dry run)": "Test mode (dry run)", "help_test_mode": "Plan, weather, zones and notifications run as for real (marked \ud83e\uddea), but nothing is switched - neither the ESP nor the pump.",
   "help_avg": "Season level from the average daily maximum instead of the day's per-degree change. Rain, wind and frost still apply.",
@@ -1394,7 +1395,11 @@ class EspSprinklerPlannerCard extends HTMLElement {
         <datalist id="svclist">${services.filter((x) => !(n.targets || []).includes(x)).map((x) => `<option value="${esc(x)}">${esc(svcName(x))}</option>`).join("")}</datalist>
         ${textOnly.length ? `<div class="hintbox"><ha-icon icon="mdi:information-outline"></ha-icon><div>${t("No buttons for {0}: sent as text only. If it is a phone (for example a notify group or your own notify service around the app), set it to Android or iOS above.", textOnly.map((x) => x.slice(7)).join(", "))}</div></div>` : ""}
         <div class="muted small">${t("Any notify service or notify entity, e.g. notify.mobile_app_stefan and notify.mobile_app_wife. Each chip sends a test to just that one.")}</div>
-        ${evRows}`, false)}`;
+        ${evRows}`, false)}
+      ${sec("s_backup", "mdi:content-save-outline", t("Backup"), t("export"), `
+        <div class="help">${t("help_backup")}</div>
+        <div class="row"><button class="ab" data-act="export"><ha-icon icon="mdi:download"></ha-icon>${t("Export settings")}</button>
+          <span class="muted small" id="exportmsg"></span></div>`, false)}`;
   }
 
   // ------------------------------------------------------------------ events
@@ -1582,6 +1587,16 @@ class EspSprinklerPlannerCard extends HTMLElement {
       } else if (act === "pzgo") { const u = this.shadowRoot.getElementById("pzuntil").value; if (!u) return; await svc("pause", { until: u }); this._pz = null; setTimeout(() => this._load(), 600);
       } else if (act === "resume") { await svc("resume", {}); setTimeout(() => this._load(), 600);
       } else if (act === "lf") { this._lf = tg.dataset.v; this._render();
+      } else if (act === "export") {
+        const msg = this.shadowRoot.getElementById("exportmsg");
+        try {
+          const b = await this._ws({ type: `${DOMAIN}/export` });
+          const name = `esp-sprinkler-planner-${String(b.title || "backup").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${dayOf(this.data.now)}.json`;
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(new Blob([JSON.stringify(b, null, 2)], { type: "application/json" })); a.download = name;
+          this.shadowRoot.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+          if (msg) msg.textContent = name;
+        } catch (e) { if (msg) msg.textContent = (e && e.message) || t("Export failed"); }
       } else if (act === "logrefresh") { this._log = null; this._render();
       } else if (act === "leaksnooze") { await svc("leak_snooze", {}); setTimeout(() => this._load(), 600);
       } else if (act === "pumpoff") {

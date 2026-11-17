@@ -3,10 +3,11 @@
     "step": {
       "user": {
         "title": "ESP Sprinkler Planner",
-        "description": "Pick the ESPHome device that runs the sprinkler controller.",
+        "description": "Pick the ESPHome device that runs the sprinkler controller. Added this planner before? Choose the settings file you exported from the card (Settings > Backup) and your zones, slots and options come back.",
         "data": {
           "device_id": "ESPHome device",
-          "name": "Name"
+          "name": "Name",
+          "backup": "Restore settings from a backup file (optional)"
         }
       },
       "controller": {
@@ -46,7 +47,8 @@
     },
     "error": {
       "no_switches": "This device has no switches - is it the sprinkler controller?",
-      "required": "Required"
+      "required": "Required",
+      "invalid_backup": "This file cannot be used: {backup_error}"
     },
     "abort": {
       "already_configured": "This device already has a planner.",

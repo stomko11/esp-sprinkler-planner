@@ -12,7 +12,11 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.sun import get_astral_event_date
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN
+import json
+from pathlib import Path
+
+from .const import CONF_CONTROLLER, CONF_VALVES, DOMAIN
+from . import backup as backup_mod
 from .model import ConfigError
 from .notify_logic import ACTIONS, EVENTS, VARIABLES, defaults, merged
 from . import stats as stats_mod
@@ -118,6 +122,27 @@ def ws_get(hass, connection, msg):
     connection.send_result(msg["id"], snapshot(hass, rt, msg["days"]))
 
 
+try:
+    _VERSION = json.loads(Path(__file__).with_name("manifest.json").read_text()).get("version", "")
+except (OSError, ValueError):
+    _VERSION = ""
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/export", vol.Optional("entry_id"): str})
+@callback
+def ws_export(hass, connection, msg):
+    rt = _runtime(hass, msg.get("entry_id"))
+    if rt is None:
+        connection.send_error(msg["id"], "not_found", "no planner found")
+        return
+    e = rt.entry
+    connection.send_result(msg["id"], backup_mod.build(
+        e.title, _VERSION, dict(e.data.get(CONF_CONTROLLER) or {}), list(e.data.get(CONF_VALVES) or []), rt.config,
+        entry={"valve_overlap": e.options.get("valve_overlap", e.data.get("valve_overlap")),
+               "watchdog_margin": e.options.get("watchdog_margin")}))
+
+
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/list"})
 @callback
 def ws_list(hass, connection, msg):
@@ -196,5 +221,5 @@ def ws_log(hass, connection, msg):
 
 
 def async_register(hass: HomeAssistant) -> None:
-    for cmd in (ws_get, ws_list, ws_preview, ws_save, ws_flag, ws_stats, ws_log):
+    for cmd in (ws_get, ws_export, ws_list, ws_preview, ws_save, ws_flag, ws_stats, ws_log):
         websocket_api.async_register_command(hass, cmd)

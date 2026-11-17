@@ -152,6 +152,19 @@ enabled. Buttons: run now, skip next, stop.
 
 ---
 
+## 10. Backup and restore
+
+Settings -> Backup -> **Export settings** downloads one JSON file with everything you set up: zones,
+slots, merging, weather, pump, meters, notifications, leak alarm, blockers, card options and the valve
+mapping. Statistics, the log and a run in progress are not in it. The file holds your notification
+targets, so keep it private.
+
+To restore: add the planner again (Settings -> Devices & services -> Add integration -> ESP Sprinkler
+Planner), pick the ESPHome device and choose the file under **Restore settings from a backup file**.
+Zones are matched to the saved ones by their ESP entities, then by name, so each keeps its slots, days
+and minutes. Anything that points to a zone not found any more is left out and listed in a notification.
+The planner starts in test mode, as any new planner.
+
 ## Using 0.1
 
 ### Install and set up

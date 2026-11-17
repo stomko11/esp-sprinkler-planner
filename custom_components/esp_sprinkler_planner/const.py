@@ -11,6 +11,8 @@ CONF_VALVE_OVERLAP = "valve_overlap"
 CONTROLLER_KEYS = ("main_switch", "reverse", "standby", "multiplier", "repeat")
 
 OPT_RESTORE = "restore"
+OPT_IMPORT = "import_config"      # settings from a backup file, moved into the store at first start
+OPT_IMPORT_NOTES = "import_notes"
 OPT_WATCHDOG = "watchdog_margin"
 
 DEFAULT_WATCHDOG = 10  # minutes past the planned end before the run is stopped

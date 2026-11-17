@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
-from .const import DOMAIN
+from .const import DOMAIN, OPT_IMPORT, OPT_IMPORT_NOTES, STORAGE_VERSION
 from . import websocket as ws_api
 from .model import ConfigError
 from .notify_logic import EVENTS
@@ -162,7 +162,29 @@ async def async_setup(hass: HomeAssistant, config) -> bool:
     return True
 
 
+async def _apply_import(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """A planner added from a backup file: put the saved settings in place once, before the first start."""
+    cfg = entry.options.get(OPT_IMPORT)
+    if not cfg:
+        return
+    from homeassistant.helpers.storage import Store
+    store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
+    data = await store.async_load() or {}
+    data["config"] = cfg
+    await store.async_save(data)
+    notes = entry.options.get(OPT_IMPORT_NOTES) or []
+    # before the update listener is added, so this does not reload the entry
+    hass.config_entries.async_update_entry(
+        entry, options={k: v for k, v in entry.options.items() if k not in (OPT_IMPORT, OPT_IMPORT_NOTES)})
+    from homeassistant.components import persistent_notification
+    persistent_notification.async_create(
+        hass, "Settings were restored from the backup file. Planner and test mode are as for a new planner: "
+        "check the zones, then switch test mode off when you are ready." + ("\n\n" + "\n".join(notes) if notes else ""),
+        title=f"{entry.title}: settings restored", notification_id=f"{DOMAIN}_{entry.entry_id}_restored")
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    await _apply_import(hass, entry)
     rt = Runtime(hass, entry)
     entry.runtime_data = rt
     await rt.async_start()
