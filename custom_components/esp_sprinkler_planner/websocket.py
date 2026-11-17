@@ -140,7 +140,8 @@ def ws_export(hass, connection, msg):
     connection.send_result(msg["id"], backup_mod.build(
         e.title, _VERSION, dict(e.data.get(CONF_CONTROLLER) or {}), list(e.data.get(CONF_VALVES) or []), rt.config,
         entry={"valve_overlap": e.options.get("valve_overlap", e.data.get("valve_overlap")),
-               "watchdog_margin": e.options.get("watchdog_margin")}))
+               "watchdog_margin": e.options.get("watchdog_margin")},
+        flags=rt.flags, data=rt.backup_data()))
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/list"})

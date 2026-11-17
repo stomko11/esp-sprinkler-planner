@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "ESP Sprinkler Planner",
-        "description": "Pick the ESPHome device that runs the sprinkler controller. Added this planner before? Choose the settings file you exported from the card (Settings > Backup) and your zones, slots and options come back.",
+        "description": "Pick the ESPHome device that runs the sprinkler controller. Added this planner before? Choose the file you exported from the card (Settings > Backup): zones, slots, options, statistics and the log come back.",
         "data": {
           "device_id": "ESPHome device",
           "name": "Name",
@@ -43,12 +43,17 @@
           "check_each": "Check each zone one by one",
           "add_more": "Add a valve that was not found"
         }
+      },
+      "restore_zones": {
+        "title": "Zones from the backup",
+        "description": "These zones of the backup did not match a valve on this device by its entities. Pick the valve each one is now, so it gets its settings and history back, or leave '-' to not restore it. Valves on the device without a zone from the backup: {new}."
       }
     },
     "error": {
       "no_switches": "This device has no switches - is it the sprinkler controller?",
       "required": "Required",
-      "invalid_backup": "This file cannot be used: {backup_error}"
+      "invalid_backup": "This file cannot be used: {backup_error}",
+      "zone_twice": "Each valve can take over only one zone from the backup."
     },
     "abort": {
       "already_configured": "This device already has a planner.",

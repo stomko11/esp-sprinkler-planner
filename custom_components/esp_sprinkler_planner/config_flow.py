@@ -13,7 +13,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import selector
 
 from .const import (CONF_CONTROLLER, CONF_DEVICE, CONF_VALVE_OVERLAP, CONF_VALVES, CONTROLLER_KEYS, DEFAULT_WATCHDOG,
-                    DOMAIN, OPT_IMPORT, OPT_IMPORT_NOTES, OPT_RESTORE, OPT_WATCHDOG)
+                    DOMAIN, OPT_IMPORT, OPT_RESTORE, OPT_WATCHDOG, STORAGE_VERSION)
 from . import backup as backup_mod
 from . import model
 from .discovery import Entity, ValveProposal, new_valves, propose
@@ -180,7 +180,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if user_input.get("add_more"):
                 self._extra = True
                 return await self.async_step_valve()
-            return self._finish()
+            return await self._finish()
         lines = []
         for v in props:
             ok = v.enable_switch and v.duration
@@ -228,7 +228,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self._extra = bool(user_input.get("add_another"))
                 if self._idx < len(props) or self._extra:
                     return await self.async_step_valve()
-                return self._finish()
+                return await self._finish()
         n = self._idx + 1
         schema = vol.Schema({
             vol.Optional("name", description=_suggested(cur.name if cur else None)): str,
@@ -263,9 +263,61 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             n += 1
         return f"zone_{n}"
 
-    def _finish(self):
+    def _unmatched(self):
+        """Backup zones no new valve took over, and new valves that are not a backup zone."""
+        saved = (self._backup or {}).get("valves") or []
+        ids = {v["id"] for v in self._valves}
+        old = [v for v in saved if v["id"] not in ids]
+        known = {v["id"] for v in saved}
+        new = [v for v in self._valves if v["id"] not in known]
+        return old, new
+
+    @staticmethod
+    def _zone_key(v: Dict[str, Any], keys: List[str]) -> str:
+        k = str(v.get("name") or v["id"])
+        return k if k not in keys else f"{k} ({v['id']})"
+
+    async def async_step_restore_zones(self, user_input=None):
+        """Restore from a backup: zones of the backup that no ESP entity matched, paired by hand."""
+        old, new = self._unmatched()
+        keys: List[str] = []
+        for v in old:
+            keys.append(self._zone_key(v, keys))
+        errors = {}
+        if user_input is not None:
+            picks = {k: user_input.get(k) or "" for k in keys}
+            chosen = [x for x in picks.values() if x]
+            if len(chosen) != len(set(chosen)):
+                errors["base"] = "zone_twice"
+            else:
+                for k, v in zip(keys, old):
+                    target = picks[k]
+                    for nv in self._valves:
+                        if target and nv["id"] == target:
+                            nv["id"] = v["id"]       # the new valve becomes the backup zone: its settings and history
+                self._paired = True
+                return await self._finish()
+        cands = [(v["id"], v.get("name") or v["id"]) for v in new]
+        opts = [selector.SelectOptionDict(value="", label="-")] + [
+            selector.SelectOptionDict(value=i, label=n) for i, n in cands]
+        fields: Dict[Any, Any] = {}
+        taken: List[str] = []
+        for k, v in zip(keys, old):
+            g = backup_mod.guess(v.get("name"), [c for c in cands if c[0] not in taken]) or ""
+            if g:
+                taken.append(g)
+            fields[vol.Optional(k, default=g)] = selector.SelectSelector(
+                selector.SelectSelectorConfig(options=opts, mode=selector.SelectSelectorMode.DROPDOWN))
+        return self.async_show_form(step_id="restore_zones", data_schema=vol.Schema(fields), errors=errors,
+                                    description_placeholders={"new": ", ".join(n for _, n in cands)})
+
+    async def _finish(self):
         if not self._valves:
             return self.async_abort(reason="no_valves")
+        if self._backup and not self._reconf and not getattr(self, "_paired", False):
+            old, new = self._unmatched()
+            if old and new:
+                return await self.async_step_restore_zones()
         self._data[CONF_VALVES] = sorted(self._valves, key=lambda v: (v["order"], v["id"]))
         if self._reconf:
             opts = {**self._reconf.options, CONF_VALVE_OVERLAP: self._data.get(CONF_VALVE_OVERLAP, 0)}
@@ -283,11 +335,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             cfg, notes = backup_mod.prepare(self._backup, [v["id"] for v in self._data[CONF_VALVES]])
             try:
                 model.parse(cfg, self._data[CONF_VALVES], int(self._data.get(CONF_VALVE_OVERLAP) or 0))
-                options[OPT_IMPORT] = cfg
             except model.ConfigError as err:
-                notes = [f"The settings in the backup could not be used and were not restored: {err}"]
-            if notes:
-                options[OPT_IMPORT_NOTES] = notes
+                cfg, notes = None, [f"The settings in the backup could not be used and were not restored: {err}"]
+            # the history can be large: it waits in its own store (not in the entry) until the first start
+            from homeassistant.helpers.storage import Store
+            pending = Store(self.hass, STORAGE_VERSION, f"{DOMAIN}.pending_{self.unique_id}")
+            await pending.async_save({"config": cfg, "flags": self._backup.get("flags") or {},
+                                      "data": self._backup.get("data") or {}, "notes": notes})
+            options[OPT_IMPORT] = True
         return self.async_create_entry(title=self._data[CONF_NAME], data=self._data, options=options)
 
 

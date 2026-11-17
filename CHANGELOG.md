@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.10.2 (on the test HA, not released yet)
+
+- **Backup now holds the history and the switches:** statistics, watered minutes, last runs, learned flow,
+  the log, temperature / rain logs and the Planner / Test mode switches are exported and restored.
+  Skips, a pause and a run in progress are not.
+- **Zone colours are kept:** a colour you never picked follows the zone's position; the export now pins
+  the colour each zone shows, so it stays when zones come back in another order.
+- **Restore asks for zones it could not match:** a backup zone that matches no valve by its entities
+  (for example "Lawn South" after the ESP got "Lawn South 1" and "Lawn South 2") is offered in an extra
+  step, with a guess by name. The chosen valve takes over that zone's settings and history.
+
 ## 0.10.1
 
 - **Reconfigure** now offers zones that were added on the ESP since (shown as "New on the device") and

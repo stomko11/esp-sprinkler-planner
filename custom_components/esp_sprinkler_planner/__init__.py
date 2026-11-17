@@ -163,23 +163,37 @@ async def async_setup(hass: HomeAssistant, config) -> bool:
 
 
 async def _apply_import(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """A planner added from a backup file: put the saved settings in place once, before the first start."""
-    cfg = entry.options.get(OPT_IMPORT)
-    if not cfg:
+    """A planner added from a backup file: put the saved settings and history in place once, before the first start."""
+    if not entry.options.get(OPT_IMPORT):
         return
     from homeassistant.helpers.storage import Store
+    imp = entry.options[OPT_IMPORT]
+    pending = Store(hass, STORAGE_VERSION, f"{DOMAIN}.pending_{entry.unique_id}")
+    if isinstance(imp, dict):                     # 0.10.1: settings were kept in the entry options
+        p = {"config": imp, "notes": entry.options.get(OPT_IMPORT_NOTES) or []}
+    else:
+        p = await pending.async_load() or {}
     store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
     data = await store.async_load() or {}
-    data["config"] = cfg
+    if p.get("config"):
+        data["config"] = p["config"]
+    if p.get("flags"):
+        data["flags"] = {**(data.get("flags") or {}), **p["flags"]}
+    for k, v in (p.get("data") or {}).items():
+        data[k] = v
     await store.async_save(data)
-    notes = entry.options.get(OPT_IMPORT_NOTES) or []
+    await pending.async_remove()
     # before the update listener is added, so this does not reload the entry
     hass.config_entries.async_update_entry(
         entry, options={k: v for k, v in entry.options.items() if k not in (OPT_IMPORT, OPT_IMPORT_NOTES)})
+    fl = data.get("flags") or {}
+    state = ("Planner " + ("on" if fl.get("enabled", True) else "off") + ", test mode "
+             + ("on" if fl.get("dry_run", True) else "OFF - scheduled runs water for real") + ", as when it was exported.")
+    notes = p.get("notes") or []
     from homeassistant.components import persistent_notification
     persistent_notification.async_create(
-        hass, "Settings were restored from the backup file. Planner and test mode are as for a new planner: "
-        "check the zones, then switch test mode off when you are ready." + ("\n\n" + "\n".join(notes) if notes else ""),
+        hass, "Settings and history were restored from the backup file. " + state
+        + ("\n\n" + "\n".join(notes) if notes else ""),
         title=f"{entry.title}: settings restored", notification_id=f"{DOMAIN}_{entry.entry_id}_restored")
 
 

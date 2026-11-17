@@ -182,6 +182,12 @@ class Runtime:
                                      "rain_entity": self._rain_entity,
                                      "suggestions": self.suggestions, "skip_done": self.skip_done})
 
+    def backup_data(self) -> Dict[str, Any]:
+        """History for a settings backup (see backup.DATA_KEYS)."""
+        return {"history": self.history, "last_run": self.last_run, "stats": self.stats,
+                "flow_samples": self.flow_samples, "flow_base": self.flow_base, "base_samples": self._base_samples,
+                "log": self.log, "tmax_log": self.tmax_log, "rain_log": self.rain_log}
+
     LOG_KINDS = {"started", "finished", "stopped", "skipped", "error", "weather", "suggestion", "blocked", "blocker_ask",
                  "leak", "valve_stuck", "flow_warning", "flow_drift", "offline", "online", "paused", "resumed", "skip_set",
                  "pump_off"}

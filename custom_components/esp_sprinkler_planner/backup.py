@@ -3,8 +3,9 @@
 Pure Python (no Home Assistant imports) so it can be tested on its own.
 
 What a backup holds: the planner config (zones, slots, settings, notifications, pump, weather, meters,
-UI, leak, blockers) and the zone mapping that goes with it (zone id, name, ESP entities). It does not hold
-statistics, the event log or the state of a run in progress.
+UI, leak, blockers), the zone mapping that goes with it (zone id, name, ESP entities), the planner and test
+mode switches, and the history (statistics, watered minutes, last runs, learned flow, log, temperature and
+rain logs). It does not hold the state of a run in progress, skips or a pause.
 
 Zone ids are the keys of everything in the config. When the planner is added again the new valves are
 matched with the saved ones by their ESP entities (then by name), so a zone keeps its id and with it its
@@ -19,10 +20,12 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 KIND = "esp_sprinkler_planner_backup"
 VERSION = 1
-MAX_BYTES = 1_000_000
+MAX_BYTES = 5_000_000
 
 CONFIG_KEYS = ("zones", "slots", "settings", "notifications", "pump", "weather", "meters", "ui", "leak", "blockers")
 VALVE_KEYS = ("id", "name", "order", "enabled", "valve_switch", "enable_switch", "duration", "max_minutes")
+FLAG_KEYS = ("enabled", "dry_run")
+DATA_KEYS = ("history", "last_run", "stats", "flow_samples", "flow_base", "base_samples", "log", "tmax_log", "rain_log")
 
 
 class BackupError(ValueError):
@@ -33,7 +36,8 @@ ENTRY_KEYS = ("valve_overlap", "watchdog_margin")
 
 
 def build(title: str, integration_version: str, controller: Dict[str, Any], valves: Sequence[Dict[str, Any]],
-          config: Dict[str, Any], now: Optional[datetime] = None, entry: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+          config: Dict[str, Any], now: Optional[datetime] = None, entry: Optional[Dict[str, Any]] = None,
+          flags: Optional[Dict[str, Any]] = None, data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     now = now or datetime.now(timezone.utc)
     return {
         "kind": KIND, "version": VERSION, "exported": now.isoformat(timespec="seconds"),
@@ -42,6 +46,8 @@ def build(title: str, integration_version: str, controller: Dict[str, Any], valv
         "entry": {k: entry[k] for k in ENTRY_KEYS if entry and isinstance(entry.get(k), (int, float))},
         "valves": [{k: v.get(k) for k in VALVE_KEYS if v.get(k) is not None} for v in valves],
         "config": copy.deepcopy({k: config[k] for k in CONFIG_KEYS if k in config}),
+        "flags": {k: bool(flags[k]) for k in FLAG_KEYS if flags and k in flags},
+        "data": copy.deepcopy({k: data[k] for k in DATA_KEYS if data and data.get(k)}),
     }
 
 
@@ -79,6 +85,30 @@ def match_valve(cand: Dict[str, Any], saved: Sequence[Dict[str, Any]], used: Seq
             if str(v.get("name") or "").strip().casefold() == name:
                 return v
     return None
+
+
+def _tokens(name: Any) -> List[str]:
+    return [w for w in "".join(c if c.isalnum() else " " for c in str(name or "").casefold()).split() if w]
+
+
+def guess(name: Any, candidates: Sequence[Tuple[str, str]]) -> Optional[str]:
+    """Best candidate id for a backup zone that no ESP entity matched, by its name: all words of the
+    shorter name in the longer one ("Lawn South" ~ "Lawn South 1"). None when nothing is close."""
+    want = _tokens(name)
+    if not want:
+        return None
+    best, score = None, 0.0
+    for cid, cname in candidates:
+        got = _tokens(cname)
+        if not got:
+            continue
+        short, long_ = (want, got) if len(want) <= len(got) else (got, want)
+        if not all(w in long_ for w in short):
+            continue
+        s = len(short) / len(long_)
+        if s > score:
+            best, score = cid, s
+    return best
 
 
 def next_free_id(taken: Sequence[str]) -> str:

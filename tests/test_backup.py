@@ -96,3 +96,25 @@ class EntryTest(unittest.TestCase):
         b = B.build("G", "1", {}, VALVES, CONFIG, entry={"valve_overlap": 5, "watchdog_margin": None})
         self.assertEqual(b["entry"], {"valve_overlap": 5})
         self.assertEqual(B.build("G", "1", {}, VALVES, CONFIG)["entry"], {})
+
+
+class GuessTest(unittest.TestCase):
+    C = [("zone_6", "Lawn South 1"), ("zone_7", "Lawn South 2"), ("zone_8", "Garage")]
+
+    def test_shorter_name_inside_longer(self):
+        self.assertEqual(B.guess("Lawn South", self.C), "zone_6")
+
+    def test_exact_beats_partial(self):
+        self.assertEqual(B.guess("lawn south 2", self.C), "zone_7")
+
+    def test_nothing_close(self):
+        self.assertIsNone(B.guess("Field", self.C))
+        self.assertIsNone(B.guess("", self.C))
+
+
+class StateTest(unittest.TestCase):
+    def test_flags_and_history_are_exported(self):
+        b = B.build("G", "1", {}, VALVES, CONFIG, flags={"enabled": True, "dry_run": 0, "other": 1},
+                    data={"stats": {"2026-01-01": {}}, "log": [], "active": {"x": 1}})
+        self.assertEqual(b["flags"], {"enabled": True, "dry_run": False})
+        self.assertEqual(b["data"], {"stats": {"2026-01-01": {}}})   # empty and unknown parts left out
