@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.11.0 (on the test HA, not released yet)
+## 0.11.0
 
 - **Zones follow the ESP on their own.** When valves are added, removed or moved on the ESP, the planner
   notices (at start, when the ESP comes back after a flash, when its entities change, and every 15
