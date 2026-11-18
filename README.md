@@ -152,6 +152,13 @@ enabled. Buttons: run now, skip next, stop.
 
 ---
 
+## Adding a valve on the ESP
+
+Add it in the ESP's YAML, anywhere in the list, and flash the ESP. When it comes back the planner adds
+the new zone in its place (marked **new** in the card) and moves the others after it. Put it in a slot
+to water it. Existing zones keep their settings and history. If a zone's position is ever wrong, use the
+arrows in Settings > Zones.
+
 ## 10. Backup and restore
 
 Settings -> Backup -> **Export settings** downloads one JSON file with everything you set up: zones

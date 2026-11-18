@@ -18,6 +18,7 @@ from homeassistant.helpers.template import Template
 from homeassistant.util import slugify
 from homeassistant.util import dt as dt_util
 
+from . import sync as sync_mod
 from . import blockers as blk_mod, executor, leak as leak_mod, model, notify_logic, planner, stats as stats_mod, weather as wx_mod
 from .const import (CONF_CONTROLLER, CONF_VALVE_OVERLAP, CONF_VALVES, DEFAULT_WATCHDOG, DOMAIN, EVENT, OPT_RESTORE,
                     OPT_WATCHDOG, PLAN_DAYS, STORAGE_VERSION)
@@ -35,6 +36,10 @@ class Runtime:
         self.entry = entry
         self.store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
         self._actor: Optional[str] = None     # HA user behind the service call / notification button being handled
+        self._esp_sig: Optional[str] = None   # the ESP's valve order at the last sync (sync.signature)
+        self._sync_timer = None
+        self.missing_valves: List[str] = []   # zone names whose valve is not on the ESP any more
+        self.order_source: Optional[str] = None   # where the zone order came from at the last sync: esp / registry
         self.config: Dict[str, Any] = {}
         self.flags: Dict[str, bool] = {"enabled": True, "dry_run": True}
         self.skip: List[str] = []
@@ -179,7 +184,7 @@ class Runtime:
                                      "rain_log": self.rain_log, "rain_last": self._rain_last, "tmax_log": self.tmax_log,
                                      "leak_snooze_until": self.leak_snooze_until, "pause_until": self.pause_until,
                                      "log": self.log,
-                                     "rain_entity": self._rain_entity,
+                                     "rain_entity": self._rain_entity, "esp_sig": self._esp_sig,
                                      "suggestions": self.suggestions, "skip_done": self.skip_done})
 
     QUIET_AFTER_RUN = timedelta(minutes=60)
@@ -200,7 +205,7 @@ class Runtime:
 
     LOG_KINDS = {"started", "finished", "stopped", "skipped", "error", "weather", "suggestion", "blocked", "blocker_ask",
                  "leak", "valve_stuck", "flow_warning", "flow_drift", "offline", "online", "paused", "resumed", "skip_set",
-                 "pump_off"}
+                 "pump_off", "zone_added", "zones_moved"}
 
     ACTOR_KINDS = {"started", "stopped", "skipped", "skip_set", "paused", "resumed", "blocked", "suggestion"}
 
@@ -999,8 +1004,99 @@ class Runtime:
     OFFLINE_GRACE = timedelta(minutes=3)   # short ESP reconnects do not notify
 
     @callback
-    def _on_controller_state(self, _event: Event) -> None:
+    def _on_controller_state(self, event: Event) -> None:
+        old, new = event.data.get("old_state"), event.data.get("new_state")
+        if old is not None and new is not None and old.state == "unavailable" and new.state != "unavailable":
+            self._schedule_sync(15)      # the ESP is back (maybe new firmware): look for new or moved valves
         self._check_health()
+
+    # ------------------------------------------------------------------ valves on the ESP (auto sync)
+    @callback
+    def _on_registry(self, event: Event) -> None:
+        from homeassistant.helpers import entity_registry as er
+        eid = event.data.get("entity_id")
+        mine = {e for v in self.valves for e in (v.get("duration"), v.get("enable_switch"), v.get("valve_switch")) if e}
+        ent = er.async_get(self.hass).async_get(eid) if eid else None
+        if eid in mine or (ent is not None and ent.device_id == self.entry.data.get("device_id")):
+            self._schedule_sync(15)
+
+    def _schedule_sync(self, seconds: float) -> None:
+        if self._sync_timer:
+            self._sync_timer()
+        self._sync_timer = async_track_point_in_utc_time(
+            self.hass, self._sync_job, dt_util.utcnow() + timedelta(seconds=seconds))
+
+    async def _sync_job(self, _now=None) -> None:
+        self._sync_timer = None
+        try:
+            await self.sync_valves()
+        except Exception:  # noqa: BLE001 - a failed sync must never stop irrigation
+            _LOGGER.exception("%s: valve sync failed", self.entry.title)
+
+    async def sync_valves(self) -> bool:
+        """Bring the zones in line with the valves on the ESP: add new ones, follow the ESP order.
+        Returns True when the zones changed (the planner then reloads)."""
+        from homeassistant.helpers import entity_registry as er
+        from .device import device_entities
+        from .discovery import propose
+        if self.active:
+            return False                 # never under a running cycle; the next check picks it up
+        device_id = self.entry.data.get("device_id")
+        if not device_id:
+            return False
+        ents, from_esp = device_entities(self.hass, device_id)
+        self.order_source = "esp" if from_esp else "registry"
+        if not ents:
+            return False
+        from homeassistant.helpers import device_registry as dr
+        dev = dr.async_get(self.hass).async_get(device_id)
+        found = propose(ents, (dev.name_by_user or dev.name or "") if dev else "").valves
+        existing = {e.entity_id for e in er.async_entries_for_device(er.async_get(self.hass), device_id)}
+        existing |= {s.entity_id for s in self.hass.states.async_all()}
+        sig_now = sync_mod.signature([f for f in found if f.enable_switch and f.duration])
+        last = self._esp_sig if from_esp else sig_now     # without the ESP's list: never move zones around
+        res = sync_mod.sync(self.valves, found, existing, last, reserved=list((self.config.get("zones") or {}).keys()))
+        names = self.zone_names()
+        missing = [names.get(v["id"], v.get("name") or v["id"]) for v in res.missing]
+        if missing != self.missing_valves:
+            self.missing_valves = missing
+            self._update_repairs()
+        if from_esp and res.signature != self._esp_sig:
+            self._esp_sig = res.signature
+            await self._save()
+        if not res.changed:
+            return False
+        today = dt_util.now().date().isoformat()
+        for v in res.added:
+            v["added"] = today
+            self._event("zone_added", zone=v["name"], reason=f"ESP position {v['order'] + 1}")
+        if res.moved and not res.added:
+            self._event("zones_moved")
+        await self._save()
+        if res.added:
+            from homeassistant.components import persistent_notification
+            persistent_notification.async_create(
+                self.hass, "New on the ESP: " + ", ".join(f"**{v['name']}** (position {v['order'] + 1})" for v in res.added)
+                + ". It is in the card now, in its place. Add it to a slot to water it.",
+                title=f"{self.entry.title}: new zone", notification_id=f"{DOMAIN}_{self.entry.entry_id}_new_zone")
+        _LOGGER.info("%s: zones synced with the ESP: %d new, order %s", self.entry.title, len(res.added),
+                     "changed" if res.moved else "kept")
+        self.hass.config_entries.async_update_entry(self.entry, data={**self.entry.data, CONF_VALVES: res.valves})
+        return True
+
+    async def reorder(self, zone_ids: List[str]) -> None:
+        """Positions set by hand in the card. They stay until the ESP's own order changes."""
+        valves = copy.deepcopy(self.valves)
+        ids = [v["id"] for v in valves]
+        if sorted(zone_ids) != sorted(ids):
+            raise model.ConfigError("reorder: pass every zone id exactly once")
+        pos = {z: i for i, z in enumerate(zone_ids)}
+        for v in valves:
+            v["order"] = pos[v["id"]]
+        valves.sort(key=lambda v: v["order"])
+        self._event("zones_moved", source="manual")
+        await self._save()
+        self.hass.config_entries.async_update_entry(self.entry, data={**self.entry.data, CONF_VALVES: valves})
 
     def _check_health(self, startup: bool = False) -> None:  # noqa: ARG002 - startup: same grace period
         states = {eid: {"state": st.state} for eid in executor.involved_entities(self.valves, self.controller)
@@ -1073,6 +1169,7 @@ class Runtime:
         self._rain_last = data.get("rain_last")
         self._rain_entity = data.get("rain_entity")
         self._base_samples = data.get("base_samples") or {}
+        self._esp_sig = data.get("esp_sig")
         self.suggestions = data.get("suggestions") or {}
         if (self.config.get("weather") or {}).get("mode", "off") != "suggest":
             self.suggestions = {k: v for k, v in self.suggestions.items() if v.get("status") != "pending"}
@@ -1109,6 +1206,8 @@ class Runtime:
             self._unsubs.append(async_track_state_change_event(self.hass, watched, self._on_controller_state))
         self._check_health(startup=True)
         self._unsubs.append(async_track_time_interval(self.hass, self._periodic, timedelta(minutes=15)))
+        self._unsubs.append(self.hass.bus.async_listen("entity_registry_updated", self._on_registry))
+        self._schedule_sync(30)          # the ESP may connect a little after Home Assistant starts
         self._subscribe_dynamic()
         await self._setup_rain()
         await self._seed_tmax()
@@ -1135,6 +1234,8 @@ class Runtime:
         self._timer = self._watchdog = self._dry_timer = self._planned_timer = self._health_timer = None
 
     async def _periodic(self, _now) -> None:
+        if await self.sync_valves():
+            return                       # the planner reloads with the new zones
         await self.refresh_weather()
         await self.async_replan()
         self._update_repairs()
@@ -1167,6 +1268,7 @@ class Runtime:
         svcs = self.hass.services.async_services().get("notify", {})
         gone = [t for t in targets if t.split(".", 1)[1] not in svcs and self.hass.states.get(t) is None]
         issue("notify_missing", bool(gone), services=", ".join(gone))
+        issue("valve_missing", bool(self.missing_valves) and not h["missing"], zones=", ".join(self.missing_valves))
 
     # ------------------------------------------------------------------ planning
     def _sun(self, day):

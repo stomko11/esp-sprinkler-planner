@@ -32,7 +32,7 @@ const SK = {
   "Scheduled runs are skipped; manual runs still work.": "Napl\u00e1novan\u00e9 behy sa presko\u010dia; ru\u010dn\u00e9 spustenie funguje.", "paused": "pozastaven\u00e9",
   "waiting for your answer": "\u010dak\u00e1 na tvoju odpove\u010f", "waiting for a blocker": "\u010dak\u00e1, k\u00fdm sa blokovanie skon\u010d\u00ed", "no answer by {0}: {1}": "bez odpovede do {0}: {1}",
   "until {0}, then {1}": "do {0}, potom {1}", "Wait 30 min": "Po\u010dka\u0165 30 min", "skip": "presko\u010di\u0165", "run": "spusti\u0165", "wait": "po\u010dka\u0165",
-  "Blockers": "Blokovanie", "Backup": "Z\u00e1loha", "export": "export", "Export settings": "Exportova\u0165 nastavenia", "Export failed": "Export zlyhal", "help_backup": "Ulo\u017e\u00ed v\u0161etky nastavenia (z\u00f3ny, sloty, po\u010dasie, notifik\u00e1cie, blokovania a ostatn\u00e9) do s\u00faboru. Ak pl\u00e1nova\u010d odstr\u00e1ni\u0161 a prid\u00e1\u0161 znova, v prvom kroku vyber tento s\u00fabor a v\u0161etko sa vr\u00e1ti; z\u00f3ny sa p\u00e1ruj\u00fa pod\u013ea ESP entit. \u0160tatistiky, log, nau\u010den\u00fd prietok a prep\u00edna\u010de Pl\u00e1nova\u010d / Sk\u00fa\u0161obn\u00fd re\u017eim s\u00fa v z\u00e1lohe; presko\u010denia, pauza a beh nie. S\u00fabor obsahuje tvoje notifika\u010dn\u00e9 cie\u013ee, dr\u017e ho v tajnosti.", "average power while running": "priemern\u00fd v\u00fdkon po\u010das behu", "triggered by": "spustil", "Skipped box": "Box Presko\u010den\u00e9", "smart": "automaticky", "always": "v\u017edy", "never": "nikdy", "help_skipped_box": "smart: pri automatickom po\u010das\u00ed sa v boxe zobrazia len ru\u010dne presko\u010den\u00e9 behy (po\u010dasie je v pl\u00e1ne a v Logu); always: v\u017edy v\u0161etko; never: skryt\u00e9.", "{0} rules": "{0} pravidiel", "1 rule": "1 pravidlo", "{0} rules (2-4)": "{0} pravidl\u00e1", "New blocker": "Nov\u00e9 blokovanie", "is on": "je zapnut\u00e9", "is off": "je vypnut\u00e9", "is": "je", "is not": "nie je",
+  "Blockers": "Blokovanie", "new": "nov\u00e1", "Move up": "Posun\u00fa\u0165 vy\u0161\u0161ie", "Move down": "Posun\u00fa\u0165 ni\u017e\u0161ie", "Not on the ESP any more: {0}": "U\u017e nie je v ESP: {0}", "Save or discard your changes first.": "Najprv ulo\u017e alebo zaho\u010f zmeny.", "zone_added_ev": "nov\u00e1 z\u00f3na", "zones_moved_ev": "zmenen\u00e9 poradie z\u00f3n", "help_position": "Riadi sa pod\u013ea ESP samo; men\u00ed\u0161 ho tu len ak sa poradie z ESP pre\u010d\u00edtalo zle. Zmena v ESP ho nastav\u00ed znova.", "help_gone": "Ak si ventil odstr\u00e1nil z\u00e1merne, pou\u017ei Prekonfigurova\u0165 a presko\u010d ho. Ak bol premenovan\u00fd, na\u010d\u00edta sa znova, ke\u010f bude ESP sp\u00e4\u0165.", "Backup": "Z\u00e1loha", "export": "export", "Export settings": "Exportova\u0165 nastavenia", "Export failed": "Export zlyhal", "help_backup": "Ulo\u017e\u00ed v\u0161etky nastavenia (z\u00f3ny, sloty, po\u010dasie, notifik\u00e1cie, blokovania a ostatn\u00e9) do s\u00faboru. Ak pl\u00e1nova\u010d odstr\u00e1ni\u0161 a prid\u00e1\u0161 znova, v prvom kroku vyber tento s\u00fabor a v\u0161etko sa vr\u00e1ti; z\u00f3ny sa p\u00e1ruj\u00fa pod\u013ea ESP entit. \u0160tatistiky, log, nau\u010den\u00fd prietok a prep\u00edna\u010de Pl\u00e1nova\u010d / Sk\u00fa\u0161obn\u00fd re\u017eim s\u00fa v z\u00e1lohe; presko\u010denia, pauza a beh nie. S\u00fabor obsahuje tvoje notifika\u010dn\u00e9 cie\u013ee, dr\u017e ho v tajnosti.", "average power while running": "priemern\u00fd v\u00fdkon po\u010das behu", "triggered by": "spustil", "Skipped box": "Box Presko\u010den\u00e9", "smart": "automaticky", "always": "v\u017edy", "never": "nikdy", "help_skipped_box": "smart: pri automatickom po\u010das\u00ed sa v boxe zobrazia len ru\u010dne presko\u010den\u00e9 behy (po\u010dasie je v pl\u00e1ne a v Logu); always: v\u017edy v\u0161etko; never: skryt\u00e9.", "{0} rules": "{0} pravidiel", "1 rule": "1 pravidlo", "{0} rules (2-4)": "{0} pravidl\u00e1", "New blocker": "Nov\u00e9 blokovanie", "is on": "je zapnut\u00e9", "is off": "je vypnut\u00e9", "is": "je", "is not": "nie je",
   "above": "nad", "below": "pod", "act_skip": "presko\u010di\u0165", "act_wait": "po\u010dka\u0165", "act_ask": "op\u00fdta\u0165 sa", "Delete": "Zmaza\u0165", "e.g. Mower on the lawn": "napr. Kosa\u010dka na tr\u00e1ve",
   "When": "Ke\u010f", "any entity: mower, switch, sensor\u2026": "\u013eubovo\u013en\u00e1 entita: kosa\u010dka, vyp\u00edna\u010d, senzor\u2026", "now": "teraz", "blocking": "blokuje", "Applies to": "Plat\u00ed pre",
   "every run": "ka\u017ed\u00fd beh", "chosen slots": "vybran\u00e9 sloty", "chosen zones": "vybran\u00e9 z\u00f3ny", "Then": "Potom", "skip the run": "presko\u010di\u0165 beh",
@@ -175,6 +175,9 @@ const EN = {
   "help_zone_days": "Days per zone: \"slot days\" follows the weekdays above. Own days replace them for that zone - it can also run on a day the slot has off (dashed). \u21ba goes back to the slot's days.",
   "help_zone_days_n": "Days per zone: own days narrow this every-N-days slot for that zone (it runs only on the N-th days that fall on those weekdays). \u21ba goes back to the slot's days.",
   "help_backup": "Saves all settings (zones, slots, weather, notifications, blockers and the rest) to a file. If you remove the planner and add it again, choose this file in the first step and everything comes back; zones are matched by their ESP entities. Statistics, the log, the learned flow and the Planner / Test mode switches are included; skips, a pause and a run in progress are not. The file contains your notification targets, keep it private.",
+  "zone_added_ev": "new zone", "zones_moved_ev": "zone order changed",
+  "help_position": "Follows the ESP on its own; change it here only if the ESP order was read wrong. A change on the ESP sets it again.",
+  "help_gone": "If you removed the valve on purpose, use Reconfigure and skip it. If it was renamed, it is picked up again once the ESP is back.",
   "help_skipped_box": "smart: with automatic weather only the runs you skipped by hand are listed here (weather skips are in the plan and the Log); always: everything; never: hidden.",
   "Test mode (dry run)": "Test mode (dry run)", "help_test_mode": "Plan, weather, zones and notifications run as for real (marked \ud83e\uddea), but nothing is switched - neither the ESP nor the pump.",
   "help_avg": "Season level from the average daily maximum instead of the day's per-degree change. Rain, wind and frost still apply.",
@@ -563,11 +566,11 @@ class EspSprinklerPlannerCard extends HTMLElement {
     if (!this._log) { this._ws({ type: `${DOMAIN}/log`, limit: 300 }).then((r) => { this._log = r.log; this._render(); }).catch(() => {}); return `<div class="muted pad">${t("Loading\u2026")}</div>`; }
     const F = this._lf || "all";
     const groups = { all: null, runs: ["started", "finished", "stopped"], skips: ["skipped", "blocked", "blocker_ask", "weather", "suggestion", "skip_set", "paused", "resumed"],
-      alarms: ["leak", "valve_stuck", "flow_warning", "flow_drift", "offline", "online", "error", "pump_off"] };
+      alarms: ["leak", "valve_stuck", "flow_warning", "flow_drift", "offline", "online", "error", "pump_off", "zone_added", "zones_moved"] };
     const icon = { started: "mdi:play-circle", finished: "mdi:check-circle", stopped: "mdi:stop-circle", skipped: "mdi:skip-next-circle", blocked: "mdi:hand-back-left",
       blocker_ask: "mdi:help-circle", weather: "mdi:weather-partly-rainy", suggestion: "mdi:lightbulb-on-outline", skip_set: "mdi:skip-next", leak: "mdi:pipe-leak",
       valve_stuck: "mdi:pipe-valve", flow_warning: "mdi:water-alert", flow_drift: "mdi:trending-down", offline: "mdi:lan-disconnect", online: "mdi:lan-connect",
-      error: "mdi:alert-circle", pump_off: "mdi:pump-off", paused: "mdi:pause-circle", resumed: "mdi:play-circle-outline" };
+      error: "mdi:alert-circle", pump_off: "mdi:pump-off", zone_added: "mdi:sprinkler-variant", zones_moved: "mdi:swap-vertical", paused: "mdi:pause-circle", resumed: "mdi:play-circle-outline" };
     const bad = ["leak", "valve_stuck", "flow_warning", "flow_drift", "offline", "error", "pump_off"];
     const rows = this._log.filter((e) => !groups[F] || groups[F].includes(e.kind));
     let lastDay = "";
@@ -865,7 +868,7 @@ class EspSprinklerPlannerCard extends HTMLElement {
           <div class="tm"><b>${Math.round(x.done)}</b>${x.left ? `<span class="muted"> +${Math.round(x.left)}</span>` : ""} min<span class="grow"></span><span class="muted">\u23f5 ${nextTxt(x)}</span></div></div>`; }).join("")}</div>`;
     }
     return `<div class="zlist">${info.map((x) => `<div class="zr ${x.z.enabled ? "" : "dis"} ${x.on ? "on" : ""}" title="${esc(x.z.name)}: ${esc(t("{0} min watered today, {1} min still planned today", Math.round(x.done), Math.round(x.left)))}">
-        <span class="zn">${this._mark(x.z)}${esc(x.z.name)}${x.on ? ` <span class="chip small run-on">ON</span>` : ""}</span>
+        <span class="zn">${this._mark(x.z)}${esc(x.z.name)}${this._isNew(x.z) ? ` <span class="chip small newz">${t("new")}</span>` : ""}${x.on ? ` <span class="chip small run-on">ON</span>` : ""}</span>
         <span class="pbar thin"><i style="width:${(x.done / maxT * 100).toFixed(1)}%;background:${x.z.color}"></i><i class="plan" style="width:${(x.left / maxT * 100).toFixed(1)}%;--c:${x.z.color}"></i></span>
         <span class="zm"><b>${Math.round(x.done)}</b>${x.left ? `<span class="muted">+${Math.round(x.left)}</span>` : ""}\u2032</span>
         <span class="muted zx">\u23f5 ${nextTxt(x)}</span></div>`).join("")}</div>`;
@@ -1250,14 +1253,26 @@ class EspSprinklerPlannerCard extends HTMLElement {
       <details class="runs" data-d="runs_slots" ${this._open_("runs_slots", false)}><summary>${t("Runs and conflicts")}</summary><div data-preview="runs"></div></details>`;
   }
 
+  _isNew(z) {
+    if (!z.added) return false;
+    return (Date.parse(dayOf(this.data.now)) - Date.parse(z.added)) / 86400000 < 14;
+  }
+
   _zonesSection() {
     const zones = this._zones();
-    return `<datalist id="iconlist">${ICONS.map((i) => `<option value="${i}"></option>`).join("")}</datalist>` + zones.map((z) => {
+    const gone = this.data.missing_valves || [];
+    return (gone.length ? `<div class="err">${esc(t("Not on the ESP any more: {0}", gone.join(", ")))}</div><div class="help">${t("help_gone")}</div>` : "")
+      + `<datalist id="iconlist">${ICONS.map((i) => `<option value="${i}"></option>`).join("")}</datalist>` + zones.map((z) => {
       const k = (f) => `zones.${z.id}.${f}`;
       const zc = this.draft.zones[z.id] || {};
       const follow = zc.weather !== false;
-      const sum = `${this._mark(z, true)}<b>${esc(z.name)}</b><span class="muted">${t("ESP position {0}", z.order)}${z.enabled ? "" : " \u00b7 " + t("(disabled)")}${follow ? "" : " \u00b7 " + t("ignores weather")}${zc.max_per_run ? ` \u00b7 ${t("max per run")} ${zc.max_per_run}\u2032` : ""}</span>`;
+      const sum = `${this._mark(z, true)}<b>${esc(z.name)}</b>${this._isNew(z) ? ` <span class="chip small newz">${t("new")}</span>` : ""}<span class="muted">${t("ESP position {0}", z.order + 1)}${z.enabled ? "" : " \u00b7 " + t("(disabled)")}${follow ? "" : " \u00b7 " + t("ignores weather")}${zc.max_per_run ? ` \u00b7 ${t("max per run")} ${zc.max_per_run}\u2032` : ""}</span>`;
+      const zi = zones.findIndex((x) => x.id === z.id);
       return this._det(`z_${z.id}`, false, sum, `
+        <div class="row"><span class="muted">${t("ESP position {0}", z.order + 1)}</span>
+          <button class="tb1" data-act="zmove" data-zone="${esc(z.id)}" data-dir="-1" ${zi === 0 ? "disabled" : ""} title="${esc(t("Move up"))}"><ha-icon icon="mdi:arrow-up"></ha-icon></button>
+          <button class="tb1" data-act="zmove" data-zone="${esc(z.id)}" data-dir="1" ${zi === zones.length - 1 ? "disabled" : ""} title="${esc(t("Move down"))}"><ha-icon icon="mdi:arrow-down"></ha-icon></button>
+          <span class="muted small">${t("help_position")}</span></div>
         <div class="row swatches">${[...new Set([...this._zones().map((x) => x.color), ...PALETTE, ...SWATCHES])].map((c) => `<button class="swc ${c.toLowerCase() === z.color.toLowerCase() ? "on" : ""}" data-act="setcolor" data-zone="${esc(z.id)}" data-color="${c}" style="background:${c}" title="${c}"></button>`).join("")}</div>
         <div class="row"><input type="color" data-k="${k("color")}" value="${esc(z.color)}" data-r="1">
           <input class="name" data-k="${k("name")}" value="${esc(zc.name || "")}" placeholder="${esc(z.name)}">
@@ -1600,6 +1615,12 @@ class EspSprinklerPlannerCard extends HTMLElement {
           this.shadowRoot.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
           if (msg) msg.textContent = name;
         } catch (e) { if (msg) msg.textContent = (e && e.message) || t("Export failed"); }
+      } else if (act === "zmove") {
+        if (this.dirty) { this._saveErr = t("Save or discard your changes first."); this._renderBar(); return; }
+        const ids = this._zones().map((z) => z.id); const i = ids.indexOf(tg.dataset.zone); const j = i + +tg.dataset.dir;
+        if (i < 0 || j < 0 || j >= ids.length) return;
+        [ids[i], ids[j]] = [ids[j], ids[i]];
+        await this._ws({ type: `${DOMAIN}/reorder`, zones: ids }); setTimeout(() => this._load(), 2500);
       } else if (act === "logrefresh") { this._log = null; this._render();
       } else if (act === "leaksnooze") { await svc("leak_snooze", {}); setTimeout(() => this._load(), 600);
       } else if (act === "pumpoff") {
@@ -1923,6 +1944,7 @@ details.ztoday > summary { list-style:none; cursor:pointer; } details.ztoday > s
 .ag { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--divider-color,#ccc); border-radius:18px; padding:2px 2px 2px 10px; margin-left:auto; }
 .seg { display:inline-flex; gap:4px; flex-wrap:wrap; } .seg .ab { padding:5px 11px; }
 .abar.wrapok { flex-wrap:wrap; overflow:visible; }
+.chip.newz { background:var(--primary-color,#03a9f4); color:#fff; border-color:transparent; }
 .row.pzbtn { flex-wrap:nowrap; } .row.pzbtn button { flex:none; }
 .psel { font-weight:600; }
 .ab.clr { padding:2px 10px; font-size:12px; text-transform:none; letter-spacing:0; font-weight:500; }

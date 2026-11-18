@@ -429,6 +429,10 @@
     "notify_missing": {
       "title": "{planner}: notification target missing",
       "description": "These notify services do not exist any more: {services}. Change the recipients in the card: Settings → Notifications."
+    },
+    "valve_missing": {
+      "title": "{planner}: zone not on the ESP any more",
+      "description": "The valve of {zones} was not found on the ESPHome device any more. If you removed it on purpose, open Settings > Devices & services > ESP Sprinkler Planner > Reconfigure and skip it. If it was renamed, it is picked up again on its own once the ESP is back."
     }
   }
 }

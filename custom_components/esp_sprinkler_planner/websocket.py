@@ -56,7 +56,7 @@ def snapshot(hass, rt, days: int) -> Dict[str, Any]:
                              | {e for e in hass.states.async_entity_ids("notify")})
     return {
         "entry_id": rt.entry.entry_id, "title": rt.entry.title,
-        "valves": [{k: v.get(k) for k in ("id", "name", "order", "enabled", "max_minutes", "valve_switch")}
+        "valves": [{k: v.get(k) for k in ("id", "name", "order", "enabled", "max_minutes", "valve_switch", "added")}
                    for v in rt.valves],
         "config": rt.config, "notifications_full": notif,
         "notify_meta": {"events": list(EVENTS), "actions": ACTIONS, "variables": VARIABLES, "defaults": defaults(rt.lang)},
@@ -72,6 +72,7 @@ def snapshot(hass, rt, days: int) -> Dict[str, Any]:
         "entities": _entities(hass, rt.entry.entry_id),
         "lang": rt.lang,
         "health": {k: rt.health[k] for k in ("missing", "unavailable", "since")},
+        "missing_valves": rt.missing_valves,
         "tmax_log": rt.tmax_log,
         "pause_until": rt.pause_until, "held": rt.held, "blockers_full": rt.blockers,
         "blocker_states": rt._blk_states(),
@@ -142,6 +143,35 @@ def ws_export(hass, connection, msg):
         entry={"valve_overlap": e.options.get("valve_overlap", e.data.get("valve_overlap")),
                "watchdog_margin": e.options.get("watchdog_margin")},
         flags=rt.flags, data=rt.backup_data()))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/reorder", vol.Optional("entry_id"): str,
+                                  vol.Required("zones"): [str]})
+@websocket_api.async_response
+async def ws_reorder(hass, connection, msg):
+    rt = _runtime(hass, msg.get("entry_id"))
+    if rt is None:
+        connection.send_error(msg["id"], "not_found", "no planner found")
+        return
+    try:
+        await rt.reorder(msg["zones"])
+    except ConfigError as err:
+        connection.send_error(msg["id"], "invalid", str(err))
+        return
+    connection.send_result(msg["id"], {"ok": True})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/sync", vol.Optional("entry_id"): str})
+@websocket_api.async_response
+async def ws_sync(hass, connection, msg):
+    rt = _runtime(hass, msg.get("entry_id"))
+    if rt is None:
+        connection.send_error(msg["id"], "not_found", "no planner found")
+        return
+    changed = await rt.sync_valves()
+    connection.send_result(msg["id"], {"changed": changed, "missing": rt.missing_valves, "order_source": rt.order_source})
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/list"})
@@ -222,5 +252,5 @@ def ws_log(hass, connection, msg):
 
 
 def async_register(hass: HomeAssistant) -> None:
-    for cmd in (ws_get, ws_export, ws_list, ws_preview, ws_save, ws_flag, ws_stats, ws_log):
+    for cmd in (ws_get, ws_export, ws_reorder, ws_sync, ws_list, ws_preview, ws_save, ws_flag, ws_stats, ws_log):
         websocket_api.async_register_command(hass, cmd)

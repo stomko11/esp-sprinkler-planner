@@ -18,6 +18,7 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
     return async_redact_data({
         "entry": {"title": entry.title, "data": dict(entry.data), "options": dict(entry.options), "version": entry.version},
         "status": rt.status, "error": rt.error, "flags": rt.flags, "health": rt.health,
+        "zone_order": {"source": rt.order_source, "esp_signature": rt._esp_sig, "missing": rt.missing_valves},
         "config": rt.config, "plan": snap.get("plan"), "weather_now": snap.get("weather_now"),
         "held": rt.held, "pause_until": rt.pause_until, "active": rt.active, "active_zone": rt.active_zone,
         "skip": rt.skip, "suggestions": rt.suggestions, "log": rt.log[-100:],

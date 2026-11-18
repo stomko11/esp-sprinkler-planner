@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.11.0 (on the test HA, not released yet)
+
+- **Zones follow the ESP on their own.** When valves are added, removed or moved on the ESP, the planner
+  notices (at start, when the ESP comes back after a flash, when its entities change, and every 15
+  minutes) and updates the zones without Reconfigure:
+  - a new valve becomes a new zone in its place, with a **new** chip in the card for two weeks, a
+    notification in Home Assistant and a Log entry; it is in no slot yet, so it does not water until you
+    add it to one;
+  - positions are read from the ESP's own entity list (its YAML order), not from the order Home
+    Assistant first saw the entities, so a valve added in the middle is shown in the middle;
+  - a zone whose valve is gone is kept and shown under Settings > Repairs and in Settings > Zones.
+- **ESP position by hand:** arrows in Settings > Zones, for the rare case the ESP order is read wrong. The
+  position stays until the ESP's own order changes. Positions in the card now count from 1.
+- Diagnostics show where the zone order came from (ESP or registry).
+
 ## 0.10.3
 
 - **Planner off really means off:** with the Planner switch off nothing is scheduled and no notification

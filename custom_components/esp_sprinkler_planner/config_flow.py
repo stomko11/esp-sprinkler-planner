@@ -16,16 +16,13 @@ from .const import (CONF_CONTROLLER, CONF_DEVICE, CONF_VALVE_OVERLAP, CONF_VALVE
                     DOMAIN, OPT_IMPORT, OPT_RESTORE, OPT_WATCHDOG, STORAGE_VERSION)
 from . import backup as backup_mod
 from . import model
+from .device import device_entities
 from .discovery import Entity, ValveProposal, new_valves, propose
 
 
 def _device_entities(hass, device_id: str) -> List[Entity]:
-    reg = er.async_get(hass)
-    out = []
-    for i, e in enumerate(er.async_entries_for_device(reg, device_id)):
-        caps = e.capabilities or {}
-        out.append(Entity(e.entity_id, e.name or e.original_name or e.entity_id, max=caps.get("max"), order=i))
-    return out
+    """The device's entities, in the ESP's own order when it can be read (see device.py)."""
+    return device_entities(hass, device_id)[0]
 
 
 def _entity_selector(domain: str, include: List[str]) -> selector.EntitySelector:
