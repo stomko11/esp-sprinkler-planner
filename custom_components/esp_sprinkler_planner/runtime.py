@@ -182,7 +182,15 @@ class Runtime:
                                      "rain_entity": self._rain_entity,
                                      "suggestions": self.suggestions, "skip_done": self.skip_done})
 
-    SCHEDULE_KINDS = {"planned", "weather", "suggestion", "skipped", "blocked", "blocker_ask"}
+    QUIET_AFTER_RUN = timedelta(minutes=60)
+
+    def _run_recent(self) -> bool:
+        """A run is going on, or one ended less than an hour ago."""
+        if self.active:
+            return True
+        ends = [dt_util.parse_datetime(x.get("end") or "") for x in (self.last_run or {}).values()]
+        last = max((e for e in ends if e), default=None)
+        return bool(last and dt_util.utcnow() - last < self.QUIET_AFTER_RUN)
 
     def backup_data(self) -> Dict[str, Any]:
         """History for a settings backup (see backup.DATA_KEYS)."""
@@ -241,8 +249,8 @@ class Runtime:
             if (kind in ("planned", "started", "dry_run") and rr.get("pass_no", 1) != 1) or \
                (kind == "finished" and rr.get("pass_no") != rr.get("passes")):
                 return
-        if kind in self.SCHEDULE_KINDS and not self.flags.get("enabled", True) and data.get("source") != "manual":
-            return      # planner off: no notifications about the schedule (manual runs and alarms still notify)
+        if not self.flags.get("enabled", True) and not self._run_recent():
+            return      # planner off: silent, except during a run you started and the hour after it (leak after watering)
         if kind in notify_logic.EVENTS:
             extra = {k: v for k, v in data.items() if k not in ("run", "calls")}
             if kind in ("planned", "started", "skipped"):

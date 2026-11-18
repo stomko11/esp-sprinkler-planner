@@ -2,10 +2,11 @@
 
 ## 0.10.3 (on the test HA, not released yet)
 
-- **Planner off really means off:** with the Planner switch off nothing is scheduled any more, so there
-  is no weather check, no "adjusted" or "skipped" notification and no log entry at a run's time, and no
-  "planned" reminder. Before, the run time still came and sent "weather adjusted" and "skipped: planner
-  disabled". Manual runs and alarms (leak, stuck valve, offline) still notify.
+- **Planner off really means off:** with the Planner switch off nothing is scheduled and no notification
+  is sent: no weather check or "adjusted" / "skipped" message at a run's time, no "planned" reminder,
+  no suggestions, offline or pause messages. The only exception is a run you start yourself: it notifies
+  as usual, and so do alarms during it and in the hour after it (a leak after watering). The Week view,
+  weather estimates and suggestions in the card still show, so you can see what the planner would do.
 
 ## 0.10.2
 
