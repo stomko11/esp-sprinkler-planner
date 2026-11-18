@@ -93,3 +93,11 @@ class SyncTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class IgnoredTest(unittest.TestCase):
+    def test_ignored_valve_is_not_added_again(self):
+        found = [F("a"), F("old"), F("b")]
+        r = S.sync(SAVED[:2], found, ents("a", "old", "b"), None, ignored=["number.old_duration"])
+        self.assertEqual(r.added, [])
+        self.assertEqual([(v["id"], v["order"]) for v in r.valves], [("zone_1", 0), ("zone_2", 1)])

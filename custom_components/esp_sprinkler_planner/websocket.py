@@ -72,7 +72,7 @@ def snapshot(hass, rt, days: int) -> Dict[str, Any]:
         "entities": _entities(hass, rt.entry.entry_id),
         "lang": rt.lang,
         "health": {k: rt.health[k] for k in ("missing", "unavailable", "since")},
-        "missing_valves": rt.missing_valves,
+        "missing_valves": rt.missing_valves, "missing_ids": rt.missing_ids, "ignored_valves": rt.ignored_valves(),
         "tmax_log": rt.tmax_log,
         "pause_until": rt.pause_until, "held": rt.held, "blockers_full": rt.blockers,
         "blocker_states": rt._blk_states(),
@@ -159,6 +159,36 @@ async def ws_reorder(hass, connection, msg):
     except ConfigError as err:
         connection.send_error(msg["id"], "invalid", str(err))
         return
+    connection.send_result(msg["id"], {"ok": True})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/remove_zone", vol.Optional("entry_id"): str,
+                                  vol.Required("zone"): str})
+@websocket_api.async_response
+async def ws_remove_zone(hass, connection, msg):
+    rt = _runtime(hass, msg.get("entry_id"))
+    if rt is None:
+        connection.send_error(msg["id"], "not_found", "no planner found")
+        return
+    try:
+        await rt.remove_zone(msg["zone"])
+    except ConfigError as err:
+        connection.send_error(msg["id"], "invalid", str(err))
+        return
+    connection.send_result(msg["id"], {"ok": True})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/unignore", vol.Optional("entry_id"): str,
+                                  vol.Required("entities"): [str]})
+@websocket_api.async_response
+async def ws_unignore(hass, connection, msg):
+    rt = _runtime(hass, msg.get("entry_id"))
+    if rt is None:
+        connection.send_error(msg["id"], "not_found", "no planner found")
+        return
+    await rt.unignore(msg["entities"])
     connection.send_result(msg["id"], {"ok": True})
 
 
@@ -252,5 +282,5 @@ def ws_log(hass, connection, msg):
 
 
 def async_register(hass: HomeAssistant) -> None:
-    for cmd in (ws_get, ws_export, ws_reorder, ws_sync, ws_list, ws_preview, ws_save, ws_flag, ws_stats, ws_log):
+    for cmd in (ws_get, ws_export, ws_reorder, ws_remove_zone, ws_unignore, ws_sync, ws_list, ws_preview, ws_save, ws_flag, ws_stats, ws_log):
         websocket_api.async_register_command(hass, cmd)

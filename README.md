@@ -159,6 +159,13 @@ the new zone in its place (marked **new** in the card) and moves the others afte
 to water it. Existing zones keep their settings and history. If a zone's position is ever wrong, use the
 arrows in Settings > Zones.
 
+## Removing a valve from the ESP
+
+Remove it from the ESP's YAML and flash. The planner notices the zone is gone, drops it from the plan and
+shows a repair: Settings -> Repairs -> *zone not on the ESP any more* -> Fix removes the zone. You can also
+remove a zone by hand under Settings -> Zones -> the zone -> *Remove from the planner*, for example one
+you do not want to water but still have on the ESP; it is then listed there with an *Add back* button.
+
 ## 10. Backup and restore
 
 Settings -> Backup -> **Export settings** downloads one JSON file with everything you set up: zones

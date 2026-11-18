@@ -49,6 +49,8 @@ def involved_entities(valves: List[Dict[str, Any]], controller: Dict[str, Option
     out = [e for e in (controller.get("main_switch"), controller.get("reverse"), controller.get("multiplier"),
                        controller.get("repeat"), controller.get("standby")) if e]
     for v in valves:
+        if v.get("gone"):       # its valve is not on the ESP any more: not part of the controller's health
+            continue
         out += [e for e in (v.get("enable_switch"), v.get("duration")) if e]
     return out
 
@@ -117,7 +119,7 @@ def start_calls(run: Run, valves, controller, states) -> List[Call]:
         num = by_id[st.zone_id]["duration"]
         calls.append(Call("number", "set_value", num, {"value": to_number_value(st.minutes, states, num)}))
     for v in valves:
-        if v.get("enable_switch") and v["id"] not in in_run:
+        if v.get("enable_switch") and v["id"] not in in_run and not v.get("gone"):
             calls.append(Call("switch", "turn_off", v["enable_switch"]))
     for st in run.steps:
         calls.append(Call("switch", "turn_on", by_id[st.zone_id]["enable_switch"]))

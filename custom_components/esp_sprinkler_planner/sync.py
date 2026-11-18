@@ -11,6 +11,7 @@ Rules
 - Positions follow the ESP whenever the ESP's own order changes (a valve added, removed or moved in
   the YAML). Positions set by hand in the card are kept while the ESP's order stays the same.
 - A saved zone none of whose entities exist any more is reported, never removed: you decide (Repairs).
+- Valves you removed from the planner while they are still on the ESP are ignored (not added again).
 """
 from __future__ import annotations
 
@@ -54,11 +55,13 @@ def next_free_id(taken: Set[str]) -> str:
 
 
 def sync(saved: Sequence[Dict[str, Any]], found: Sequence[Any], existing: Set[str],
-         last_signature: Optional[str], reserved: Sequence[str] = ()) -> SyncResult:
+         last_signature: Optional[str], reserved: Sequence[str] = (), ignored: Sequence[str] = ()) -> SyncResult:
     """saved: entry valves; found: discovery proposals in ESP order (complete ones are used);
     existing: entity ids that exist now; last_signature: signature() at the last sync (None = never);
     reserved: zone ids that must not be given to a new valve."""
-    found = [f for f in found if getattr(f, "enable_switch", None) and getattr(f, "duration", None)]
+    skip = set(ignored)
+    found = [f for f in found if getattr(f, "enable_switch", None) and getattr(f, "duration", None)
+             and not (_ents(f) & skip)]
     sig = signature(found)
     out = copy.deepcopy(list(saved))
     by_found: Dict[int, Dict[str, Any]] = {}

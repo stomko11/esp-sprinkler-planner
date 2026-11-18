@@ -120,7 +120,7 @@ def zones_from(valves: List[Dict[str, Any]], zone_cfg: Dict[str, Dict[str, Any]]
         where = f"zone {v['id']}"
         out.append(Zone(
             v["id"], c.get("name") or v.get("name") or v["id"], int(v.get("order", 0)),
-            enabled=bool(c.get("enabled", v.get("enabled", True))),
+            enabled=bool(c.get("enabled", v.get("enabled", True))) and not v.get("gone"),
             max_per_run=_num(c.get("max_per_run"), where + " max_per_run"),
             max_per_day=_num(c.get("max_per_day"), where + " max_per_day"),
             hard_max=_num(v.get("max_minutes"), where + " max"),

@@ -44,11 +44,13 @@ def esp_order(hass: HomeAssistant, device_id: str) -> Optional[Dict[str, int]]:
         mac = entry.unique_id
         out: Dict[str, int] = {}
         pos = 0
+        total = 0
         for info_type, infos in info.items():
             domain = _DOMAINS.get(getattr(info_type, "__name__", ""))
             if not domain:
                 continue
             for item in infos.values():
+                total += 1
                 eid = None
                 if build_device_unique_id and mac:
                     try:
@@ -59,7 +61,9 @@ def esp_order(hass: HomeAssistant, device_id: str) -> Optional[Dict[str, int]]:
                 if eid and eid not in out:
                     out[eid] = pos
                 pos += 1
-        return out or None
+        if not out or len(out) < total:
+            return None          # some entity could not be matched: do not trust a partial list
+        return out
     except Exception as err:  # noqa: BLE001 - never break the planner over the order
         _LOGGER.debug("ESP order not readable for %s: %s", device_id, err)
         return None
@@ -75,7 +79,8 @@ def device_entities(hass: HomeAssistant, device_id: str) -> Tuple[List[Entity], 
         caps = e.capabilities or {}
         pos = i
         if order is not None:
-            # entities the ESP list has keep its order; anything else goes after, in registry order
+            if e.domain in ("switch", "number") and e.entity_id not in order:
+                continue     # left in the registry, but the ESP does not have it any more
             pos = order[e.entity_id] if e.entity_id in order else 100000 + i
         out.append(Entity(e.entity_id, e.name or e.original_name or e.entity_id, max=caps.get("max"), order=pos))
     return out, order is not None

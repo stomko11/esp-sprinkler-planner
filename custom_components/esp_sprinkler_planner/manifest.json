@@ -18,6 +18,7 @@
     "file_upload",
     "frontend",
     "http",
+    "repairs",
     "websocket_api"
   ],
   "documentation": "https://github.com/stomko11/esp-sprinkler-planner",

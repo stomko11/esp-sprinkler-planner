@@ -122,7 +122,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         rows = [(ValveProposal(v.get("name") or v["id"], v.get("valve_switch"), v.get("enable_switch"),
                                v.get("duration"), v.get("max_minutes"), pos.get(v.get("duration"), int(v.get("order", i)))),
                  v["id"], v.get("enabled", True)) for i, v in enumerate(saved)]
-        fresh = new_valves([r[0] for r in rows], found)
+        ign = set(entry.data.get("ignored_valves") or [])
+        fresh = [v for v in new_valves([r[0] for r in rows], found)
+                 if not ({v.duration, v.enable_switch, v.valve_switch} & ign)]    # removed from the planner by you
         rows += [(v, None, True) for v in fresh]      # valves added on the ESP since: offered as new zones
         rows.sort(key=lambda r: r[0].order)           # stable: a saved zone stays ahead of a new one with the same position
         self._proposal.valves = [r[0] for r in rows]

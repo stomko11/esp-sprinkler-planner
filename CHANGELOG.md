@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.11.1 (on the test HA, not released yet)
+
+- **A zone whose valve is gone no longer takes the planner offline.** It drops out of the plan and the
+  controller health check, and shows under Settings > Repairs with a **Fix** button: one click removes
+  the zone. The same list is shown at the top of Settings > Zones, with a Remove button per zone.
+  "Gone" is decided from the ESP's own entity list, so a valve Home Assistant still remembers counts as
+  gone once the ESP stopped sending it.
+- **Remove from the planner** (Settings > Zones > a zone): takes the zone out of the card, the slots and
+  the blockers. Statistics stay. A valve that is still on the ESP is not added again by the automatic
+  sync; it is listed under Zones as "Removed from the planner, still on the ESP" with an **Add back**
+  button. Reconfigure skips such valves too.
+
 ## 0.11.0
 
 - **Zones follow the ESP on their own.** When valves are added, removed or moved on the ESP, the planner

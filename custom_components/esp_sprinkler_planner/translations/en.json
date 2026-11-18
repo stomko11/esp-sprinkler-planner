@@ -432,7 +432,18 @@
     },
     "valve_missing": {
       "title": "{planner}: zone not on the ESP any more",
-      "description": "The valve of {zones} was not found on the ESPHome device any more. If you removed it on purpose, open Settings > Devices & services > ESP Sprinkler Planner > Reconfigure and skip it. If it was renamed, it is picked up again on its own once the ESP is back."
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Remove {zones}?",
+            "description": "The valve of {zones} is not on the ESPHome device any more. Submit to remove the zone from {planner}: it leaves the card, the slots and the blockers; its statistics stay. If the valve was only renamed or the ESP is still updating, close this instead - it clears on its own once the valve is back."
+          }
+        },
+        "abort": {
+          "not_loaded": "The planner is not loaded.",
+          "remove_failed": "Not removed: {error}"
+        }
+      }
     }
   }
 }

@@ -39,6 +39,7 @@ class Runtime:
         self._esp_sig: Optional[str] = None   # the ESP's valve order at the last sync (sync.signature)
         self._sync_timer = None
         self.missing_valves: List[str] = []   # zone names whose valve is not on the ESP any more
+        self.missing_ids: List[str] = []
         self.order_source: Optional[str] = None   # where the zone order came from at the last sync: esp / registry
         self.config: Dict[str, Any] = {}
         self.flags: Dict[str, bool] = {"enabled": True, "dry_run": True}
@@ -96,6 +97,12 @@ class Runtime:
     # ------------------------------------------------------------------ properties
     @property
     def valves(self) -> List[Dict[str, Any]]:
+        """The zones as the planner uses them: one whose valve is not on the ESP any more counts as off."""
+        gone = set(self.missing_ids)
+        return [({**v, "gone": True} if v["id"] in gone else v) for v in self.entry.data[CONF_VALVES]]
+
+    @property
+    def saved_valves(self) -> List[Dict[str, Any]]:
         return self.entry.data[CONF_VALVES]
 
     @property
@@ -185,6 +192,7 @@ class Runtime:
                                      "leak_snooze_until": self.leak_snooze_until, "pause_until": self.pause_until,
                                      "log": self.log,
                                      "rain_entity": self._rain_entity, "esp_sig": self._esp_sig,
+                                     "missing_ids": self.missing_ids, "missing_names": self.missing_valves,
                                      "suggestions": self.suggestions, "skip_done": self.skip_done})
 
     QUIET_AFTER_RUN = timedelta(minutes=60)
@@ -205,7 +213,7 @@ class Runtime:
 
     LOG_KINDS = {"started", "finished", "stopped", "skipped", "error", "weather", "suggestion", "blocked", "blocker_ask",
                  "leak", "valve_stuck", "flow_warning", "flow_drift", "offline", "online", "paused", "resumed", "skip_set",
-                 "pump_off", "zone_added", "zones_moved"}
+                 "pump_off", "zone_added", "zones_moved", "zone_removed"}
 
     ACTOR_KINDS = {"started", "stopped", "skipped", "skip_set", "paused", "resumed", "blocked", "suggestion"}
 
@@ -1051,16 +1059,25 @@ class Runtime:
         from homeassistant.helpers import device_registry as dr
         dev = dr.async_get(self.hass).async_get(device_id)
         found = propose(ents, (dev.name_by_user or dev.name or "") if dev else "").valves
-        existing = {e.entity_id for e in er.async_entries_for_device(er.async_get(self.hass), device_id)}
-        existing |= {s.entity_id for s in self.hass.states.async_all()}
+        if from_esp:      # the ESP's own list is the truth: what is not in it is gone, even if HA still remembers it
+            existing = {e.entity_id for e in ents}
+        else:
+            existing = {e.entity_id for e in er.async_entries_for_device(er.async_get(self.hass), device_id)}
+            existing |= {s.entity_id for s in self.hass.states.async_all()}
         sig_now = sync_mod.signature([f for f in found if f.enable_switch and f.duration])
         last = self._esp_sig if from_esp else sig_now     # without the ESP's list: never move zones around
-        res = sync_mod.sync(self.valves, found, existing, last, reserved=list((self.config.get("zones") or {}).keys()))
+        res = sync_mod.sync(self.saved_valves, found, existing, last, reserved=list((self.config.get("zones") or {}).keys()),
+                            ignored=self.entry.data.get("ignored_valves") or [])
         names = self.zone_names()
         missing = [names.get(v["id"], v.get("name") or v["id"]) for v in res.missing]
-        if missing != self.missing_valves:
-            self.missing_valves = missing
+        ids = [v["id"] for v in res.missing]
+        if missing != self.missing_valves or ids != self.missing_ids:
+            self.missing_valves, self.missing_ids = missing, ids
+            await self._save()
+            self._check_health()
             self._update_repairs()
+            if not res.changed:
+                await self.async_replan()      # a zone without a valve drops out of the plan (and returns with it)
         if from_esp and res.signature != self._esp_sig:
             self._esp_sig = res.signature
             await self._save()
@@ -1084,9 +1101,67 @@ class Runtime:
         self.hass.config_entries.async_update_entry(self.entry, data={**self.entry.data, CONF_VALVES: res.valves})
         return True
 
+    async def remove_zone(self, zone_id: str) -> None:
+        """Take a zone out of the planner: its valve, its settings and its place in slots and blockers.
+        Statistics stay. A valve still on the ESP is remembered as ignored, so the sync does not add it again."""
+        if self.active:
+            raise model.ConfigError("a run is going on: remove the zone when it has finished")
+        valves = [v for v in self.saved_valves if v["id"] != zone_id]
+        gone = next((v for v in self.saved_valves if v["id"] == zone_id), None)
+        if gone is None:
+            raise model.ConfigError(f"zone {zone_id!r} does not exist")
+        if not valves:
+            raise model.ConfigError("the last zone cannot be removed")
+        name = self.zone_names().get(zone_id, gone.get("name") or zone_id)
+        cfg = copy.deepcopy(self.config)
+        (cfg.get("zones") or {}).pop(zone_id, None)
+        for s in cfg.get("slots") or []:
+            s["zones"] = [z for z in s.get("zones") or [] if z.get("zone") != zone_id]
+        for b in cfg.get("blockers") or []:
+            if "zones" in b:
+                b["zones"] = [z for z in b["zones"] if z != zone_id]
+        self.config = cfg
+        from homeassistant.helpers import entity_registry as er
+        reg = er.async_get(self.hass)
+        ents = [e for e in (gone.get("duration"), gone.get("enable_switch"), gone.get("valve_switch")) if e]
+        still = [e for e in ents if reg.async_get(e) is not None or self.hass.states.get(e) is not None]
+        ignored = list(self.entry.data.get("ignored_valves") or [])
+        if still:
+            ignored = sorted(set(ignored) | set(ents))
+        # its sensors go with it
+        for e in list(er.async_entries_for_config_entry(reg, self.entry.entry_id)):
+            if e.unique_id.startswith(f"{self.entry.entry_id}_{zone_id}_"):
+                reg.async_remove(e.entity_id)
+        self.missing_valves = [n for n in self.missing_valves if n != name]
+        self.missing_ids = [z for z in self.missing_ids if z != zone_id]
+        self._event("zone_removed", zone=name)
+        await self._save()
+        self.hass.config_entries.async_update_entry(
+            self.entry, data={**self.entry.data, CONF_VALVES: valves, "ignored_valves": ignored})
+
+    def ignored_valves(self) -> List[Dict[str, Any]]:
+        """Valves on the ESP that were removed from the planner: name and entities, to add them back."""
+        from .device import device_entities
+        from .discovery import propose
+        ign = set(self.entry.data.get("ignored_valves") or [])
+        if not ign:
+            return []
+        ents, _ = device_entities(self.hass, self.entry.data.get("device_id") or "")
+        out = []
+        for f in propose(ents, "").valves:
+            fe = {e for e in (f.duration, f.enable_switch, f.valve_switch) if e}
+            if fe & ign:
+                out.append({"name": f.name, "entities": sorted(fe & ign)})
+        return out
+
+    async def unignore(self, entities: List[str]) -> None:
+        """Add a removed valve back: the next sync makes it a zone again."""
+        ign = [e for e in (self.entry.data.get("ignored_valves") or []) if e not in set(entities)]
+        self.hass.config_entries.async_update_entry(self.entry, data={**self.entry.data, "ignored_valves": ign})
+
     async def reorder(self, zone_ids: List[str]) -> None:
         """Positions set by hand in the card. They stay until the ESP's own order changes."""
-        valves = copy.deepcopy(self.valves)
+        valves = copy.deepcopy(self.saved_valves)
         ids = [v["id"] for v in valves]
         if sorted(zone_ids) != sorted(ids):
             raise model.ConfigError("reorder: pass every zone id exactly once")
@@ -1170,6 +1245,8 @@ class Runtime:
         self._rain_entity = data.get("rain_entity")
         self._base_samples = data.get("base_samples") or {}
         self._esp_sig = data.get("esp_sig")
+        self.missing_ids = [z for z in data.get("missing_ids") or [] if z in {v["id"] for v in self.entry.data[CONF_VALVES]}]
+        self.missing_valves = list(data.get("missing_names") or []) if self.missing_ids else []
         self.suggestions = data.get("suggestions") or {}
         if (self.config.get("weather") or {}).get("mode", "off") != "suggest":
             self.suggestions = {k: v for k, v in self.suggestions.items() if v.get("status") != "pending"}
@@ -1268,7 +1345,14 @@ class Runtime:
         svcs = self.hass.services.async_services().get("notify", {})
         gone = [t for t in targets if t.split(".", 1)[1] not in svcs and self.hass.states.get(t) is None]
         issue("notify_missing", bool(gone), services=", ".join(gone))
-        issue("valve_missing", bool(self.missing_valves) and not h["missing"], zones=", ".join(self.missing_valves))
+        iid = f"valve_missing_{eid}"
+        if self.missing_valves:
+            ir.async_create_issue(self.hass, DOMAIN, iid, is_fixable=True, is_persistent=False,
+                                  severity=ir.IssueSeverity.WARNING, translation_key="valve_missing",
+                                  translation_placeholders={"planner": self.entry.title, "zones": ", ".join(self.missing_valves)},
+                                  data={"entry_id": eid, "zones": list(self.missing_ids)})
+        else:
+            ir.async_delete_issue(self.hass, DOMAIN, iid)
 
     # ------------------------------------------------------------------ planning
     def _sun(self, day):
