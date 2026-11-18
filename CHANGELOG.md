@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.11.1 (on the test HA, not released yet)
+## 0.11.1
 
 - **A zone whose valve is gone no longer takes the planner offline.** It drops out of the plan and the
   controller health check, and shows under Settings > Repairs with a **Fix** button: one click removes
