@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.10.3 (on the test HA, not released yet)
+## 0.10.3
 
 - **Planner off really means off:** with the Planner switch off nothing is scheduled and no notification
   is sent: no weather check or "adjusted" / "skipped" message at a run's time, no "planned" reminder,
