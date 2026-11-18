@@ -182,6 +182,8 @@ class Runtime:
                                      "rain_entity": self._rain_entity,
                                      "suggestions": self.suggestions, "skip_done": self.skip_done})
 
+    SCHEDULE_KINDS = {"planned", "weather", "suggestion", "skipped", "blocked", "blocker_ask"}
+
     def backup_data(self) -> Dict[str, Any]:
         """History for a settings backup (see backup.DATA_KEYS)."""
         return {"history": self.history, "last_run": self.last_run, "stats": self.stats,
@@ -239,6 +241,8 @@ class Runtime:
             if (kind in ("planned", "started", "dry_run") and rr.get("pass_no", 1) != 1) or \
                (kind == "finished" and rr.get("pass_no") != rr.get("passes")):
                 return
+        if kind in self.SCHEDULE_KINDS and not self.flags.get("enabled", True) and data.get("source") != "manual":
+            return      # planner off: no notifications about the schedule (manual runs and alarms still notify)
         if kind in notify_logic.EVENTS:
             extra = {k: v for k, v in data.items() if k not in ("run", "calls")}
             if kind in ("planned", "started", "skipped"):
@@ -1218,7 +1222,8 @@ class Runtime:
         blocked = set(self.skip) | set(self.wx_skip) | paused
         upcoming = [r for r in self.plan.runs if r.start > now and run_key(r) not in blocked]
         self.next_run = upcoming[0] if upcoming else None
-        if self.next_run and not self.active:
+        # planner off: nothing is scheduled, so no weather check, skip or notification at the run's time
+        if self.next_run and not self.active and self.flags.get("enabled", True):
             self._timer = async_track_point_in_utc_time(self.hass, self._fire, dt_util.as_utc(self.next_run.start))
         self._arm_planned_notice(now)
         self._changed()
@@ -1228,7 +1233,7 @@ class Runtime:
             self._planned_timer()
             self._planned_timer = None
         run = self.next_run
-        if not run or self.active:
+        if not run or self.active or not self.flags.get("enabled", True):
             return
         try:
             full = notify_logic.merged(self.config.get("notifications"), self.lang)

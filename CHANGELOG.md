@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.3 (on the test HA, not released yet)
+
+- **Planner off really means off:** with the Planner switch off nothing is scheduled any more, so there
+  is no weather check, no "adjusted" or "skipped" notification and no log entry at a run's time, and no
+  "planned" reminder. Before, the run time still came and sent "weather adjusted" and "skipped: planner
+  disabled". Manual runs and alarms (leak, stuck valve, offline) still notify.
+
 ## 0.10.2
 
 - **Backup now holds the history and the switches:** statistics, watered minutes, last runs, learned flow,
